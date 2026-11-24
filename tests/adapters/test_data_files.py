@@ -4,6 +4,7 @@ These tests read the files that ship with the package, so a typo or a value with
 source fails here and not at startup in front of the interviewer.
 """
 
+import re
 import tomllib
 from datetime import date
 from decimal import Decimal
@@ -16,13 +17,16 @@ from sunquote.adapters.data_files import (
     default_data_dir,
     load_catalog,
     load_engineering_assumptions,
+    load_financial_assumptions,
     load_pricing_assumptions,
+    load_residential_tariff,
 )
 from sunquote.domain.model import RoofType
 from sunquote.domain.money import Currency, Money
 
 CATALOG_FILE = default_data_dir() / "catalog.toml"
 ASSUMPTIONS_FILE = default_data_dir() / "assumptions.toml"
+TARIFF_FILE = default_data_dir() / "tariff.toml"
 
 
 def test_shipped_catalog_has_the_default_panel_from_the_research_note() -> None:
@@ -100,7 +104,7 @@ def test_shipped_pricing_assumptions_match_the_research_note() -> None:
 
 
 def test_shipped_files_are_marked_placeholder() -> None:
-    for path in (CATALOG_FILE, ASSUMPTIONS_FILE):
+    for path in (CATALOG_FILE, ASSUMPTIONS_FILE, TARIFF_FILE):
         data = tomllib.loads(path.read_text(encoding="utf-8"))
         assert data["meta"]["placeholder"] is True, path.name
 
@@ -227,3 +231,77 @@ def test_a_negative_margin_is_rejected(tmp_path: Path) -> None:
 
     with pytest.raises(ValidationError, match="margin"):
         load_pricing_assumptions(file)
+
+
+def test_shipped_tariff_matches_the_research_note() -> None:
+    tariff = load_residential_tariff(TARIFF_FILE)
+
+    assert tariff.tier_threshold_kwh_per_year == Decimal(2920)
+    assert tariff.low_tariff_try_per_kwh == Decimal("3.24")
+    assert tariff.high_tariff_try_per_kwh == Decimal("4.86")
+    assert tariff.export_price_try_per_kwh == Decimal("2.92")
+    assert tariff.self_consumption_ratio == Decimal("0.85")
+    assert tariff.valid_from == date(2026, 4, 4)
+    assert "EPDK" in tariff.source
+
+
+def test_every_tariff_value_names_its_source_kind_and_date() -> None:
+    data = tomllib.loads(TARIFF_FILE.read_text(encoding="utf-8"))
+
+    assert data["tariff"]["source"].strip()
+    assert isinstance(data["tariff"]["valid_from"], date)
+    for key in (
+        "tier_threshold_kwh_per_year",
+        "low_tariff_try_per_kwh",
+        "high_tariff_try_per_kwh",
+        "export_price_try_per_kwh",
+        "self_consumption_ratio",
+    ):
+        entry = data[key]
+        assert entry["source"].strip(), key
+        assert entry["kind"] in {"direct", "derived", "estimate"}, key
+        assert isinstance(entry["date"], date), key
+
+
+def test_a_tariff_whose_low_tier_costs_more_than_the_high_tier_is_rejected(tmp_path: Path) -> None:
+    data = TARIFF_FILE.read_text(encoding="utf-8").replace("value = 3.24", "value = 9.99", 1)
+    file = tmp_path / "tariff.toml"
+    file.write_text(data, encoding="utf-8")
+
+    with pytest.raises(ValueError, match="low Retail Tariff"):
+        load_residential_tariff(file)
+
+
+def test_a_tariff_value_without_a_source_is_rejected(tmp_path: Path) -> None:
+    text = TARIFF_FILE.read_text(encoding="utf-8")
+    head, _, tail = text.partition("[self_consumption_ratio]")
+    tail_without_source = re.sub(r"^source = .*$", "", tail, count=1, flags=re.MULTILINE)
+    file = tmp_path / "tariff.toml"
+    file.write_text(head + "[self_consumption_ratio]" + tail_without_source, encoding="utf-8")
+
+    with pytest.raises(ValidationError, match="source"):
+        load_residential_tariff(file)
+
+
+def test_shipped_financial_assumptions_match_the_research_note() -> None:
+    financial = load_financial_assumptions(ASSUMPTIONS_FILE)
+
+    assert financial.tariff_escalation_rate_real == Decimal("0.02")
+    assert financial.equipment_escalation_rate_real == Decimal("0")
+    assert financial.lifetime_years == 25
+    assert financial.inverter_replacement_year == 12
+
+
+def test_every_financial_assumption_names_its_source_kind_and_date() -> None:
+    data = tomllib.loads(ASSUMPTIONS_FILE.read_text(encoding="utf-8"))
+
+    for key in (
+        "tariff_escalation_rate_real",
+        "equipment_escalation_rate_real",
+        "lifetime_years",
+        "inverter_replacement_year",
+    ):
+        entry = data[key]
+        assert entry["source"].strip(), key
+        assert entry["kind"] in {"direct", "derived", "estimate"}, key
+        assert isinstance(entry["date"], date), key

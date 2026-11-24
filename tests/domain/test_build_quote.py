@@ -10,6 +10,7 @@ import pytest
 
 from sunquote.domain.errors import NoViableSystemError
 from sunquote.domain.model import RoofType
+from sunquote.domain.money import Currency, Money
 from sunquote.domain.quote import build_quote
 from sunquote.domain.sizing import BindingLimit, SizingStrategy
 from tests.factories import (
@@ -17,9 +18,11 @@ from tests.factories import (
     make_assumptions,
     make_catalog,
     make_exchange_rate,
+    make_financial_assumptions,
     make_pricing_assumptions,
     make_request,
     make_specific_yield,
+    make_tariff,
 )
 
 
@@ -38,6 +41,8 @@ def build(
         assumptions=make_assumptions(),
         pricing=make_pricing_assumptions(),
         exchange_rate=make_exchange_rate(),
+        tariff=make_tariff(),
+        financial=make_financial_assumptions(),
         quote_date=QUOTE_DATE,
     )
 
@@ -108,6 +113,8 @@ def test_flat_roof_uses_its_coverage_ratio_and_the_installer_orientation() -> No
         assumptions=make_assumptions(flat_roof_tilt_deg="18"),
         pricing=make_pricing_assumptions(),
         exchange_rate=make_exchange_rate(),
+        tariff=make_tariff(),
+        financial=make_financial_assumptions(),
         quote_date=QUOTE_DATE,
     )
 
@@ -133,6 +140,8 @@ def test_quote_carries_customer_date_and_the_assumptions_it_was_built_with() -> 
         assumptions=make_assumptions(pitched_coverage_ratio="0.75", system_loss_percent="12"),
         pricing=make_pricing_assumptions(),
         exchange_rate=make_exchange_rate(),
+        tariff=make_tariff(),
+        financial=make_financial_assumptions(),
         quote_date=QUOTE_DATE,
     )
 
@@ -147,3 +156,48 @@ def test_quote_carries_customer_date_and_the_assumptions_it_was_built_with() -> 
 
 def test_same_inputs_give_an_identical_quote() -> None:
     assert build() == build()
+
+
+# --- Savings and the tariff assumptions ----------------------------------------------------
+#
+# Default quote: 500 kWh/month (6,000 kWh/year), 8 panels = 4.0 kWp producing 6,000 kWh in year 1,
+# the 3.5 kW inverter (USD 650 = 26,000 TRY, 31,200 with VAT), total price 159,000 TRY.
+# Tariff and financial assumptions: see tests/factories.py (escalation 2%, replacement in year 12,
+# lifetime 25 years, panel degradation 0.5%/year). Year-by-year figures worked out by hand.
+
+
+def test_option_savings_follow_from_production_consumption_and_tariff() -> None:
+    savings = build().system_options[0].savings
+
+    assert savings.first_year_annual_savings == Money(Decimal("22800"), Currency.TRY)
+    assert len(savings.cash_flow) == 25
+    # The 31,200 TRY replacement (inverter incl. 20% VAT, equipment escalation 0) falls in year 12.
+    year_twelve = savings.cash_flow[11]
+    assert year_twelve.inverter_replacement == Money(Decimal("31200"), Currency.TRY)
+    assert year_twelve.net_savings.amount < 0
+    assert savings.payback_years == pytest.approx(Decimal("6.6577903846"), abs=Decimal("1e-9"))
+    assert savings.payback_beyond_lifetime is False
+    assert savings.lifetime_savings.amount == pytest.approx(
+        Decimal("665405.54059"), abs=Decimal("1e-4")
+    )
+
+
+def test_savings_are_computed_for_each_option_from_its_own_price_and_production() -> None:
+    small = build(monthly_consumption_kwh="313").system_options[0]  # 5 panels = 2.5 kWp
+    large = build().system_options[0]  # 8 panels = 4.0 kWp
+
+    assert small.savings.cash_flow[0].production_kwh == Decimal("3750")
+    assert large.savings.cash_flow[0].production_kwh == Decimal("6000")
+    assert small.savings != large.savings
+
+
+def test_quote_records_the_consumption_tier_split_and_the_tariff_and_financial_assumptions() -> (
+    None
+):
+    recorded = build().assumptions
+
+    assert recorded.annual_consumption_kwh == Decimal("6000")
+    assert recorded.low_tier_consumption_kwh == Decimal("3000")
+    assert recorded.high_tier_consumption_kwh == Decimal("3000")
+    assert recorded.tariff == make_tariff()
+    assert recorded.financial == make_financial_assumptions()

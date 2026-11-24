@@ -21,7 +21,7 @@ from pydantic import (
 )
 
 from sunquote.domain import rounding
-from sunquote.domain.assumptions import DcAcRatioRange, PricingAssumptions
+from sunquote.domain.assumptions import DcAcRatioRange, FinancialAssumptions, PricingAssumptions
 from sunquote.domain.catalog import Inverter, Panel
 from sunquote.domain.model import (
     Consumption,
@@ -37,7 +37,9 @@ from sunquote.domain.money import Currency, ExchangeRate, ExchangeRateOverride, 
 from sunquote.domain.pricing import SystemPrice
 from sunquote.domain.production import SpecificYieldInputs
 from sunquote.domain.quote import Quote, SystemOption
+from sunquote.domain.savings import SavingsAnalysis, YearlyCashFlow
 from sunquote.domain.sizing import BindingLimit, SizingStrategy
+from sunquote.domain.tariff import ResidentialTariff
 
 JsonNumber = Annotated[
     Decimal, PlainSerializer(lambda value: float(value), return_type=float, when_used="json")
@@ -251,6 +253,37 @@ class MonthlyProduction(BaseModel):
     production_kwh: int
 
 
+class CashFlowRow(BaseModel):
+    """One year of the cash flow, in today's lira (escalation rates are real, ADR 0003)."""
+
+    year: int = Field(ge=1)
+    production_kwh: int
+    self_consumed_kwh: int
+    exported_kwh: int
+    self_consumption_savings_try: int
+    export_income_try: int
+    annual_savings_try: int
+    inverter_replacement_try: int
+    net_savings_try: int
+    cumulative_net_savings_try: int
+
+
+class SavingsResponse(BaseModel):
+    """What a System Option saves the Customer, in today's lira.
+
+    `payback_period_years` is null, with `payback_beyond_lifetime` true, when the total price
+    including VAT is not recovered within the lifetime.
+    """
+
+    first_year_annual_savings_try: int
+    payback_period_years: JsonNumber | None
+    payback_beyond_lifetime: bool
+    lifetime_savings_try: int = Field(
+        description="Total net savings, after the inverter replacement."
+    )
+    cash_flow: list[CashFlowRow]
+
+
 class SystemOptionResponse(BaseModel):
     strategy: SizingStrategy
     panel: PanelSummary
@@ -261,6 +294,28 @@ class SystemOptionResponse(BaseModel):
     monthly_production_kwh: list[MonthlyProduction]
     inverter: InverterSummary
     price: PriceResponse
+    savings: SavingsResponse
+
+
+class TariffResponse(BaseModel):
+    """The residential Retail Tariff the savings were calculated with (ADR 0002)."""
+
+    tier_threshold_kwh_per_year: JsonNumber
+    low_tariff_try_per_kwh: JsonNumber
+    high_tariff_try_per_kwh: JsonNumber
+    export_price_try_per_kwh: JsonNumber
+    self_consumption_ratio: JsonNumber
+    valid_from: dt.date
+    source: str
+
+
+class FinancialResponse(BaseModel):
+    """Both escalation rates are real (inflation-adjusted): all figures are in today's lira."""
+
+    tariff_escalation_rate_real: JsonNumber
+    equipment_escalation_rate_real: JsonNumber
+    lifetime_years: int
+    inverter_replacement_year: int
 
 
 class AssumptionsResponse(BaseModel):
@@ -275,6 +330,11 @@ class AssumptionsResponse(BaseModel):
     dc_ac_ratio_range: DcAcRatioRangeResponse
     pricing: PricingResponse
     exchange_rate: ExchangeRateResponse
+    annual_consumption_kwh: JsonNumber
+    low_tier_consumption_kwh: JsonNumber
+    high_tier_consumption_kwh: JsonNumber
+    tariff: TariffResponse
+    financial: FinancialResponse
 
 
 class QuoteResponse(BaseModel):
@@ -317,6 +377,53 @@ def _price_response(price: SystemPrice) -> PriceResponse:
     )
 
 
+def _cash_flow_row(row: YearlyCashFlow) -> CashFlowRow:
+    return CashFlowRow(
+        year=row.year,
+        production_kwh=rounding.round_kwh(row.production_kwh),
+        self_consumed_kwh=rounding.round_kwh(row.self_consumed_kwh),
+        exported_kwh=rounding.round_kwh(row.exported_kwh),
+        self_consumption_savings_try=rounding.round_try(row.self_consumption_savings.amount),
+        export_income_try=rounding.round_try(row.export_income.amount),
+        annual_savings_try=rounding.round_try(row.annual_savings.amount),
+        inverter_replacement_try=rounding.round_try(row.inverter_replacement.amount),
+        net_savings_try=rounding.round_try(row.net_savings.amount),
+        cumulative_net_savings_try=rounding.round_try(row.cumulative_net_savings.amount),
+    )
+
+
+def _savings_response(savings: SavingsAnalysis) -> SavingsResponse:
+    payback = savings.payback_years
+    return SavingsResponse(
+        first_year_annual_savings_try=rounding.round_try(savings.first_year_annual_savings.amount),
+        payback_period_years=None if payback is None else rounding.round_payback_years(payback),
+        payback_beyond_lifetime=savings.payback_beyond_lifetime,
+        lifetime_savings_try=rounding.round_try(savings.lifetime_savings.amount),
+        cash_flow=[_cash_flow_row(row) for row in savings.cash_flow],
+    )
+
+
+def _tariff_response(tariff: ResidentialTariff) -> TariffResponse:
+    return TariffResponse(
+        tier_threshold_kwh_per_year=tariff.tier_threshold_kwh_per_year,
+        low_tariff_try_per_kwh=tariff.low_tariff_try_per_kwh,
+        high_tariff_try_per_kwh=tariff.high_tariff_try_per_kwh,
+        export_price_try_per_kwh=tariff.export_price_try_per_kwh,
+        self_consumption_ratio=tariff.self_consumption_ratio,
+        valid_from=tariff.valid_from,
+        source=tariff.source,
+    )
+
+
+def _financial_response(financial: FinancialAssumptions) -> FinancialResponse:
+    return FinancialResponse(
+        tariff_escalation_rate_real=financial.tariff_escalation_rate_real,
+        equipment_escalation_rate_real=financial.equipment_escalation_rate_real,
+        lifetime_years=financial.lifetime_years,
+        inverter_replacement_year=financial.inverter_replacement_year,
+    )
+
+
 def _option_response(option: SystemOption) -> SystemOptionResponse:
     return SystemOptionResponse(
         strategy=option.strategy,
@@ -331,6 +438,7 @@ def _option_response(option: SystemOption) -> SystemOptionResponse:
         ],
         inverter=_inverter_summary(option.inverter),
         price=_price_response(option.price),
+        savings=_savings_response(option.savings),
     )
 
 
@@ -429,5 +537,10 @@ def quote_response(quote: Quote) -> QuoteResponse:
             dc_ac_ratio_range=_dc_ac_range_response(recorded.dc_ac_ratio_range),
             pricing=_pricing_response(recorded.pricing),
             exchange_rate=_exchange_rate_response(recorded.exchange_rate),
+            annual_consumption_kwh=recorded.annual_consumption_kwh,
+            low_tier_consumption_kwh=recorded.low_tier_consumption_kwh,
+            high_tier_consumption_kwh=recorded.high_tier_consumption_kwh,
+            tariff=_tariff_response(recorded.tariff),
+            financial=_financial_response(recorded.financial),
         ),
     )

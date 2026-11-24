@@ -7,19 +7,28 @@ from decimal import Decimal
 from sunquote.domain.assumptions import (
     DcAcRatioRange,
     EngineeringAssumptions,
+    FinancialAssumptions,
     PricingAssumptions,
 )
 from sunquote.domain.catalog import Catalog, Inverter, Panel
 from sunquote.domain.model import Customer, QuoteRequest, RoofType
 from sunquote.domain.money import ExchangeRate
-from sunquote.domain.pricing import SystemPrice, dc_ac_ratio, price_system, select_inverter
+from sunquote.domain.pricing import (
+    SystemPrice,
+    dc_ac_ratio,
+    price_system,
+    select_inverter,
+    to_try,
+)
 from sunquote.domain.production import (
     SpecificYield,
     SpecificYieldInputs,
     annual_production_kwh,
     monthly_production_kwh,
 )
+from sunquote.domain.savings import SavingsAnalysis, analyze_savings
 from sunquote.domain.sizing import BindingLimit, SizingStrategy, size_consumption_matched
+from sunquote.domain.tariff import ResidentialTariff
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,14 +45,16 @@ class SystemOption:
     inverter: Inverter
     dc_ac_ratio: Decimal
     price: SystemPrice
+    savings: SavingsAnalysis
 
 
 @dataclass(frozen=True, slots=True)
 class QuoteAssumptions:
     """Everything the Quote was calculated with, so it can be reproduced later.
 
-    `inverters` is the whole list the inverter choice was made from. Later tickets add the
-    Tariff and the financial assumptions.
+    `inverters` is the whole list the inverter choice was made from. The annual consumption and
+    its split across the Tariff Tiers (ADR 0002) are recorded, not one chosen tier. The
+    financial assumptions hold real escalation rates (ADR 0003).
     """
 
     submitted_request: QuoteRequest
@@ -57,6 +68,11 @@ class QuoteAssumptions:
     dc_ac_ratio_range: DcAcRatioRange
     pricing: PricingAssumptions
     exchange_rate: ExchangeRate
+    annual_consumption_kwh: Decimal
+    low_tier_consumption_kwh: Decimal
+    high_tier_consumption_kwh: Decimal
+    tariff: ResidentialTariff
+    financial: FinancialAssumptions
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,6 +91,8 @@ def build_quote(
     assumptions: EngineeringAssumptions,
     pricing: PricingAssumptions,
     exchange_rate: ExchangeRate,
+    tariff: ResidentialTariff,
+    financial: FinancialAssumptions,
     quote_date: date,
 ) -> Quote:
     """Build the Quote. No clock, file system or network: everything arrives as an argument.
@@ -102,24 +120,39 @@ def build_quote(
         rate=exchange_rate,
     )
 
+    annual_consumption_kwh = 12 * request.consumption.monthly_consumption_kwh
+    low_tier_kwh, high_tier_kwh = tariff.split_by_tier(annual_consumption_kwh)
+    year1_production_kwh = annual_production_kwh(capacity_kwp, specific_yield)
+    price = price_system(
+        panel=panel,
+        panel_count=sizing.panel_count,
+        inverter=inverter,
+        capacity_kwp=capacity_kwp,
+        pricing=pricing,
+        rate=exchange_rate,
+    )
+    savings = analyze_savings(
+        year1_production_kwh=year1_production_kwh,
+        annual_consumption_kwh=annual_consumption_kwh,
+        degradation_rate_per_year=panel.degradation_rate_per_year,
+        tariff=tariff,
+        financial=financial,
+        inverter_price_incl_vat=to_try(inverter.unit_price, exchange_rate) * (1 + pricing.vat_rate),
+        total_price_incl_vat=price.total,
+    )
+
     option = SystemOption(
         strategy=SizingStrategy.CONSUMPTION_MATCHED,
         panel=panel,
         panel_count=sizing.panel_count,
         capacity_kwp=capacity_kwp,
         binding_limit=sizing.binding_limit,
-        annual_production_kwh=annual_production_kwh(capacity_kwp, specific_yield),
+        annual_production_kwh=year1_production_kwh,
         monthly_production_kwh=monthly_production_kwh(capacity_kwp, specific_yield),
         inverter=inverter,
         dc_ac_ratio=dc_ac_ratio(capacity_kwp, inverter),
-        price=price_system(
-            panel=panel,
-            panel_count=sizing.panel_count,
-            inverter=inverter,
-            capacity_kwp=capacity_kwp,
-            pricing=pricing,
-            rate=exchange_rate,
-        ),
+        price=price,
+        savings=savings,
     )
     return Quote(
         customer=request.customer,
@@ -137,5 +170,10 @@ def build_quote(
             dc_ac_ratio_range=assumptions.dc_ac_ratio_range,
             pricing=pricing,
             exchange_rate=exchange_rate,
+            annual_consumption_kwh=annual_consumption_kwh,
+            low_tier_consumption_kwh=low_tier_kwh,
+            high_tier_consumption_kwh=high_tier_kwh,
+            tariff=tariff,
+            financial=financial,
         ),
     )

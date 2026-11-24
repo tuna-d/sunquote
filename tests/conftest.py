@@ -7,7 +7,13 @@ from sunquote.api.app import create_app
 from sunquote.api.dependencies import AppDependencies
 from sunquote.config import Settings
 from sunquote.domain.service import QuoteService
-from tests.factories import make_assumptions, make_catalog, make_pricing_assumptions
+from tests.factories import (
+    make_assumptions,
+    make_catalog,
+    make_financial_assumptions,
+    make_pricing_assumptions,
+    make_tariff,
+)
 from tests.fakes import FakeExchangeRateProvider, FakeSpecificYieldProvider, FixedClock
 
 
@@ -41,6 +47,8 @@ def client(
         catalog=make_catalog(),
         assumptions=make_assumptions(),
         pricing=make_pricing_assumptions(),
+        tariff=make_tariff(),
+        financial=make_financial_assumptions(),
     )
     app = create_app(settings=Settings(), dependencies=AppDependencies(quote_service=service))
     with TestClient(app) as test_client:

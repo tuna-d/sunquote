@@ -459,3 +459,83 @@ def test_openapi_documents_the_endpoint(client: TestClient) -> None:
     paths = client.get("/openapi.json").json()["paths"]
 
     assert "201" in paths["/quotes"]["post"]["responses"]
+
+
+# --- Savings, payback and the tariff assumptions -------------------------------------------
+#
+# The default 4.0 kWp system (500 kWh/month, 6,000 kWh a year, total price 159,000 TRY) with the
+# test tariff and financial assumptions of tests/factories.py. Year-by-year figures were worked
+# out by hand (see tests/domain/test_build_quote.py).
+
+
+def test_each_option_carries_first_year_savings_payback_and_lifetime_savings(
+    client: TestClient,
+) -> None:
+    [option] = client.post("/quotes", json=valid_body()).json()["system_options"]
+
+    savings = option["savings"]
+    assert savings["first_year_annual_savings_try"] == 22800
+    assert savings["payback_period_years"] == 6.7  # 6.6578, shown with one decimal
+    assert savings["payback_beyond_lifetime"] is False
+    assert savings["lifetime_savings_try"] == 665406  # 665,405.54, net of the replacement
+
+
+def test_the_yearly_cash_flow_is_returned_in_whole_lira_and_kwh(client: TestClient) -> None:
+    [option] = client.post("/quotes", json=valid_body()).json()["system_options"]
+
+    cash_flow = option["savings"]["cash_flow"]
+    assert [row["year"] for row in cash_flow] == list(range(1, 26))
+    assert cash_flow[0] == {
+        "year": 1,
+        "production_kwh": 6000,
+        "self_consumed_kwh": 4800,
+        "exported_kwh": 1200,
+        "self_consumption_savings_try": 20400,
+        "export_income_try": 2400,
+        "annual_savings_try": 22800,
+        "inverter_replacement_try": 0,
+        "net_savings_try": 22800,
+        "cumulative_net_savings_try": 22800,
+    }
+    # Year 12 carries the 31,200 TRY inverter replacement: 27,228.35 - 31,200 = -3,971.65.
+    year_twelve = cash_flow[11]
+    assert year_twelve["inverter_replacement_try"] == 31200
+    assert year_twelve["net_savings_try"] == -3972
+    assert year_twelve["cumulative_net_savings_try"] == 268242
+
+
+def test_a_payback_beyond_the_lifetime_has_no_period_and_says_so(client: TestClient) -> None:
+    body = valid_body()
+    body["consumption"]["monthly_consumption_kwh"] = 10  # one panel; the fixed costs dominate
+
+    [option] = client.post("/quotes", json=body).json()["system_options"]
+
+    savings = option["savings"]
+    assert savings["payback_beyond_lifetime"] is True
+    assert savings["payback_period_years"] is None
+
+
+def test_assumptions_record_consumption_split_tariff_and_financial_inputs(
+    client: TestClient,
+) -> None:
+    assumptions = client.post("/quotes", json=valid_body()).json()["assumptions"]
+
+    assert assumptions["annual_consumption_kwh"] == 6000
+    assert assumptions["low_tier_consumption_kwh"] == 3000
+    assert assumptions["high_tier_consumption_kwh"] == 3000
+    assert assumptions["tariff"] == {
+        "tier_threshold_kwh_per_year": 3000,
+        "low_tariff_try_per_kwh": 3,
+        "high_tariff_try_per_kwh": 5,
+        "export_price_try_per_kwh": 2,
+        "self_consumption_ratio": 0.8,
+        "valid_from": "2026-04-04",
+        "source": "test tariff",
+    }
+    assert assumptions["financial"] == {
+        "tariff_escalation_rate_real": 0.02,
+        "equipment_escalation_rate_real": 0,
+        "lifetime_years": 25,
+        "inverter_replacement_year": 12,
+    }
+    assert assumptions["default_panel"]["degradation_rate_per_year"] == 0.005

@@ -1,4 +1,5 @@
-"""Loaders for the placeholder data files (catalog, engineering and pricing assumptions).
+"""Loaders for the placeholder data files (catalog, tariff, engineering, pricing and financial
+assumptions).
 
 The files are TOML so they can carry comments. Floats are parsed straight into `Decimal`
 (never through `float`). Pydantic validates each file, including that every value names its
@@ -17,11 +18,13 @@ from pydantic import BaseModel, ConfigDict, Field
 from sunquote.domain.assumptions import (
     DcAcRatioRange,
     EngineeringAssumptions,
+    FinancialAssumptions,
     PricingAssumptions,
 )
 from sunquote.domain.catalog import Catalog, Inverter, Panel
 from sunquote.domain.model import RoofType
 from sunquote.domain.money import Currency, Money
+from sunquote.domain.tariff import ResidentialTariff
 
 Kind = Literal["direct", "derived", "estimate"]
 
@@ -60,6 +63,23 @@ class _Positive(_SourcedValue):
 
 class _NonNegative(_SourcedValue):
     value: Decimal = Field(ge=0)
+
+
+class _Share(_SourcedValue):
+    value: Decimal = Field(ge=0, le=1)
+
+
+class _Rate(_SourcedValue):
+    """A yearly rate as a share (0.02 is 2%); it may be negative but not below -100%."""
+
+    value: Decimal = Field(gt=-1)
+
+
+class _PositiveYears(_Strict):
+    value: int = Field(ge=1)
+    kind: Kind
+    source: str = Field(min_length=1)
+    date: date
 
 
 class _CatalogItem(_Strict):
@@ -115,6 +135,25 @@ class _AssumptionsFile(_Strict):
     margin: _NonNegative
     vat_rate: _NonNegative
     flat_roof_tilt_deg: _Tilt
+    tariff_escalation_rate_real: _Rate
+    equipment_escalation_rate_real: _Rate
+    lifetime_years: _PositiveYears
+    inverter_replacement_year: _PositiveYears
+
+
+class _TariffMeta(_Strict):
+    valid_from: date
+    source: str = Field(min_length=1)
+
+
+class _TariffFile(_Strict):
+    meta: _Meta
+    tariff: _TariffMeta
+    tier_threshold_kwh_per_year: _Positive
+    low_tariff_try_per_kwh: _Positive
+    high_tariff_try_per_kwh: _Positive
+    export_price_try_per_kwh: _NonNegative
+    self_consumption_ratio: _Share
 
 
 def default_data_dir() -> Path:
@@ -180,4 +219,27 @@ def load_pricing_assumptions(path: Path) -> PricingAssumptions:
         fixed_project_cost=Money(file.fixed_project_cost_try.value, Currency.TRY),
         margin=file.margin.value,
         vat_rate=file.vat_rate.value,
+    )
+
+
+def load_financial_assumptions(path: Path) -> FinancialAssumptions:
+    file = _AssumptionsFile.model_validate(_read(path))
+    return FinancialAssumptions(
+        tariff_escalation_rate_real=file.tariff_escalation_rate_real.value,
+        equipment_escalation_rate_real=file.equipment_escalation_rate_real.value,
+        lifetime_years=file.lifetime_years.value,
+        inverter_replacement_year=file.inverter_replacement_year.value,
+    )
+
+
+def load_residential_tariff(path: Path) -> ResidentialTariff:
+    file = _TariffFile.model_validate(_read(path))
+    return ResidentialTariff(
+        tier_threshold_kwh_per_year=file.tier_threshold_kwh_per_year.value,
+        low_tariff_try_per_kwh=file.low_tariff_try_per_kwh.value,
+        high_tariff_try_per_kwh=file.high_tariff_try_per_kwh.value,
+        export_price_try_per_kwh=file.export_price_try_per_kwh.value,
+        self_consumption_ratio=file.self_consumption_ratio.value,
+        valid_from=file.tariff.valid_from,
+        source=file.tariff.source,
     )

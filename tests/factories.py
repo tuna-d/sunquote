@@ -12,6 +12,7 @@ from decimal import Decimal
 from sunquote.domain.assumptions import (
     DcAcRatioRange,
     EngineeringAssumptions,
+    FinancialAssumptions,
     PricingAssumptions,
 )
 from sunquote.domain.catalog import Catalog, Inverter, Panel
@@ -27,6 +28,7 @@ from sunquote.domain.model import (
 )
 from sunquote.domain.money import Currency, ExchangeRate, Money
 from sunquote.domain.production import SpecificYield, SpecificYieldInputs
+from sunquote.domain.tariff import ResidentialTariff
 
 QUOTE_DATE = date(2026, 11, 24)
 RATE_DATE = date(2026, 11, 23)  # the business day before QUOTE_DATE
@@ -125,6 +127,40 @@ def make_assumptions(
         dc_ac_ratio_range=DcAcRatioRange(
             minimum=Decimal(dc_ac_ratio_min), maximum=Decimal(dc_ac_ratio_max)
         ),
+    )
+
+
+def make_financial_assumptions(
+    *,
+    tariff_escalation: str = "0.02",
+    equipment_escalation: str = "0",
+    lifetime_years: int = 25,
+    replacement_year: int = 12,
+) -> FinancialAssumptions:
+    return FinancialAssumptions(
+        tariff_escalation_rate_real=Decimal(tariff_escalation),
+        equipment_escalation_rate_real=Decimal(equipment_escalation),
+        lifetime_years=lifetime_years,
+        inverter_replacement_year=replacement_year,
+    )
+
+
+def make_tariff(
+    *,
+    threshold_kwh_per_year: str = "3000",
+    low_try_per_kwh: str = "3",
+    high_try_per_kwh: str = "5",
+    export_try_per_kwh: str = "2",
+    self_consumption_ratio: str = "0.8",
+) -> ResidentialTariff:
+    return ResidentialTariff(
+        tier_threshold_kwh_per_year=Decimal(threshold_kwh_per_year),
+        low_tariff_try_per_kwh=Decimal(low_try_per_kwh),
+        high_tariff_try_per_kwh=Decimal(high_try_per_kwh),
+        export_price_try_per_kwh=Decimal(export_try_per_kwh),
+        self_consumption_ratio=Decimal(self_consumption_ratio),
+        valid_from=date(2026, 4, 4),
+        source="test tariff",
     )
 
 
