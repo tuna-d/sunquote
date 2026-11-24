@@ -250,6 +250,25 @@ def test_an_error_or_timeout_gives_the_fixed_text_and_the_quote_is_still_created
     assert slot(page(client, quote), "greeting") == "Sayın Şule Öztürk,"
 
 
+def test_any_unexpected_writer_exception_still_gives_a_fallback_and_a_201(
+    client_factory: ClientFactory,
+    quote_repository: FakeQuoteRepository,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    writer = ScriptedNarrativeWriter(RuntimeError("boom with key=SECRET-KEY"))
+    client = client_with(client_factory, writer)
+
+    with caplog.at_level("WARNING"):
+        quote = create(client)
+
+    assert quote["narrative"]["source"] == "fallback"
+    assert quote["narrative"]["greeting"] == "Sayın Şule Öztürk,"
+    assert len(quote_repository.stored) == 1
+    assert any("RuntimeError" in message for message in caplog.messages)
+    # The log names the exception type only: an arbitrary message could carry a secret.
+    assert "SECRET-KEY" not in caplog.text
+
+
 def test_an_error_on_the_first_attempt_is_not_retried(client_factory: ClientFactory) -> None:
     writer = ScriptedNarrativeWriter(NarrativeUnavailableError("down"), draft())
     client = client_with(client_factory, writer)

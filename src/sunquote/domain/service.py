@@ -46,7 +46,8 @@ class QuoteService:
     The Narrative step runs after the Quote is built and before it is saved: the writer drafts,
     the validator checks, one retry gets the violations, and both attempts share
     `narrative_budget_seconds`. Anything else (no writer, a second rejection, an error, a
-    timeout) records a `fallback` Narrative. The step never makes Quote creation fail.
+    timeout, any other exception from the writer) records a `fallback` Narrative. The step never
+    makes Quote creation fail.
     """
 
     def __init__(
@@ -147,6 +148,14 @@ class QuoteService:
                 draft = await self._validated_draft(writer, quote)
         except (NarrativeUnavailableError, TimeoutError) as error:
             logger.warning("Narrative unavailable, using the fixed text: %s", error)
+            draft = None
+        except Exception as error:
+            # An unexpected failure: log the type only, since an arbitrary message could carry
+            # a secret (a key echoed in a client error, say).
+            logger.warning(
+                "Narrative writer failed unexpectedly (%s), using the fixed text",
+                type(error).__name__,
+            )
             draft = None
         if draft is None:
             return replace(NO_NARRATIVE, generated_at=generated_at)
