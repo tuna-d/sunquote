@@ -46,7 +46,8 @@ def recorded_transport(requests_seen: list[httpx.Request]) -> httpx.MockTranspor
 
 @pytest.fixture
 def wired_client(recorded_transport: httpx.MockTransport) -> Iterator[TestClient]:
-    settings = Settings(redis_url=None)
+    # No key, even when a developer's `.env` sets one for the evals.
+    settings = Settings(redis_url=None, gemini_api_key=None)
     dependencies = build_dependencies(
         settings,
         transport=recorded_transport,

@@ -66,7 +66,8 @@ sloped one pitched.
 residential when the Sales Rep does not name another group. When they name another one (ticari, \
 sanayi, tarım), pass it as the closest English name (commercial, industrial, agricultural) so \
 the tool reports it as unsupported. Ask for it, as the missing field subscriber_group, only \
-when it is unclear whether the Site is a home or a business.
+when the Sales Rep wrote that it is unclear whether the Site is a home or a business; never \
+when they simply name no group.
 - Call {CREATE_QUOTE} once, only when every required value is known: the Customer's name, the \
 Address, the roof type, the usable roof area, the tilt and the azimuth of a pitched roof, the \
 consumption (kWh or bill) and the subscriber group.
@@ -74,6 +75,14 @@ consumption (kWh or bill) and the subscriber group.
 {ASK_FOR_MISSING_FIELDS} instead. List all the missing fields at once, never one at a time, and \
 write one short Turkish question that asks for all of them. A value the Sales Rep already gave \
 anywhere in the conversation is not missing.
+- Ask only for what the quote needs. Before calling {ASK_FOR_MISSING_FIELDS}, drop from its \
+fields every one of these, which are never missing:
+  - roof.tilt_deg and roof.azimuth_deg when the roof is flat (düz çatı, teras): a flat roof \
+needs neither, so leave both out of {CREATE_QUOTE} as well;
+  - roof.roof_type when the Sales Rep wrote eğimli, düz, teras or another word for the roof's \
+shape;
+  - subscriber_group, unless the Sales Rep wrote that they do not know whether the Site is a \
+home or a business.
 
 Questions and explanations
 - The same rule applies to every reply that is not about a created Quote (a question, the \

@@ -263,6 +263,10 @@ Addresses are compared after trimming, collapsing whitespace and Turkish lowerca
 fields allow a difference of 1% or 0.5, whichever is larger. Question scenarios require exactly
 the expected `missing_fields` and no `create_quote` attempt.
 
+Last run on 2026-11-24 with `gemini-3.5-flash-lite`: 19 of 20 scenarios passed (95%). The one
+failure asked whether a roof described as "eğimli" was flat or pitched instead of calling
+`create_quote`.
+
 `SUNQUOTE_EVAL_DELAY_SECONDS` controls the pause between Gemini requests (15 seconds by default),
 including requests within a turn. A call that fails (a rate limit or an outage) is repeated up to
 twice after one more pause, so a single HTTP 429 does not fail a scenario. The 20 scenarios contain up to 23 turns with at most three
@@ -319,12 +323,14 @@ request. The [manual integration workflow](.github/workflows/integration.yml) ru
 real Gemini test inside it skips there, since the workflow sets no key. Run it locally with
 `SUNQUOTE_GEMINI_API_KEY` set to include it.
 
-## What comes next
+## Status
 
-- [Spec #2](https://github.com/tuna-d/sunquote/issues/2) adds an LLM-written Narrative that
-  refers to calculated figures through placeholders.
-- [Spec #3](https://github.com/tuna-d/sunquote/issues/3) adds a natural-language quote
-  assistant and an extraction evaluation suite.
+All three specs are implemented: the [Quote engine](https://github.com/tuna-d/sunquote/issues/1),
+the [LLM-written Narrative](https://github.com/tuna-d/sunquote/issues/2) and the
+[quote assistant with its extraction eval](https://github.com/tuna-d/sunquote/issues/3). The
+domain vocabulary is in [GLOSSARY.md](GLOSSARY.md) and the design decisions are in
+[docs/adr](docs/adr). The Catalog, Tariff and pricing inputs remain
+[placeholder data](#placeholder-data).
 
 ---
 
