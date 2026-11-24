@@ -35,7 +35,8 @@ Three findings touch the design of spec #1. The repo owner decided them on 2026-
   the installed capacity (the exception (b) covers municipal, industrial and irrigation consumers, not mesken).
 - "Installed capacity" is the electrical (inverter AC) capacity. Amended Madde 17(7): requested *mechanical* (panel DC)
   capacity "elektriksel kurulu gücün iki katını aşamaz", so DC/AC up to 2.0 is legal. This matches the spec's rule
-  (inverter AC at most Contracted Power; panels capped by Contracted Power times the maximum DC/AC Ratio).
+  (inverter AC at most Contracted Power; panels capped by the usable inverter AC power times the maximum DC/AC Ratio,
+  where the usable AC power is that of the largest Catalog inverter within the Contracted Power).
 - Madde 26(17) as amended: annual production may not exceed twice annual consumption, and that rule explicitly does **not**
   apply to plants linked to mesken consumption facilities. So there is no consumption-based cap for residential.
 - The only "10 kW" in the regulation text is Madde 11(1): a "tip proje" (simplified type-project) threshold of 10 kW. It is a
