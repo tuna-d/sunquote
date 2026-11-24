@@ -4,6 +4,7 @@ Each problem has a stable `type` URN, so clients can branch on it. To add one, a
 `ProblemType` and register the exception that maps to it in `PROBLEMS_BY_EXCEPTION`.
 """
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -15,6 +16,8 @@ from pydantic import BaseModel
 from sunquote.domain import rounding
 from sunquote.domain.errors import (
     AddressNotFoundError,
+    AssistantNotConfiguredError,
+    ConversationUnavailableError,
     DomainError,
     LocationNotSupportedError,
     NoCompatibleInverterError,
@@ -48,6 +51,10 @@ LOCATION_NOT_SUPPORTED = ProblemType("location-not-supported", "Location not sup
 ADDRESS_NOT_FOUND = ProblemType("address-not-found", "Address not found", 422)
 QUOTE_NOT_FOUND = ProblemType("quote-not-found", "Quote not found", 404)
 UPSTREAM_UNAVAILABLE = ProblemType("upstream-unavailable", "Upstream service unavailable", 503)
+# Only ever a tool error of the quote assistant, never an HTTP response.
+QUOTE_ALREADY_CREATED = ProblemType("quote-already-created", "A Quote was already created", 409)
+ASSISTANT_NOT_CONFIGURED = ProblemType("assistant-not-configured", "Assistant not configured", 503)
+ASSISTANT_UNAVAILABLE = ProblemType("assistant-unavailable", "Assistant unavailable", 503)
 
 PROBLEMS_BY_EXCEPTION: dict[type[DomainError], ProblemType] = {
     UnsupportedSubscriberGroupError: UNSUPPORTED_SUBSCRIBER_GROUP,
@@ -57,6 +64,8 @@ PROBLEMS_BY_EXCEPTION: dict[type[DomainError], ProblemType] = {
     AddressNotFoundError: ADDRESS_NOT_FOUND,
     UpstreamUnavailableError: UPSTREAM_UNAVAILABLE,
     QuoteNotFoundError: QUOTE_NOT_FOUND,
+    AssistantNotConfiguredError: ASSISTANT_NOT_CONFIGURED,
+    ConversationUnavailableError: ASSISTANT_UNAVAILABLE,
 }
 
 
@@ -105,15 +114,20 @@ def _field_path(location: tuple[int | str, ...]) -> str:
     return ".".join(parts) if parts else "body"
 
 
-async def _handle_validation_error(_: Request, error: Exception) -> JSONResponse:
-    assert isinstance(error, RequestValidationError)
-    errors = [
+def field_errors(items: Sequence[Mapping[str, Any]]) -> list[dict[str, str]]:
+    """Pydantic's error items as `{field, message}` entries, in the problem body's format."""
+    return [
         {
             "field": _field_path(item["loc"]),
             "message": item["msg"].removeprefix("Value error, "),
         }
-        for item in error.errors()
+        for item in items
     ]
+
+
+async def _handle_validation_error(_: Request, error: Exception) -> JSONResponse:
+    assert isinstance(error, RequestValidationError)
+    errors = field_errors(error.errors())
     return problem_response(
         VALIDATION_ERROR,
         f"{len(errors)} field(s) failed validation: " + ", ".join(e["field"] for e in errors),
@@ -121,7 +135,7 @@ async def _handle_validation_error(_: Request, error: Exception) -> JSONResponse
     )
 
 
-def _detail(error: DomainError) -> str:
+def error_detail(error: DomainError) -> str:
     """The error's message, with any figure it carries shown through the rounding policy."""
     if isinstance(error, NoCompatibleInverterError):
         capacity_kwp = rounding.round_capacity_kwp(error.capacity_kwp)
@@ -135,7 +149,7 @@ def _detail(error: DomainError) -> str:
 async def _handle_domain_error(_: Request, error: Exception) -> JSONResponse:
     assert isinstance(error, DomainError)
     problem_type = PROBLEMS_BY_EXCEPTION[type(error)]
-    return problem_response(problem_type, _detail(error))
+    return problem_response(problem_type, error_detail(error))
 
 
 def register_error_handlers(app: FastAPI) -> None:

@@ -2,11 +2,24 @@
 
 import asyncio
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from uuid import UUID, uuid4
 
-from sunquote.domain.errors import DomainError, NarrativeUnavailableError, UpstreamUnavailableError
+from sunquote.domain.conversation import (
+    ChatMessage,
+    ModelReply,
+    ReplyRejection,
+    ToolDeclaration,
+    ToolExchange,
+)
+from sunquote.domain.errors import (
+    ConversationUnavailableError,
+    DomainError,
+    NarrativeUnavailableError,
+    UpstreamUnavailableError,
+)
 from sunquote.domain.model import Coordinates, GeocodingResult
 from sunquote.domain.money import Currency, ExchangeRate
 from sunquote.domain.narrative import NarrativeContext, NarrativeDraft, Violation
@@ -60,6 +73,61 @@ class ScriptedNarrativeWriter:
         if isinstance(item, int | float):
             await asyncio.sleep(item)
             raise NarrativeUnavailableError("scripted sleep ended")
+        if isinstance(item, Exception):
+            raise item
+        return item
+
+
+@dataclass(frozen=True)
+class ConversationCall:
+    """What the assistant sent the model in one call."""
+
+    system_instruction: str
+    messages: tuple[ChatMessage, ...]
+    tools: tuple[ToolDeclaration, ...]
+    exchanges: tuple[ToolExchange, ...]
+    rejected_reply: ReplyRejection | None
+
+
+class ScriptedConversationModel:
+    """A ConversationModel that answers each call with the next scripted item: a reply (text
+    or tool call) is returned, an exception is raised, a number of seconds sleeps first (to hit
+    a time budget).
+
+    Records every call it receives.
+    """
+
+    def __init__(
+        self,
+        *script: ModelReply | Exception | float,
+        model_name: str = "fake-chat-1",
+    ) -> None:
+        self.model_name = model_name
+        self._script = list(script)
+        self.calls: list[ConversationCall] = []
+
+    async def respond(
+        self,
+        *,
+        system_instruction: str,
+        messages: Sequence[ChatMessage],
+        tools: Sequence[ToolDeclaration],
+        exchanges: Sequence[ToolExchange] = (),
+        rejected_reply: ReplyRejection | None = None,
+    ) -> ModelReply:
+        self.calls.append(
+            ConversationCall(
+                system_instruction,
+                tuple(messages),
+                tuple(tools),
+                tuple(exchanges),
+                rejected_reply,
+            )
+        )
+        item = self._script.pop(0)
+        if isinstance(item, int | float):
+            await asyncio.sleep(item)
+            raise ConversationUnavailableError("scripted sleep ended")
         if isinstance(item, Exception):
             raise item
         return item

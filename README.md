@@ -184,6 +184,44 @@ The live eval is opt-in and excluded from CI. The default offline suite checks t
 of System Option count, Roof Type, Binding Limit, Tariff Tier, Payback Period and both forms of
 consumption input.
 
+## Optional: the quote assistant
+
+`POST /assistant/messages` lets a Sales Rep describe a Customer in Turkish instead of filling in
+the `POST /quotes` form. It needs the same free Gemini key as the Narrative
+(`SUNQUOTE_GEMINI_API_KEY`, see above). Without a key it answers `503` with the problem type
+`urn:sunquote:problem:assistant-not-configured`, and the rest of the API works as usual.
+
+```sh
+curl http://localhost:8000/assistant/messages -H 'Content-Type: application/json' -d '{
+  "messages": [
+    {"role": "user", "content": "Ayşe Yılmaz için teklif: Etimesgut, Ankara. 40 m² eğimli çatı, güneye bakıyor, 30 derece. Aylık 500 kWh tüketiyor."}
+  ]
+}'
+```
+
+Gemini turns the message into a `create_quote` tool call, which runs the normal Quote creation
+(geocoding, PVGIS, TCMB, Narrative, storage). The response has three fields:
+
+- `reply`: a Turkish explanation of the Quote with every figure filled from the Quote;
+- `quote`: `{id, quote_number, document_url}` when a Quote was created in this turn, else `null`;
+- `missing_fields`: an empty list for now.
+
+The server keeps no conversation: the client sends the whole conversation (1 to 20 messages of
+at most 2,000 characters, the last one from `user`) with every request. The model never
+supplies Coordinates, since the tool takes only an Address, which is always geocoded. At most one
+Quote is created per request and the model is called at most three times, within
+`SUNQUOTE_ASSISTANT_TIMEOUT_SECONDS` (30 s).
+
+**Figures.** As with the Narrative, the model refers to figures through placeholders and the
+service fills them ([ADR 0001](docs/adr/0001-llm-never-writes-figures.md)). A reply that breaks
+the rules is requested once more. If it breaks them again, or the model fails after the Quote was
+created, the reply is a fixed Turkish confirmation with the Quote Number, each option's capacity
+and total price, and the document link. When the model is unavailable before any Quote exists,
+the endpoint answers `503` with `urn:sunquote:problem:assistant-unavailable`.
+
+**Privacy.** Unlike the Narrative, the Sales Rep's own messages go to Gemini and may include the
+Customer's name and Address. Google's free tier may use submitted content for training.
+
 ## Placeholder data
 
 The TOML files in [`src/sunquote/data/`](src/sunquote/data) contain placeholder inputs

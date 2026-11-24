@@ -1,0 +1,37 @@
+{
+  "candidates": [
+    {
+      "content": {
+        "role": "model",
+        "parts": [
+          {
+            "functionCall": {
+              "name": "create_quote",
+              "args": {
+                "customer": {"name": "Ayşe Yılmaz"},
+                "site": {"address": "Etimesgut, Ankara"},
+                "roof": {
+                  "roof_type": "pitched",
+                  "usable_area_m2": 40,
+                  "azimuth_deg": 180,
+                  "tilt_deg": 30
+                },
+                "consumption": {"monthly_consumption_kwh": 500},
+                "subscriber_group": "residential"
+              }
+            },
+            "thoughtSignature": "c2lnbmF0dXJlLTE="
+          }
+        ]
+      },
+      "finishReason": "STOP",
+      "index": 0
+    }
+  ],
+  "usageMetadata": {
+    "promptTokenCount": 1420,
+    "candidatesTokenCount": 96,
+    "totalTokenCount": 1516
+  },
+  "modelVersion": "gemini-3.5-flash-lite"
+}

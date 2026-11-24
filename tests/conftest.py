@@ -7,7 +7,8 @@ from fastapi.testclient import TestClient
 from sunquote.api.app import create_app
 from sunquote.api.dependencies import AppDependencies
 from sunquote.config import Settings
-from sunquote.domain.ports import NarrativeWriter
+from sunquote.domain.conversation import DEFAULT_ASSISTANT_BUDGET_SECONDS
+from sunquote.domain.ports import ConversationModel, NarrativeWriter
 from sunquote.domain.reference_data import ReferenceData
 from sunquote.domain.service import QuoteService
 from tests.factories import make_reference_data
@@ -60,7 +61,8 @@ def client_factory(
 ) -> Iterator[ClientFactory]:
     """Builds clients on the fake collaborators; a test overrides only the clock or the
     reference data it is about. A Narrative writer is optional: without one every Quote
-    records `fallback`."""
+    records `fallback`. So is the assistant's conversation model: without one the assistant
+    answers 503."""
     with ExitStack() as stack:
 
         def make(
@@ -69,6 +71,8 @@ def client_factory(
             reference_data: ReferenceData | None = None,
             narrative_writer: NarrativeWriter | None = None,
             narrative_budget_seconds: float = 15.0,
+            conversation_model: ConversationModel | None = None,
+            assistant_budget_seconds: float = DEFAULT_ASSISTANT_BUDGET_SECONDS,
         ) -> TestClient:
             service = QuoteService(
                 quote_repository=quote_repository,
@@ -83,7 +87,10 @@ def client_factory(
             app = create_app(
                 settings=Settings(),
                 dependencies=AppDependencies(
-                    quote_service=service, quote_repository=quote_repository
+                    quote_service=service,
+                    quote_repository=quote_repository,
+                    conversation_model=conversation_model,
+                    assistant_budget_seconds=assistant_budget_seconds,
                 ),
             )
             return stack.enter_context(TestClient(app))

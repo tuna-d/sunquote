@@ -1,0 +1,22 @@
+{
+  "candidates": [
+    {
+      "content": {
+        "role": "model",
+        "parts": [
+          {
+            "text": "Teklifiniz hazır. {quote_number} numaralı teklifte ilk seçenek {option_1_capacity_kwp} kWp gücündedir ve toplam {option_1_total_try} tutarındadır."
+          }
+        ]
+      },
+      "finishReason": "STOP",
+      "index": 0
+    }
+  ],
+  "usageMetadata": {
+    "promptTokenCount": 1730,
+    "candidatesTokenCount": 51,
+    "totalTokenCount": 1781
+  },
+  "modelVersion": "gemini-3.5-flash-lite"
+}

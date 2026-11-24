@@ -4,6 +4,7 @@ The prose slots hold text and `{placeholders}` only (ADR 0001). `validate_narrat
 draft mechanically against the anonymised `NarrativeContext`; the domain writes no prose.
 """
 
+from collections.abc import Collection
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
@@ -149,9 +150,17 @@ def _fields(draft: NarrativeDraft) -> tuple[tuple[str, str | None], ...]:
     )
 
 
-def _text_violations(field: str, text: str, context: NarrativeContext) -> list[Violation]:
+def validate_text(
+    text: str, *, field: str, available_placeholders: Collection[str], max_length: int
+) -> tuple[Violation, ...]:
+    """Every per-text rule `text` breaks: digits outside placeholders, unknown or unavailable
+    placeholders, unbalanced curly braces and length. `field` names the text in the violations.
+
+    The Narrative's slots use it, and so does any other text that may refer to a Quote's
+    figures only through placeholders (the assistant's reply).
+    """
     violations: list[Violation] = []
-    available = set(context.available_placeholders)
+    available = set(available_placeholders)
     known = known_placeholders()
     for name in dict.fromkeys(PLACEHOLDER_PATTERN.findall(text)):
         if name not in known:
@@ -179,14 +188,15 @@ def _text_violations(field: str, text: str, context: NarrativeContext) -> list[V
                 "a digit is written outside a placeholder; refer to figures by placeholder",
             )
         )
-    limit = LENGTH_LIMITS[field]
-    if len(text) > limit:
+    if len(text) > max_length:
         violations.append(
             Violation(
-                ViolationKind.TOO_LONG, field, f"{len(text)} characters; the limit is {limit}"
+                ViolationKind.TOO_LONG,
+                field,
+                f"{len(text)} characters; the limit is {max_length}",
             )
         )
-    return violations
+    return tuple(violations)
 
 
 def validate_narrative(draft: NarrativeDraft, context: NarrativeContext) -> tuple[Violation, ...]:
@@ -209,5 +219,12 @@ def validate_narrative(draft: NarrativeDraft, context: NarrativeContext) -> tupl
                 )
             )
         else:
-            violations.extend(_text_violations(field, text, context))
+            violations.extend(
+                validate_text(
+                    text,
+                    field=field,
+                    available_placeholders=context.available_placeholders,
+                    max_length=LENGTH_LIMITS[field],
+                )
+            )
     return tuple(violations)

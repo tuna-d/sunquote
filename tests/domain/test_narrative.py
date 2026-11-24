@@ -16,6 +16,7 @@ from sunquote.domain.narrative import (
     Orientation,
     ViolationKind,
     validate_narrative,
+    validate_text,
 )
 from sunquote.domain.narrative_context import build_narrative_context
 from sunquote.domain.placeholders import available_placeholders, fill_placeholders
@@ -495,3 +496,36 @@ def test_an_llm_record_needs_a_draft_and_a_model_and_a_fallback_has_neither() ->
         NarrativeRecord(source=NarrativeSource.FALLBACK, draft=draft, model=None, generated_at=None)
     with pytest.raises(ValueError, match="fallback"):
         NarrativeRecord(source=NarrativeSource.FALLBACK, draft=None, model="m", generated_at=None)
+
+
+# --- One text on its own (the assistant's reply uses it) -------------------------------------
+
+
+def test_a_single_text_is_checked_against_a_quotes_available_placeholders() -> None:
+    context = build_narrative_context(one_option())
+
+    clean = validate_text(
+        "{customer_name}, {option_1_total_try} tutarında.",
+        field="reply",
+        available_placeholders=context.available_placeholders,
+        max_length=1500,
+    )
+    broken = validate_text(
+        "8 kWp {option_2_total_try} {nothing} {",
+        field="reply",
+        available_placeholders=context.available_placeholders,
+        max_length=1500,
+    )
+
+    assert clean == ()
+    assert {(v.kind, v.field) for v in broken} == {
+        (ViolationKind.DIGIT_OUTSIDE_PLACEHOLDER, "reply"),
+        (ViolationKind.UNAVAILABLE_PLACEHOLDER, "reply"),
+        (ViolationKind.UNKNOWN_PLACEHOLDER, "reply"),
+    }
+
+
+def test_a_single_text_has_its_own_length_limit() -> None:
+    violations = validate_text("a" * 11, field="reply", available_placeholders=(), max_length=10)
+
+    assert [(v.kind, v.field) for v in violations] == [(ViolationKind.TOO_LONG, "reply")]
