@@ -1,4 +1,5 @@
-"""The real adapters and shipped data files wired together, with a recorded PVGIS response."""
+"""The real adapters and shipped data files wired together, with recorded PVGIS and TCMB
+responses."""
 
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
@@ -14,7 +15,9 @@ from sunquote.bootstrap import build_dependencies
 from sunquote.config import Settings
 from tests.api.test_quotes import valid_body
 
-RECORDING = Path(__file__).parent / "adapters" / "recordings" / "pvgis_pvcalc_ankara.json"
+RECORDINGS = Path(__file__).parent / "adapters" / "recordings"
+RECORDING = RECORDINGS / "pvgis_pvcalc_ankara.json"
+TCMB_MONDAY = RECORDINGS / "tcmb_2026-11-23_monday.xml"
 
 
 @pytest.fixture
@@ -24,12 +27,15 @@ def requests_seen() -> list[httpx.Request]:
 
 @pytest.fixture
 def wired_client(requests_seen: list[httpx.Request]) -> Iterator[TestClient]:
-    def pvgis(request: httpx.Request) -> httpx.Response:
+    def upstream(request: httpx.Request) -> httpx.Response:
         requests_seen.append(request)
+        if request.url.host == "www.tcmb.gov.tr":
+            # Whatever the quote date, serve the Monday 2026-11-23 file (USD selling 50.6026).
+            return httpx.Response(200, content=TCMB_MONDAY.read_bytes())
         return httpx.Response(200, text=RECORDING.read_text(encoding="utf-8"))
 
     settings = Settings()
-    dependencies = build_dependencies(settings, transport=httpx.MockTransport(pvgis))
+    dependencies = build_dependencies(settings, transport=httpx.MockTransport(upstream))
     with TestClient(create_app(settings, dependencies)) as client:
         yield client
 
@@ -57,8 +63,32 @@ def test_quote_from_shipped_data_files_and_recorded_pvgis_response(
         "aspect_deg": 0,
         "system_loss_percent": 14,
     }
-    [pvgis_request] = requests_seen
+    pvgis_request = next(r for r in requests_seen if r.url.host != "www.tcmb.gov.tr")
     assert pvgis_request.url.params["loss"] == "14"
+
+
+def test_quote_is_priced_from_the_shipped_prices_and_the_tcmb_rate(
+    wired_client: TestClient, requests_seen: list[httpx.Request]
+) -> None:
+    quote = wired_client.post("/quotes", json=valid_body()).json()
+
+    # 9 Trina panels (3.96 kWp). The 3 kW Huawei is the cheapest in range (3.96 / 3 = 1.32).
+    [option] = quote["system_options"]
+    assert option["inverter"]["model"] == "SUN2000-3KTL-M1"
+    # USD: 9 x 76 + 650 + 120 x 3.96 = 684 + 650 + 475.2 = 1,809.2 -> x 50.6026 = 91,550.25
+    # + labour 4,000 x 3.96 = 15,840 + fixed 20,000 = 127,390.25 (Installation Cost)
+    # x 1.25 = 159,237.81 (Sale Price); VAT 20% = 31,847.56; total 191,085.37
+    assert option["price"] == {
+        "installation_cost_try": 127390,
+        "sale_price_try": 159238,
+        "vat_try": 31848,
+        "total_try": 191085,
+    }
+    rate = quote["assumptions"]["exchange_rate"]
+    assert (rate["rate"], rate["overridden"]) == (50.6026, False)
+    tcmb_requests = [r for r in requests_seen if r.url.host == "www.tcmb.gov.tr"]
+    assert tcmb_requests
+    assert tcmb_requests[0].url.path.endswith(".xml")
 
 
 def test_flat_roof_sends_the_configured_tilt_and_south_facing_aspect_to_pvgis(
@@ -70,7 +100,7 @@ def test_flat_roof_sends_the_configured_tilt_and_south_facing_aspect_to_pvgis(
     response = wired_client.post("/quotes", json=body)
 
     assert response.status_code == 201
-    [pvgis_request] = requests_seen
+    pvgis_request = next(r for r in requests_seen if r.url.host != "www.tcmb.gov.tr")
     assert pvgis_request.url.params["angle"] == "15"
     assert pvgis_request.url.params["aspect"] == "0"
     pvgis_inputs = response.json()["assumptions"]["pvgis_inputs"]

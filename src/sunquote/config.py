@@ -29,3 +29,7 @@ class Settings(BaseSettings):
 
     pvgis_base_url: str = "https://re.jrc.ec.europa.eu/api/v5_3"
     pvgis_timeout_seconds: float = Field(default=10.0, gt=0)
+
+    # TCMB publishes the daily exchange rate files at <base>/<YYYYMM>/<DDMMYYYY>.xml. No key.
+    tcmb_base_url: str = "https://www.tcmb.gov.tr/kurlar"
+    tcmb_timeout_seconds: float = Field(default=10.0, gt=0)

@@ -11,7 +11,7 @@ import httpx
 import pytest
 
 from sunquote.adapters.pvgis import PvgisSpecificYieldProvider
-from sunquote.domain.errors import UpstreamUnavailableError
+from sunquote.domain.errors import LocationNotSupportedError, UpstreamUnavailableError
 from sunquote.domain.model import Coordinates
 from sunquote.domain.ports import SpecificYieldQuery
 
@@ -145,11 +145,18 @@ async def test_server_errors_are_upstream_unavailable(status: int) -> None:
         await provider_with(respond_with("busy", status)).fetch(make_query())
 
 
-async def test_location_over_the_sea_is_upstream_unavailable_with_pvgis_message() -> None:
+async def test_location_over_the_sea_is_not_supported_with_the_pvgis_message() -> None:
     provider = provider_with(respond_with(recording("pvgis_pvcalc_over_sea.json"), status=400))
 
-    with pytest.raises(UpstreamUnavailableError, match="Location over the sea"):
+    with pytest.raises(LocationNotSupportedError) as raised:
         await provider.fetch(make_query(latitude="36", longitude="30"))
+
+    assert str(raised.value) == "Location over the sea. Please, select another location"
+
+
+async def test_a_400_without_a_body_still_says_the_location_is_not_supported() -> None:
+    with pytest.raises(LocationNotSupportedError, match="HTTP 400"):
+        await provider_with(respond_with("", status=400)).fetch(make_query())
 
 
 @pytest.mark.parametrize(

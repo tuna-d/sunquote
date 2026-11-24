@@ -14,6 +14,8 @@ from pydantic import BaseModel
 
 from sunquote.domain.errors import (
     DomainError,
+    LocationNotSupportedError,
+    NoCompatibleInverterError,
     NoViableSystemError,
     UnsupportedSubscriberGroupError,
     UpstreamUnavailableError,
@@ -38,11 +40,15 @@ UNSUPPORTED_SUBSCRIBER_GROUP = ProblemType(
     "unsupported-subscriber-group", "Unsupported Subscriber Group", 422
 )
 NO_VIABLE_SYSTEM = ProblemType("no-viable-system", "No viable system", 422)
+NO_COMPATIBLE_INVERTER = ProblemType("no-compatible-inverter", "No compatible inverter", 422)
+LOCATION_NOT_SUPPORTED = ProblemType("location-not-supported", "Location not supported", 422)
 UPSTREAM_UNAVAILABLE = ProblemType("upstream-unavailable", "Upstream service unavailable", 503)
 
 PROBLEMS_BY_EXCEPTION: dict[type[DomainError], ProblemType] = {
     UnsupportedSubscriberGroupError: UNSUPPORTED_SUBSCRIBER_GROUP,
     NoViableSystemError: NO_VIABLE_SYSTEM,
+    NoCompatibleInverterError: NO_COMPATIBLE_INVERTER,
+    LocationNotSupportedError: LOCATION_NOT_SUPPORTED,
     UpstreamUnavailableError: UPSTREAM_UNAVAILABLE,
 }
 

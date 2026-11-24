@@ -5,7 +5,7 @@ Decimals leave the API as JSON numbers: the displayed figures are already rounde
 inputs recorded in the assumptions are short decimals that survive the trip exactly.
 """
 
-from datetime import date
+import datetime as dt
 from decimal import Decimal
 from typing import Annotated
 
@@ -21,7 +21,8 @@ from pydantic import (
 )
 
 from sunquote.domain import rounding
-from sunquote.domain.catalog import Panel
+from sunquote.domain.assumptions import DcAcRatioRange, PricingAssumptions
+from sunquote.domain.catalog import Inverter, Panel
 from sunquote.domain.model import (
     Consumption,
     Coordinates,
@@ -32,6 +33,8 @@ from sunquote.domain.model import (
     Site,
     SubscriberGroup,
 )
+from sunquote.domain.money import Currency, ExchangeRate, ExchangeRateOverride, Money
+from sunquote.domain.pricing import SystemPrice
 from sunquote.domain.production import SpecificYieldInputs
 from sunquote.domain.quote import Quote, SystemOption
 from sunquote.domain.sizing import BindingLimit, SizingStrategy
@@ -84,12 +87,31 @@ class ConsumptionBody(BaseModel):
     monthly_consumption_kwh: Annotated[Decimal, Field(gt=0)]
 
 
+class ExchangeRateOverrideBody(BaseModel):
+    rate: Annotated[Decimal, Field(gt=0)] = Field(description="TRY per 1 USD.")
+    date: dt.date = Field(description="The date the rate applies to.")
+
+
 class QuoteRequestBody(BaseModel):
     customer: CustomerBody
     site: SiteBody
     roof: RoofBody
     consumption: ConsumptionBody
     subscriber_group: str = Field(description="Only `residential` is supported.")
+    exchange_rate_override: ExchangeRateOverrideBody | None = Field(
+        default=None,
+        description=(
+            "USD/TRY rate to price with instead of TCMB's. When given, TCMB is not called "
+            "and the Quote records that the rate was overridden."
+        ),
+    )
+
+    def exchange_rate_override_to_domain(self) -> ExchangeRateOverride | None:
+        if self.exchange_rate_override is None:
+            return None
+        return ExchangeRateOverride(
+            rate=self.exchange_rate_override.rate, rate_date=self.exchange_rate_override.date
+        )
 
     def to_domain(self) -> QuoteRequest:
         """Raises `UnsupportedSubscriberGroupError` for any group but residential."""
@@ -155,11 +177,62 @@ class PanelSummary(BaseModel):
     power_w: int
 
 
+class MoneyResponse(BaseModel):
+    """An amount at full precision with its currency, for unit prices and rates."""
+
+    amount: JsonNumber
+    currency: Currency
+
+
 class PanelDatasheet(PanelSummary):
     length_mm: int
     width_mm: int
     area_m2: JsonNumber
     degradation_rate_per_year: JsonNumber
+    unit_price: MoneyResponse
+
+
+class InverterSummary(BaseModel):
+    inverter_id: str
+    manufacturer: str
+    model: str
+    ac_power_kw: JsonNumber
+
+
+class InverterDatasheet(InverterSummary):
+    unit_price: MoneyResponse
+
+
+class ExchangeRateResponse(BaseModel):
+    """1 `base_currency` buys `rate` `quote_currency` on `date`."""
+
+    base_currency: Currency
+    quote_currency: Currency
+    rate: JsonNumber
+    date: dt.date
+    overridden: bool
+
+
+class PricingResponse(BaseModel):
+    bos_price_per_kwp: MoneyResponse
+    labour_price_per_kwp: MoneyResponse
+    fixed_project_cost: MoneyResponse
+    margin: JsonNumber
+    vat_rate: JsonNumber
+
+
+class DcAcRatioRangeResponse(BaseModel):
+    minimum: JsonNumber
+    maximum: JsonNumber
+
+
+class PriceResponse(BaseModel):
+    """What the Customer pays for a System Option, in whole lira."""
+
+    installation_cost_try: int
+    sale_price_try: int
+    vat_try: int
+    total_try: int
 
 
 class PvgisInputs(BaseModel):
@@ -186,6 +259,8 @@ class SystemOptionResponse(BaseModel):
     binding_limit: BindingLimit
     annual_production_kwh: int
     monthly_production_kwh: list[MonthlyProduction]
+    inverter: InverterSummary
+    price: PriceResponse
 
 
 class AssumptionsResponse(BaseModel):
@@ -196,13 +271,17 @@ class AssumptionsResponse(BaseModel):
     effective_tilt_deg: JsonNumber
     coverage_ratio: JsonNumber
     default_panel: PanelDatasheet
+    inverters: list[InverterDatasheet]
+    dc_ac_ratio_range: DcAcRatioRangeResponse
+    pricing: PricingResponse
+    exchange_rate: ExchangeRateResponse
 
 
 class QuoteResponse(BaseModel):
     model_config = ConfigDict(title="Quote")
 
     customer: SubmittedCustomer
-    quote_date: date
+    quote_date: dt.date
     system_options: list[SystemOptionResponse]
     assumptions: AssumptionsResponse
 
@@ -213,6 +292,28 @@ def _panel_summary(panel: Panel) -> PanelSummary:
         manufacturer=panel.manufacturer,
         model=panel.model,
         power_w=panel.power_w,
+    )
+
+
+def _money(money: Money) -> MoneyResponse:
+    return MoneyResponse(amount=money.amount, currency=money.currency)
+
+
+def _inverter_summary(inverter: Inverter) -> InverterSummary:
+    return InverterSummary(
+        inverter_id=inverter.inverter_id,
+        manufacturer=inverter.manufacturer,
+        model=inverter.model,
+        ac_power_kw=inverter.ac_power_kw,
+    )
+
+
+def _price_response(price: SystemPrice) -> PriceResponse:
+    return PriceResponse(
+        installation_cost_try=rounding.round_try(price.installation_cost.amount),
+        sale_price_try=rounding.round_try(price.sale_price.amount),
+        vat_try=rounding.round_try(price.vat.amount),
+        total_try=rounding.round_try(price.total.amount),
     )
 
 
@@ -228,6 +329,8 @@ def _option_response(option: SystemOption) -> SystemOptionResponse:
             MonthlyProduction(month=month, production_kwh=rounding.round_kwh(kwh))
             for month, kwh in enumerate(option.monthly_production_kwh, start=1)
         ],
+        inverter=_inverter_summary(option.inverter),
+        price=_price_response(option.price),
     )
 
 
@@ -265,6 +368,30 @@ def _pvgis_inputs(inputs: SpecificYieldInputs) -> PvgisInputs:
     )
 
 
+def _pricing_response(pricing: PricingAssumptions) -> PricingResponse:
+    return PricingResponse(
+        bos_price_per_kwp=_money(pricing.bos_price_per_kwp),
+        labour_price_per_kwp=_money(pricing.labour_price_per_kwp),
+        fixed_project_cost=_money(pricing.fixed_project_cost),
+        margin=pricing.margin,
+        vat_rate=pricing.vat_rate,
+    )
+
+
+def _exchange_rate_response(rate: ExchangeRate) -> ExchangeRateResponse:
+    return ExchangeRateResponse(
+        base_currency=rate.base,
+        quote_currency=rate.quote,
+        rate=rate.rate,
+        date=rate.rate_date,
+        overridden=rate.overridden,
+    )
+
+
+def _dc_ac_range_response(ratio_range: DcAcRatioRange) -> DcAcRatioRangeResponse:
+    return DcAcRatioRangeResponse(minimum=ratio_range.minimum, maximum=ratio_range.maximum)
+
+
 def quote_response(quote: Quote) -> QuoteResponse:
     recorded = quote.assumptions
     panel = recorded.default_panel
@@ -290,6 +417,17 @@ def quote_response(quote: Quote) -> QuoteResponse:
                 width_mm=panel.width_mm,
                 area_m2=panel.area_m2,
                 degradation_rate_per_year=panel.degradation_rate_per_year,
+                unit_price=_money(panel.unit_price),
             ),
+            inverters=[
+                InverterDatasheet(
+                    **_inverter_summary(inverter).model_dump(),
+                    unit_price=_money(inverter.unit_price),
+                )
+                for inverter in recorded.inverters
+            ],
+            dc_ac_ratio_range=_dc_ac_range_response(recorded.dc_ac_ratio_range),
+            pricing=_pricing_response(recorded.pricing),
+            exchange_rate=_exchange_rate_response(recorded.exchange_rate),
         ),
     )

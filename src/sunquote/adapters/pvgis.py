@@ -4,7 +4,7 @@ from decimal import ROUND_HALF_UP, Decimal
 
 import httpx
 
-from sunquote.domain.errors import UpstreamUnavailableError
+from sunquote.domain.errors import LocationNotSupportedError, UpstreamUnavailableError
 from sunquote.domain.ports import SpecificYieldQuery
 from sunquote.domain.production import SpecificYield, SpecificYieldInputs
 
@@ -71,6 +71,12 @@ class PvgisSpecificYieldProvider:
             raise UpstreamUnavailableError(
                 _SERVICE, f"could not connect ({type(error).__name__})"
             ) from None
+        if response.status_code == 400:
+            # PVGIS answers 400 with an explanation when it cannot serve the point, for example
+            # "Location over the sea". The request is well-formed, so the Site is the problem.
+            raise LocationNotSupportedError(
+                _error_message(response) or "PVGIS rejected the location (HTTP 400)"
+            )
         if response.status_code != 200:
             raise UpstreamUnavailableError(
                 _SERVICE, f"HTTP {response.status_code}: {_error_message(response)}"

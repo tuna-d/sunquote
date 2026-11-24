@@ -1,13 +1,13 @@
 # PLACEHOLDER DATA. Not any installer's real engineering rules.
 #
-# Engineering assumptions for the quote calculation, from the research note
-# docs/research/placeholder-market-data.md (section 5, research date 2026-11-24).
+# Engineering and pricing assumptions for the quote calculation, from the research note
+# docs/research/placeholder-market-data.md (sections 4 and 5, research date 2026-11-24).
 # Every value carries its kind, source and date:
 #   direct   - copied from a primary source
 #   derived  - computed from direct figures (derivation in the source text)
 #   estimate - a judgment value with no primary source; replace when real data arrives
 #
-# Pricing, tariff and financial assumptions join this file in later tickets.
+# Tariff and financial assumptions join this file in later tickets.
 
 [meta]
 placeholder = true
@@ -35,4 +35,53 @@ date = 2026-11-24
 value = 14
 kind = "direct"
 source = "PVGIS PVcalc default system loss, as used by docs/research/placeholder-market-data.md section 5"
+date = 2026-11-24
+
+[dc_ac_ratio_min]
+value = 1.00
+kind = "estimate"
+source = "docs/research/placeholder-market-data.md section 5: below 1 wastes inverter capacity"
+date = 2026-11-24
+
+# The research note proposes 1.30. With string inverters in 3-10 kW steps, 1.30 leaves gaps: a
+# 3.96 kWp system (9 panels of 440 W) is 1.32 on a 3 kW and 0.99 on a 4 kW inverter, so no
+# inverter qualifies and the quote fails. 1.50 closes the gaps while staying well under the 2.0
+# the research note cites for the regulation and the manufacturer. The owner may tighten it.
+[dc_ac_ratio_max]
+value = 1.50
+kind = "estimate"
+source = "docs/research/placeholder-market-data.md section 5 (proposed 1.30), widened to 1.50 so the catalog has no sizing gaps; the regulation allows up to 2.0 and Huawei recommends up to about 2.0 for small units"
+date = 2026-11-24
+
+# Pricing. BOS (balance of system: mounting and cabling) is USD, labour and the fixed project
+# cost are TRY. Margin and VAT are shares: 0.25 is 25%.
+
+[bos_usd_per_kwp]
+value = 120
+kind = "estimate"
+source = "docs/research/placeholder-market-data.md section 4: typical pitched-roof rails, clamps, DC/AC cable and protection"
+date = 2026-11-24
+
+[labour_try_per_kwp]
+value = 4000
+kind = "estimate"
+source = "docs/research/placeholder-market-data.md section 4: about USD 80/kWp at 50.4 TRY/USD"
+date = 2026-11-24
+
+[fixed_project_cost_try]
+value = 20000
+kind = "estimate"
+source = "docs/research/placeholder-market-data.md section 4: permits, project file, grid application, meter change; about USD 400"
+date = 2026-11-24
+
+[margin]
+value = 0.25
+kind = "estimate"
+source = "docs/research/placeholder-market-data.md section 4: modelled 10 kWp system sits below a 2026 market price quote, so this is on the low side"
+date = 2026-11-24
+
+[vat_rate]
+value = 0.20
+kind = "estimate"
+source = "docs/research/placeholder-market-data.md section 4: general KDV rate; applicability to residential PV still to be confirmed (open point 1)"
 date = 2026-11-24
