@@ -13,7 +13,7 @@ from sunquote.domain.assumptions import (
 )
 from sunquote.domain.catalog import Catalog, Inverter, Panel
 from sunquote.domain.model import Customer, QuoteRequest, RoofType
-from sunquote.domain.money import ExchangeRate
+from sunquote.domain.money import Currency, ExchangeRate, Money
 from sunquote.domain.pricing import (
     SystemPrice,
     dc_ac_ratio,
@@ -83,6 +83,11 @@ class QuoteAssumptions:
     high_tier_consumption_kwh: Decimal
     tariff: ResidentialTariff
     financial: FinancialAssumptions
+    derived_monthly_consumption_kwh: Decimal | None = None
+
+    @property
+    def consumption_derived_from_bill(self) -> bool:
+        return self.derived_monthly_consumption_kwh is not None
 
 
 @dataclass(frozen=True, slots=True)
@@ -175,7 +180,18 @@ def build_quote(
     coverage_ratio = assumptions.coverage_ratio(roof.roof_type)
     azimuth_deg, tilt_deg = roof.effective_orientation(assumptions.flat_roof_tilt_deg)
     contracted_power = _contracted_power(request, assumptions)
-    annual_consumption_kwh = 12 * request.consumption.monthly_consumption_kwh
+    monthly_consumption_kwh = request.consumption.monthly_consumption_kwh
+    derived_monthly_consumption_kwh = None
+    if monthly_consumption_kwh is None:
+        monthly_bill_try = request.consumption.monthly_bill_try
+        assert monthly_bill_try is not None
+        annual_consumption_kwh = tariff.annual_consumption_from_cost(
+            12 * Money(monthly_bill_try, Currency.TRY)
+        )
+        monthly_consumption_kwh = annual_consumption_kwh / 12
+        derived_monthly_consumption_kwh = monthly_consumption_kwh
+    else:
+        annual_consumption_kwh = 12 * monthly_consumption_kwh
     low_tier_kwh, high_tier_kwh = tariff.split_by_tier(annual_consumption_kwh)
 
     roof_panels = roof_capacity_panels(roof.usable_area_m2, coverage_ratio, panel)
@@ -183,7 +199,7 @@ def build_quote(
         contracted_power.kw, assumptions.dc_ac_ratio_range.maximum, panel
     )
     consumption_matched = size_consumption_matched(
-        monthly_consumption_kwh=request.consumption.monthly_consumption_kwh,
+        monthly_consumption_kwh=monthly_consumption_kwh,
         annual_kwh_per_kwp=specific_yield.annual_kwh_per_kwp,
         roof_panels=roof_panels,
         contracted_power_cap_panels=cap_panels,
@@ -233,6 +249,7 @@ def build_quote(
             high_tier_consumption_kwh=high_tier_kwh,
             tariff=tariff,
             financial=financial,
+            derived_monthly_consumption_kwh=derived_monthly_consumption_kwh,
         ),
     )
 

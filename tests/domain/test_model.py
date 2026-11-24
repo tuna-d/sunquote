@@ -32,6 +32,8 @@ def roof(**overrides: str) -> Roof:
         lambda: roof(azimuth_deg="-1"),
         lambda: roof(tilt_deg="90.1"),
         lambda: Consumption(monthly_consumption_kwh=Decimal("0")),
+        lambda: Consumption(),
+        lambda: Consumption(monthly_bill_try=Decimal("-1")),
         lambda: SpecificYield(
             annual_kwh_per_kwp=Decimal("0"),
             monthly_kwh_per_kwp=make_specific_yield().monthly_kwh_per_kwp,

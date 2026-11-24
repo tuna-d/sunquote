@@ -4,21 +4,24 @@ Fixed inputs: panel 0.5 kWp / 2.0 m2, coverage ratio 0.80, annual specific yield
 kWh/kWp (monthly values sum to 1,500).
 """
 
+from dataclasses import replace
 from decimal import Decimal
 
 import pytest
 
 from sunquote.domain.errors import NoViableSystemError
-from sunquote.domain.model import RoofType
+from sunquote.domain.model import Consumption, RoofType
 from sunquote.domain.money import Currency, Money
 from sunquote.domain.quote import build_quote
 from sunquote.domain.sizing import BindingLimit, SizingStrategy
 from tests.factories import (
+    DEFAULT_INVERTERS,
     QUOTE_DATE,
     make_assumptions,
     make_catalog,
     make_exchange_rate,
     make_financial_assumptions,
+    make_inverter,
     make_pricing_assumptions,
     make_request,
     make_specific_yield,
@@ -212,3 +215,46 @@ def test_the_roof_max_option_gets_its_own_savings_from_its_own_price_and_product
     assert roof_max.savings.cash_flow[11].inverter_replacement == Money(
         Decimal("52800"), Currency.TRY
     )
+
+
+@pytest.mark.parametrize(
+    ("bill_try", "annual_cost_try", "annual_kwh", "monthly_kwh"),
+    [
+        ("700", "8400", "3360", "280"),
+        ("750", "9000", "3600", "300"),
+        ("1000", "12000", "4400", "366.67"),
+        ("2000", "24000", "7600", "633.33"),
+    ],
+)
+def test_monthly_bill_converts_through_the_marginal_tariff_tiers(
+    bill_try: str, annual_cost_try: str, annual_kwh: str, monthly_kwh: str
+) -> None:
+    tariff = make_tariff(
+        threshold_kwh_per_year="3600", low_try_per_kwh="2.50", high_try_per_kwh="3.75"
+    )
+    quote = build_quote(
+        request=replace(
+            make_request(), consumption=Consumption(monthly_bill_try=Decimal(bill_try))
+        ),
+        specific_yield=make_specific_yield(),
+        catalog=make_catalog((*DEFAULT_INVERTERS, make_inverter("i2", "2", "375"))),
+        assumptions=make_assumptions(),
+        pricing=make_pricing_assumptions(),
+        exchange_rate=make_exchange_rate(),
+        tariff=tariff,
+        financial=make_financial_assumptions(),
+        quote_date=QUOTE_DATE,
+    )
+
+    recorded = quote.assumptions
+    assert recorded.annual_consumption_kwh == Decimal(annual_kwh)
+    assert tariff.annual_cost(recorded.annual_consumption_kwh) == Money(
+        Decimal(annual_cost_try), Currency.TRY
+    )
+    assert recorded.consumption_derived_from_bill
+    assert recorded.submitted_request.consumption.monthly_bill_try == Decimal(bill_try)
+    assert recorded.derived_monthly_consumption_kwh is not None
+    assert recorded.derived_monthly_consumption_kwh.quantize(Decimal("0.01")) == Decimal(
+        monthly_kwh
+    )
+    assert 12 * recorded.derived_monthly_consumption_kwh == Decimal(annual_kwh)

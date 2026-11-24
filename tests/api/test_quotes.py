@@ -57,6 +57,38 @@ def with_change(path: str, value: Any) -> dict[str, Any]:
     return body
 
 
+def test_creates_the_same_system_options_from_a_bill_as_from_kwh(client: TestClient) -> None:
+    # Test tariff: 3,000 kWh at 3 TRY plus 3,000 kWh at 5 TRY costs 2,000 TRY/month.
+    response = client.post("/quotes", json=with_change("consumption", {"monthly_bill_try": 2000}))
+    direct = client.post("/quotes", json=valid_body())
+
+    assert response.status_code == 201
+    quote = response.json()
+    assert quote["system_options"] == direct.json()["system_options"]
+    assumptions = quote["assumptions"]
+    assert assumptions["consumption_derived_from_bill"] is True
+    assert assumptions["derived_monthly_consumption_kwh"] == "500"
+    assert assumptions["annual_consumption_kwh"] == 6000
+    assert assumptions["submitted_request"]["consumption"] == {
+        "monthly_consumption_kwh": None,
+        "monthly_bill_try": "2000",
+    }
+
+
+def test_direct_consumption_takes_precedence_over_a_monthly_bill(client: TestClient) -> None:
+    response = client.post("/quotes", json=with_change("consumption.monthly_bill_try", 1125))
+    direct = client.post("/quotes", json=valid_body())
+
+    assert response.status_code == 201
+    quote = response.json()
+    assert quote["system_options"] == direct.json()["system_options"]
+    assumptions = quote["assumptions"]
+    assert assumptions["consumption_derived_from_bill"] is False
+    assert assumptions["derived_monthly_consumption_kwh"] is None
+    assert assumptions["annual_consumption_kwh"] == 6000
+    assert assumptions["submitted_request"]["consumption"]["monthly_bill_try"] == "1125"
+
+
 def test_creates_a_quote_with_a_consumption_matched_and_a_roof_max_option(
     client: TestClient,
 ) -> None:
@@ -376,6 +408,9 @@ def test_pvgis_is_asked_for_the_roof_orientation_at_the_site(
         ("consumption.monthly_consumption_kwh", 0),
         ("consumption.monthly_consumption_kwh", -3),
         ("consumption.monthly_consumption_kwh", ...),
+        ("consumption.monthly_consumption_kwh", None),
+        ("consumption.monthly_bill_try", 0),
+        ("consumption.monthly_bill_try", -3),
         ("subscriber_group", ...),
         ("contracted_power_kw", 0),
         ("contracted_power_kw", -3),
