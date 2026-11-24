@@ -1692,6 +1692,7 @@ dependencies = [
     { name = "asyncpg" },
     { name = "fastapi", extra = ["standard"] },
     { name = "httpx" },
+    { name = "jinja2" },
     { name = "pydantic-settings" },
     { name = "sqlalchemy", extra = ["asyncio"] },
 ]
@@ -1709,6 +1710,7 @@ requires-dist = [
     { name = "asyncpg", specifier = ">=0.32.0" },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.115" },
     { name = "httpx", specifier = ">=0.27" },
+    { name = "jinja2", specifier = ">=3.1" },
     { name = "pydantic-settings", specifier = ">=2.6" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
 ]

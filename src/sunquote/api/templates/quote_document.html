@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Teklif {{ quote_number }}</title>
+<style>
+  :root { --ink: #1c2b36; --muted: #5c6b77; --line: #d5dde3; --accent: #c9740a; --soft: #f5f7f9; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px; font: 14px/1.5 "Segoe UI", Arial, sans-serif; color: var(--ink); background: #fff; }
+  main { max-width: 190mm; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 24px 0 8px; padding-bottom: 4px; border-bottom: 2px solid var(--accent); }
+  h3 { font-size: 15px; margin: 0 0 4px; }
+  header dl { display: grid; grid-template-columns: max-content 1fr; gap: 2px 16px; margin: 12px 0 0; }
+  header dt { color: var(--muted); }
+  header dd { margin: 0; }
+  .narrative p { margin: 8px 0; }
+  .options { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+  .option { border: 1px solid var(--line); border-radius: 6px; padding: 12px; break-inside: avoid; }
+  .option .why { color: var(--muted); margin: 0 0 8px; }
+  .option dl { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; margin: 8px 0; }
+  .option dt { color: var(--muted); }
+  .option dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+  .option dd.total { font-weight: 700; }
+  table.monthly { width: 100%; border-collapse: collapse; font-size: 12px; }
+  table.monthly td { padding: 1px 4px; border-bottom: 1px solid var(--line); }
+  table.monthly td.kwh { text-align: right; width: 5em; font-variant-numeric: tabular-nums; }
+  table.monthly td.chart { width: 45%; }
+  .bar { display: block; height: 8px; background: var(--accent); border-radius: 2px; }
+  .assumptions dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; }
+  .assumptions dt { font-weight: 600; }
+  .assumptions dd { margin: 0; }
+  .note { color: var(--muted); font-size: 12px; }
+  @page { size: A4; margin: 15mm; }
+  @media print {
+    body { padding: 0; font-size: 11pt; }
+    main { max-width: none; }
+    .options { grid-template-columns: 1fr 1fr; gap: 10px; }
+    .option, .assumptions { break-inside: avoid; }
+    h2 { break-after: avoid; }
+    .bar { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Güneş Enerjisi Sistemi Teklifi</h1>
+    <dl>
+      <dt>Teklif numarası</dt><dd>{{ quote_number }}</dd>
+      <dt>Teklif tarihi</dt><dd>{{ quote_date }}</dd>
+      <dt>Geçerlilik tarihi</dt><dd>{{ valid_until }}</dd>
+      <dt>Müşteri</dt><dd>{{ customer_name }}</dd>
+      <dt>Kurulum yeri</dt><dd>{{ site }}</dd>
+    </dl>
+  </header>
+
+  <section class="narrative">
+    <p data-slot="greeting">{{ narrative.greeting }}</p>
+    <p data-slot="summary">{{ narrative.summary }}</p>
+{% if two_options %}
+    <p data-slot="options_comparison">{{ narrative.options_comparison }}</p>
+{% endif %}
+  </section>
+
+  <section>
+    <h2>Sistem seçenekleri</h2>
+    <div class="options">
+{% for option in options %}
+      <section class="option">
+        <h3>Seçenek {{ option.number }}: {{ option.strategy_title }}</h3>
+        <p class="why">{{ option.strategy_explanation }}<br><strong>Boyutu sınırlayan etken:</strong> {{ option.binding_limit_explanation }}</p>
+        <dl>
+          <dt>Sistem gücü</dt><dd>{{ option.capacity_kwp }} kWp</dd>
+          <dt>Panel</dt><dd>{{ option.panel_count }} adet {{ option.panel_name }}</dd>
+          <dt>İnverter</dt><dd>{{ option.inverter_name }}</dd>
+          <dt>Yıllık üretim (ilk yıl)</dt><dd>{{ option.annual_production_kwh }} kWh</dd>
+        </dl>
+        <table class="monthly" aria-label="Aylık üretim (kWh)">
+{% for month in option.months %}
+          <tr><td>{{ month.name }}</td><td class="kwh">{{ month.production_kwh }} kWh</td><td class="chart"><span class="bar" style="width: {{ month.bar_percent }}%"></span></td></tr>
+{% endfor %}
+        </table>
+        <dl>
+          <dt>Satış fiyatı (KDV hariç)</dt><dd>{{ option.sale_price }}</dd>
+          <dt>KDV ({{ option.vat_rate }})</dt><dd>{{ option.vat }}</dd>
+          <dt>Toplam (KDV dahil)</dt><dd class="total">{{ option.total }}</dd>
+          <dt>İlk yıl tasarrufu</dt><dd>{{ option.first_year_savings }}</dd>
+          <dt>Geri ödeme süresi</dt>
+{% if option.payback_beyond_lifetime %}
+          <dd>Yatırım, {{ option.lifetime_years }} yıllık analiz süresi içinde geri ödenmiyor.</dd>
+{% else %}
+          <dd>{{ option.payback }} yıl</dd>
+{% endif %}
+          <dt>{{ option.lifetime_years }} yıllık toplam tasarruf</dt><dd>{{ option.lifetime_savings }}</dd>
+        </dl>
+      </section>
+{% endfor %}
+    </div>
+    <p class="note">Tasarruf ve geri ödeme rakamları reel fiyat artışıyla, bugünkü lira cinsinden hesaplanmıştır (aşağıdaki varsayımlara bakınız).</p>
+  </section>
+
+  <section class="assumptions" id="assumptions">
+    <h2>Hesapta kullanılan varsayımlar</h2>
+    <dl>
+{% for item in assumptions %}
+      <dt>{{ item.label }}</dt><dd>{{ item.text }}</dd>
+{% endfor %}
+    </dl>
+  </section>
+
+  <section class="narrative">
+    <h2>Sonraki adımlar</h2>
+    <p data-slot="next_steps">{{ narrative.next_steps }}</p>
+  </section>
+</main>
+</body>
+</html>

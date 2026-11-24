@@ -34,3 +34,18 @@ def round_kwh(energy_kwh: Decimal) -> int:
 def round_payback_years(payback_years: Decimal) -> Decimal:
     """The Payback Period is shown with 1 decimal."""
     return _half_up(payback_years, _ONE_DECIMAL)
+
+
+def round_try_per_kwh(price_try_per_kwh: Decimal) -> Decimal:
+    """Tariff and Export Prices are shown with 2 decimals."""
+    return _half_up(price_try_per_kwh, _TWO_DECIMALS)
+
+
+def round_exchange_rate(rate: Decimal) -> Decimal:
+    """An Exchange Rate is shown with 4 decimals, the precision TCMB publishes."""
+    return _half_up(rate, Decimal("0.0001"))
+
+
+def round_percent(share: Decimal) -> Decimal:
+    """A share (0.25) is shown as a percentage (25.0) with 1 decimal."""
+    return _half_up(share * 100, _ONE_DECIMAL)
