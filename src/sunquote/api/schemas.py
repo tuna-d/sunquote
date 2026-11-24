@@ -481,6 +481,11 @@ def _panel_summary(panel: Panel) -> PanelSummary:
     )
 
 
+def _whole_lira(money: Money) -> int:
+    """A TRY amount in whole lira, by the rounding policy."""
+    return rounding.round_try(money.amount)
+
+
 def _money(money: Money) -> MoneyResponse:
     return MoneyResponse(amount=money.amount, currency=money.currency)
 
@@ -496,10 +501,10 @@ def _inverter_summary(inverter: Inverter) -> InverterSummary:
 
 def _price_response(price: SystemPrice) -> PriceResponse:
     return PriceResponse(
-        installation_cost_try=rounding.round_try(price.installation_cost.amount),
-        sale_price_try=rounding.round_try(price.sale_price.amount),
-        vat_try=rounding.round_try(price.vat.amount),
-        total_try=rounding.round_try(price.total.amount),
+        installation_cost_try=_whole_lira(price.installation_cost),
+        sale_price_try=_whole_lira(price.sale_price),
+        vat_try=_whole_lira(price.vat),
+        total_try=_whole_lira(price.total),
     )
 
 
@@ -509,22 +514,22 @@ def _cash_flow_row(row: YearlyCashFlow) -> CashFlowRow:
         production_kwh=rounding.round_kwh(row.production_kwh),
         self_consumed_kwh=rounding.round_kwh(row.self_consumed_kwh),
         exported_kwh=rounding.round_kwh(row.exported_kwh),
-        self_consumption_savings_try=rounding.round_try(row.self_consumption_savings.amount),
-        export_income_try=rounding.round_try(row.export_income.amount),
-        annual_savings_try=rounding.round_try(row.annual_savings.amount),
-        inverter_replacement_try=rounding.round_try(row.inverter_replacement.amount),
-        net_savings_try=rounding.round_try(row.net_savings.amount),
-        cumulative_net_savings_try=rounding.round_try(row.cumulative_net_savings.amount),
+        self_consumption_savings_try=_whole_lira(row.self_consumption_savings),
+        export_income_try=_whole_lira(row.export_income),
+        annual_savings_try=_whole_lira(row.annual_savings),
+        inverter_replacement_try=_whole_lira(row.inverter_replacement),
+        net_savings_try=_whole_lira(row.net_savings),
+        cumulative_net_savings_try=_whole_lira(row.cumulative_net_savings),
     )
 
 
 def _savings_response(savings: SavingsAnalysis) -> SavingsResponse:
     payback = savings.payback_years
     return SavingsResponse(
-        first_year_annual_savings_try=rounding.round_try(savings.first_year_annual_savings.amount),
+        first_year_annual_savings_try=_whole_lira(savings.first_year_annual_savings),
         payback_period_years=None if payback is None else rounding.round_payback_years(payback),
         payback_beyond_lifetime=savings.payback_beyond_lifetime,
-        lifetime_savings_try=rounding.round_try(savings.lifetime_savings.amount),
+        lifetime_savings_try=_whole_lira(savings.lifetime_savings),
         cash_flow=[_cash_flow_row(row) for row in savings.cash_flow],
     )
 
@@ -738,7 +743,7 @@ def _list_item(stored: StoredQuote) -> QuoteListItem:
         province=stored.province,
         system_option_count=len(quote.system_options),
         capacity_kwp=rounding.round_capacity_kwp(first.capacity_kwp),
-        total_try=rounding.round_try(first.price.total.amount),
+        total_try=_whole_lira(first.price.total),
     )
 
 
