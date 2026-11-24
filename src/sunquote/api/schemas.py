@@ -147,7 +147,12 @@ class ConsumptionBody(BaseModel):
 
 
 class ExchangeRateOverrideBody(BaseModel):
-    rate: Annotated[Decimal, Field(gt=0)] = Field(description="TRY per 1 USD.")
+    rate: Annotated[Decimal, Field(gt=0)] = Field(
+        description=(
+            "TRY per 1 unit of the currency the Catalog and pricing data are priced in "
+            "(USD in the placeholder data)."
+        )
+    )
     date: dt.date = Field(description="The date the rate applies to.")
 
 
@@ -168,8 +173,9 @@ class QuoteRequestBody(BaseModel):
     exchange_rate_override: ExchangeRateOverrideBody | None = Field(
         default=None,
         description=(
-            "USD/TRY rate to price with instead of TCMB's. When given, TCMB is not called "
-            "and the Quote records that the rate was overridden."
+            "Rate to price with instead of TCMB's, for the currency the Catalog and pricing data "
+            "are priced in (USD in the placeholder data). When given, TCMB is not called and the "
+            "Quote records that the rate was overridden."
         ),
     )
 

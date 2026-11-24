@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from sunquote.domain.model import RoofType, SubscriberGroup
-from sunquote.domain.money import Currency, Money
+from sunquote.domain.money import Money
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,9 +59,9 @@ class EngineeringAssumptions:
 class PricingAssumptions:
     """The prices and rates the Installation Cost and Sale Price are built from.
 
-    The BOS (mounting and cabling) price may be in a foreign currency; labour and the fixed
-    project cost are TRY. `margin` and `vat_rate` are shares (0.25 is 25%). `validity_period_days`
-    is how long a Quote's price holds, counted from the quote date.
+    Every price carries its own currency, declared in the data file; the pricing converts what
+    is not TRY. `margin` and `vat_rate` are shares (0.25 is 25%). `validity_period_days` is how
+    long a Quote's price holds, counted from the quote date.
     """
 
     bos_price_per_kwp: Money
@@ -74,10 +74,6 @@ class PricingAssumptions:
     def __post_init__(self) -> None:
         if self.validity_period_days <= 0:
             raise ValueError("the validity period must be at least one day")
-        if self.labour_price_per_kwp.currency is not Currency.TRY:
-            raise ValueError("the labour price per kWp must be in TRY")
-        if self.fixed_project_cost.currency is not Currency.TRY:
-            raise ValueError("the fixed project cost must be in TRY")
         if self.margin < 0 or self.vat_rate < 0:
             raise ValueError("margin and VAT rate must not be negative")
 

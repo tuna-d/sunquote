@@ -4,6 +4,7 @@ Worked example (tests/factories.py): 8 panels of 0.5 kWp = 4.0 kWp at USD 100 ea
 100/kWp, labour 3,000 TRY/kWp, fixed project cost 20,000 TRY, Margin 25%, VAT 20%, 40 TRY/USD.
 """
 
+from dataclasses import replace
 from decimal import Decimal
 
 import pytest
@@ -11,12 +12,12 @@ import pytest
 from sunquote.domain.assumptions import DcAcRatioRange
 from sunquote.domain.catalog import Inverter
 from sunquote.domain.errors import (
-    CurrencyMismatchError,
+    MissingExchangeRateError,
     NoCompatibleInverterError,
     NoViableSystemError,
 )
 from sunquote.domain.money import Currency, ExchangeRate, Money
-from sunquote.domain.pricing import inverter_price_incl_vat, select_inverter
+from sunquote.domain.pricing import inverter_price_incl_vat, select_inverter, to_try
 from sunquote.domain.quote import Quote, build_quote
 from tests.factories import (
     DEFAULT_INVERTERS,
@@ -156,6 +157,41 @@ def test_no_compatible_inverter_carries_the_unrounded_capacity_as_a_number() -> 
     assert isinstance(raised.value.capacity_kwp, Decimal)
 
 
+def test_a_currency_the_rate_does_not_cover_is_rejected_with_a_clear_error() -> None:
+    euro_price = Money(Decimal(100), Currency.EUR)
+
+    with pytest.raises(MissingExchangeRateError, match=r"no Exchange Rate for EUR.*USD") as raised:
+        to_try(euro_price, make_exchange_rate("40"))  # a USD/TRY rate
+
+    assert raised.value.currency is Currency.EUR
+
+
+def test_try_amounts_pass_through_and_the_rates_currency_converts() -> None:
+    assert to_try(try_amount("5"), make_exchange_rate("40")) == try_amount("5")
+    assert to_try(Money(Decimal(2), Currency.USD), make_exchange_rate("40")) == try_amount("80")
+
+
+def test_a_quote_priced_in_a_currency_its_rate_does_not_cover_is_rejected() -> None:
+    euro_rate = ExchangeRate(
+        base=Currency.EUR, quote=Currency.TRY, rate=Decimal(45), rate_date=RATE_DATE
+    )
+
+    with pytest.raises(MissingExchangeRateError, match="USD"):
+        build(exchange_rate=euro_rate)  # the catalog is priced in USD
+
+
+def test_foreign_labour_and_fixed_costs_are_converted_with_the_rate() -> None:
+    pricing = replace(
+        make_pricing_assumptions(),
+        labour_price_per_kwp=Money(Decimal(75), Currency.USD),  # 3,000 TRY at 40
+        fixed_project_cost=Money(Decimal(500), Currency.USD),  # 20,000 TRY at 40
+    )
+
+    price = build(pricing=pricing).system_options[0].price
+
+    assert price.installation_cost == try_amount("106000")  # as with the TRY prices
+
+
 def test_the_inverter_price_including_vat_is_in_try_at_the_rate() -> None:
     inverter = make_inverter("i35", "3.5", "650")  # USD 650 x 40 = 26,000 TRY
 
@@ -200,7 +236,7 @@ def test_a_zero_margin_and_zero_vat_leave_the_cost_unchanged() -> None:
     assert price.total == price.sale_price
 
 
-def test_a_price_in_a_currency_without_a_rate_is_refused() -> None:
+def test_a_catalog_in_two_foreign_currencies_is_refused_before_any_quote() -> None:
     eur_inverter = Inverter(
         inverter_id="eur",
         manufacturer="Test",
@@ -209,7 +245,7 @@ def test_a_price_in_a_currency_without_a_rate_is_refused() -> None:
         unit_price=Money(Decimal(500), Currency.EUR),
     )
 
-    with pytest.raises(CurrencyMismatchError):
+    with pytest.raises(ValueError, match=r"more than one foreign currency \(EUR, USD\)"):
         build(inverters=(eur_inverter,))
 
 

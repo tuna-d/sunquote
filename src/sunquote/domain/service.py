@@ -16,10 +16,6 @@ from sunquote.domain.ports import (
 from sunquote.domain.quote import build_quote
 from sunquote.domain.reference_data import ReferenceData
 
-# The currency the Catalog and BOS unit prices are quoted in. The data files enforce it, so the
-# Quote needs exactly one rate (this against TRY).
-EQUIPMENT_PRICE_CURRENCY = Currency.USD
-
 
 class QuoteService:
     """Orchestrates the ports around `build_quote`. It holds no rules of its own.
@@ -91,13 +87,17 @@ class QuoteService:
     async def _exchange_rate(
         self, quote_date: date, override: ExchangeRateOverride | None
     ) -> ExchangeRate:
-        """The override when given (the provider is not called), else the provider's rate."""
+        """The override when given (the provider is not called), else the provider's rate.
+
+        The rate is for the currency the data files price the equipment in.
+        """
+        currency = self._reference_data.exchange_rate_currency
         if override is not None:
             return ExchangeRate(
-                base=EQUIPMENT_PRICE_CURRENCY,
+                base=currency,
                 quote=Currency.TRY,
                 rate=override.rate,
                 rate_date=override.rate_date,
                 overridden=True,
             )
-        return await self._exchange_rate_provider.fetch(EQUIPMENT_PRICE_CURRENCY, quote_date)
+        return await self._exchange_rate_provider.fetch(currency, quote_date)

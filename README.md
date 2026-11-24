@@ -127,7 +127,10 @@ The TOML files in [`src/sunquote/data/`](src/sunquote/data) contain placeholder 
 for the Catalog (panel and inverter specifications and unit prices), Residential Tariff
 (tiers, Export Price, Self-Consumption Ratio and default Contracted Power), and
 pricing, engineering and financial Assumptions (installation costs, Margin, VAT, Roof
-coverage, system loss and escalation rates).
+coverage, system loss and escalation rates). Every price entry declares its own currency
+(`price_currency` for Catalog items, `currency` for the pricing Assumptions); the Quote
+fetches the TCMB rate for that currency (USD in the placeholder data) and records it. The
+prices in one data set may use TRY and one foreign currency, not two.
 
 The [market-data research note](docs/research/placeholder-market-data.md) records sources,
 dates, owner decisions and open questions. Set `SUNQUOTE_DATA_DIR` to load your own files.

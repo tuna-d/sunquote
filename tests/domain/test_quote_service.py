@@ -4,8 +4,10 @@ from decimal import Decimal
 import pytest
 
 from sunquote.domain.errors import NoViableSystemError, UpstreamUnavailableError
-from sunquote.domain.money import Currency, ExchangeRateOverride
+from sunquote.domain.money import Currency, ExchangeRate, ExchangeRateOverride
+from sunquote.domain.reference_data import ReferenceData
 from sunquote.domain.service import QuoteService
+from tests.domain.test_reference_data import in_currency
 from tests.factories import (
     QUOTE_DATE,
     RATE_DATE,
@@ -31,6 +33,7 @@ def make_service(
     rates: FakeExchangeRateProvider | None = None,
     repository: FakeQuoteRepository | None = None,
     clock: FixedClock | None = None,
+    reference_data: ReferenceData | None = None,
 ) -> QuoteService:
     return QuoteService(
         quote_repository=repository or FakeQuoteRepository(),
@@ -38,7 +41,8 @@ def make_service(
         specific_yield_provider=provider,
         exchange_rate_provider=rates or FakeExchangeRateProvider(),
         clock=clock or FixedClock(),
-        reference_data=make_reference_data(assumptions=make_assumptions(system_loss_percent="12")),
+        reference_data=reference_data
+        or make_reference_data(assumptions=make_assumptions(system_loss_percent="12")),
     )
 
 
@@ -90,6 +94,40 @@ async def test_an_override_replaces_the_provider_and_is_recorded() -> None:
     )
     # 1,850 USD x 45 = 83,250 + 12,000 labour + 20,000 fixed
     assert quote.system_options[0].price.installation_cost.amount == Decimal("115250")
+
+
+async def test_the_rate_is_fetched_for_the_currency_the_data_files_price_in() -> None:
+    euro_data = in_currency(make_reference_data(), Currency.EUR)
+    euro_rate = ExchangeRate(
+        base=Currency.EUR, quote=Currency.TRY, rate=Decimal(45), rate_date=RATE_DATE
+    )
+    rates = FakeExchangeRateProvider(euro_rate)
+
+    stored = await make_service(
+        FakeSpecificYieldProvider(), rates, reference_data=euro_data
+    ).create_quote(make_request())
+
+    assert rates.requests == [(Currency.EUR, QUOTE_DATE)]
+    assert stored.quote.assumptions.exchange_rate == euro_rate
+    # 1,850 EUR x 45 = 83,250 + 12,000 labour + 20,000 fixed
+    assert stored.quote.system_options[0].price.installation_cost.amount == Decimal("115250")
+
+
+async def test_an_override_is_in_the_currency_the_data_files_price_in() -> None:
+    euro_data = in_currency(make_reference_data(), Currency.EUR)
+    override = ExchangeRateOverride(rate=Decimal("46"), rate_date=date(2026, 11, 1))
+
+    stored = await make_service(FakeSpecificYieldProvider(), reference_data=euro_data).create_quote(
+        make_request(), exchange_rate_override=override
+    )
+
+    recorded = stored.quote.assumptions.exchange_rate
+    assert (recorded.base, recorded.quote, recorded.rate) == (
+        Currency.EUR,
+        Currency.TRY,
+        Decimal("46"),
+    )
+    assert recorded.overridden is True
 
 
 async def test_the_provider_rate_is_not_marked_overridden() -> None:

@@ -126,9 +126,9 @@ def test_every_assumption_value_names_its_source_kind_and_date() -> None:
         data["dc_ac_ratio_min"],
         data["dc_ac_ratio_max"],
         data["default_contracted_power_kw"]["residential"],
-        data["bos_usd_per_kwp"],
-        data["labour_try_per_kwp"],
-        data["fixed_project_cost_try"],
+        data["bos_price_per_kwp"],
+        data["labour_price_per_kwp"],
+        data["fixed_project_cost"],
         data["margin"],
         data["vat_rate"],
         data["validity_period_days"],
@@ -202,13 +202,63 @@ def test_ratios_outside_their_range_are_rejected(tmp_path: Path) -> None:
         load_engineering_assumptions(file)
 
 
-def test_a_catalog_price_in_another_currency_than_usd_is_rejected(tmp_path: Path) -> None:
-    data = CATALOG_FILE.read_text(encoding="utf-8").replace("unit_price_usd", "unit_price_eur", 1)
+def test_every_catalog_price_and_pricing_entry_declares_its_currency() -> None:
+    catalog = tomllib.loads(CATALOG_FILE.read_text(encoding="utf-8"))
+    assumptions = tomllib.loads(ASSUMPTIONS_FILE.read_text(encoding="utf-8"))
+
+    for item in [*catalog["panels"], *catalog["inverters"]]:
+        assert item["price_currency"] in {"USD", "EUR", "TRY"}
+    for key in ("bos_price_per_kwp", "labour_price_per_kwp", "fixed_project_cost"):
+        assert assumptions[key]["currency"] in {"USD", "EUR", "TRY"}, key
+
+
+def test_a_catalog_price_takes_the_currency_the_file_declares(tmp_path: Path) -> None:
+    data = CATALOG_FILE.read_text(encoding="utf-8").replace(
+        'price_currency = "USD"', 'price_currency = "EUR"', 1
+    )
     file = tmp_path / "catalog.toml"
     file.write_text(data, encoding="utf-8")
 
-    with pytest.raises(ValidationError, match="unit_price"):
+    catalog = load_catalog(file)
+
+    assert catalog.panels[0].unit_price == Money(Decimal(76), Currency.EUR)
+    assert catalog.panels[1].unit_price.currency is Currency.USD
+
+
+@pytest.mark.parametrize("replacement", ["", 'price_currency = "XYZ"'])
+def test_a_catalog_price_without_a_known_currency_is_rejected(
+    tmp_path: Path, replacement: str
+) -> None:
+    data = CATALOG_FILE.read_text(encoding="utf-8").replace(
+        'price_currency = "USD"', replacement, 1
+    )
+    file = tmp_path / "catalog.toml"
+    file.write_text(data, encoding="utf-8")
+
+    with pytest.raises(ValidationError, match="price_currency"):
         load_catalog(file)
+
+
+def test_a_pricing_entry_takes_the_currency_the_file_declares(tmp_path: Path) -> None:
+    data = ASSUMPTIONS_FILE.read_text(encoding="utf-8").replace(
+        'currency = "USD"', 'currency = "EUR"', 1
+    )
+    file = tmp_path / "assumptions.toml"
+    file.write_text(data, encoding="utf-8")
+
+    pricing = load_pricing_assumptions(file)
+
+    assert pricing.bos_price_per_kwp == Money(Decimal(120), Currency.EUR)
+    assert pricing.labour_price_per_kwp.currency is Currency.TRY
+
+
+def test_a_pricing_entry_without_a_currency_is_rejected(tmp_path: Path) -> None:
+    data = ASSUMPTIONS_FILE.read_text(encoding="utf-8").replace('currency = "USD"\n', "", 1)
+    file = tmp_path / "assumptions.toml"
+    file.write_text(data, encoding="utf-8")
+
+    with pytest.raises(ValidationError, match="currency"):
+        load_pricing_assumptions(file)
 
 
 def test_an_inverter_without_ac_power_is_rejected(tmp_path: Path) -> None:
