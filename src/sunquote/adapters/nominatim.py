@@ -1,38 +1,33 @@
 """Nominatim search restricted to Turkey."""
 
-import asyncio
 from decimal import Decimal
-from threading import Lock
-from time import monotonic
 
 import httpx
 
+from sunquote.adapters.rate_limiter import RateLimiter
 from sunquote.domain.errors import AddressNotFoundError, UpstreamUnavailableError
 from sunquote.domain.model import Coordinates, GeocodingResult
 
 _SERVICE = "Nominatim"
-_request_slot_lock = Lock()
-_next_request_at = float("-inf")
 
-
-async def _wait_for_request_slot() -> None:
-    global _next_request_at
-    # All adapters in this process share the same clock and lock, even across event loops.
-    while True:
-        with _request_slot_lock:
-            now = monotonic()
-            delay = _next_request_at - now
-            if delay <= 0:
-                _next_request_at = now + 1
-                return
-        await asyncio.sleep(delay)
+# Nominatim's usage policy allows one request per second per application. Every geocoder in the
+# process shares this limiter by default, whichever event loop it runs on.
+NOMINATIM_RATE_LIMITER = RateLimiter(1.0)
 
 
 class NominatimGeocoder:
-    def __init__(self, *, client: httpx.AsyncClient, base_url: str, timeout_seconds: float) -> None:
+    def __init__(
+        self,
+        *,
+        client: httpx.AsyncClient,
+        base_url: str,
+        timeout_seconds: float,
+        rate_limiter: RateLimiter = NOMINATIM_RATE_LIMITER,
+    ) -> None:
         self._client = client
         self._endpoint = f"{base_url.rstrip('/')}/search"
         self._timeout_seconds = timeout_seconds
+        self.rate_limiter = rate_limiter
 
     async def geocode(self, address: str) -> GeocodingResult:
         params = {
@@ -42,7 +37,7 @@ class NominatimGeocoder:
             "limit": "1",
             "addressdetails": "1",
         }
-        await _wait_for_request_slot()
+        await self.rate_limiter.wait()
         try:
             response = await self._client.get(
                 self._endpoint,

@@ -8,7 +8,8 @@ from time import monotonic
 import httpx
 import pytest
 
-from sunquote.adapters.nominatim import NominatimGeocoder
+from sunquote.adapters.nominatim import NOMINATIM_RATE_LIMITER, NominatimGeocoder
+from sunquote.adapters.rate_limiter import RateLimiter
 from sunquote.domain.errors import AddressNotFoundError, UpstreamUnavailableError
 from sunquote.domain.model import Coordinates
 
@@ -102,6 +103,38 @@ async def test_concurrent_geocoders_share_the_one_request_per_second_limit() -> 
 
     assert len(arrival_times) == 2
     assert all(later - earlier >= 0.99 for earlier, later in pairwise(arrival_times))
+
+
+async def test_a_geocoder_waits_on_its_rate_limiter_before_each_request() -> None:
+    events: list[str] = []
+
+    class RecordingLimiter(RateLimiter):
+        async def wait(self) -> None:
+            events.append("wait")
+
+    def upstream(_: httpx.Request) -> httpx.Response:
+        events.append("request")
+        return httpx.Response(200, text=recording("ankara"))
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(upstream)) as client:
+        geocoder = NominatimGeocoder(
+            client=client,
+            base_url=BASE_URL,
+            timeout_seconds=5.0,
+            rate_limiter=RecordingLimiter(1.0),
+        )
+        await geocoder.geocode(ADDRESS)
+        await geocoder.geocode(ADDRESS)
+
+    assert events == ["wait", "request", "wait", "request"]
+
+
+async def test_geocoders_use_the_one_process_wide_limiter_unless_given_another() -> None:
+    async with httpx.AsyncClient() as client:
+        first = NominatimGeocoder(client=client, base_url=BASE_URL, timeout_seconds=5.0)
+        second = NominatimGeocoder(client=client, base_url=BASE_URL, timeout_seconds=5.0)
+
+    assert first.rate_limiter is second.rate_limiter is NOMINATIM_RATE_LIMITER
 
 
 async def test_an_empty_result_is_address_not_found() -> None:
