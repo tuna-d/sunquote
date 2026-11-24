@@ -458,11 +458,16 @@ def test_boundary_values_are_accepted(client: TestClient) -> None:
 
 
 @pytest.mark.parametrize(
-    "orientation",
-    [{}, {"azimuth_deg": 90, "tilt_deg": 30}, {"azimuth_deg": -1, "tilt_deg": "ignored"}],
+    ("orientation", "recorded"),
+    [
+        ({}, {"azimuth_deg": None, "tilt_deg": None}),
+        ({"azimuth_deg": 90, "tilt_deg": 30}, {"azimuth_deg": 90, "tilt_deg": 30}),
+        ({"azimuth_deg": 270}, {"azimuth_deg": 270, "tilt_deg": None}),
+        ({"azimuth_deg": None, "tilt_deg": 5}, {"azimuth_deg": None, "tilt_deg": 5}),
+    ],
 )
-def test_flat_roof_uses_installer_orientation_regardless_of_submitted_angles(
-    client: TestClient, orientation: dict[str, Any]
+def test_flat_roof_uses_installer_orientation_and_records_the_submitted_angles(
+    client: TestClient, orientation: dict[str, Any], recorded: dict[str, Any]
 ) -> None:
     body = valid_body()
     body["roof"] = {"roof_type": "flat", "usable_area_m2": 20, **orientation}
@@ -481,9 +486,31 @@ def test_flat_roof_uses_installer_orientation_regardless_of_submitted_angles(
     assert assumptions["submitted_request"]["roof"] == {
         "roof_type": "flat",
         "usable_area_m2": 20,
-        "azimuth_deg": None,
-        "tilt_deg": None,
+        **recorded,
     }
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("azimuth_deg", 360), ("azimuth_deg", -1), ("tilt_deg", 91), ("tilt_deg", "ignored")],
+)
+def test_flat_roof_angles_that_are_given_are_still_validated(
+    client: TestClient, field: str, value: Any
+) -> None:
+    body = valid_body()
+    body["roof"] = {"roof_type": "flat", "usable_area_m2": 20, field: value}
+
+    response = client.post("/quotes", json=body)
+
+    assert response.status_code == 422
+    assert f"roof.{field}" in [error["field"] for error in response.json()["errors"]]
+
+
+def test_flat_roof_does_not_need_angles(client: TestClient) -> None:
+    body = valid_body()
+    body["roof"] = {"roof_type": "flat", "usable_area_m2": 20}
+
+    assert client.post("/quotes", json=body).status_code == 201
 
 
 def test_malformed_json_is_a_validation_problem(client: TestClient) -> None:

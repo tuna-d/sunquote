@@ -62,7 +62,12 @@ class GeocodingResult:
 
 @dataclass(frozen=True, slots=True)
 class Roof:
-    """A single roof surface. `azimuth_deg` is a compass bearing: 180 is south."""
+    """A single roof surface. `azimuth_deg` is a compass bearing: 180 is south.
+
+    A pitched Roof needs both angles. A flat Roof does not: the panels sit on racks at the
+    Installer's tilt facing south (`effective_orientation`), whatever angles were given. Angles
+    that were given stay as submitted, so the Quote records the input unchanged.
+    """
 
     roof_type: RoofType
     usable_area_m2: Decimal
@@ -72,13 +77,17 @@ class Roof:
     def __post_init__(self) -> None:
         if self.usable_area_m2 <= 0:
             raise ValueError("usable_area_m2 must be positive")
-        if self.roof_type is RoofType.FLAT:
-            object.__setattr__(self, "azimuth_deg", None)
-            object.__setattr__(self, "tilt_deg", None)
-            return
-        if self.azimuth_deg is None or not Decimal(0) <= self.azimuth_deg < Decimal(360):
+        angles_required = self.roof_type is RoofType.PITCHED
+        azimuth, tilt = self.azimuth_deg, self.tilt_deg
+        if azimuth is None:
+            if angles_required:
+                raise ValueError("azimuth_deg must be within [0, 360)")
+        elif not Decimal(0) <= azimuth < Decimal(360):
             raise ValueError("azimuth_deg must be within [0, 360)")
-        if self.tilt_deg is None or not Decimal(0) <= self.tilt_deg <= Decimal(90):
+        if tilt is None:
+            if angles_required:
+                raise ValueError("tilt_deg must be within [0, 90]")
+        elif not Decimal(0) <= tilt <= Decimal(90):
             raise ValueError("tilt_deg must be within [0, 90]")
 
     def effective_orientation(self, flat_roof_tilt_deg: Decimal) -> tuple[Decimal, Decimal]:

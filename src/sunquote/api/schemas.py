@@ -102,21 +102,26 @@ class RoofBody(BaseModel):
     azimuth_deg: Annotated[Decimal, Field(ge=0, lt=360)] | None = Field(
         default=None,
         validate_default=True,
-        description="Compass bearing (180 = south). Required for pitched roofs, ignored for flat.",
+        description=(
+            "Compass bearing (180 = south). Required for pitched roofs. A flat roof does not "
+            "need it and does not use it (panels face south); a value given is recorded as "
+            "submitted."
+        ),
     )
     tilt_deg: Annotated[Decimal, Field(ge=0, le=90)] | None = Field(
         default=None,
         validate_default=True,
-        description="Required for pitched roofs, ignored for flat roofs.",
+        description=(
+            "Required for pitched roofs. A flat roof does not need it and does not use it "
+            "(panels sit at the Installer's tilt); a value given is recorded as submitted."
+        ),
     )
 
     @field_validator("azimuth_deg", "tilt_deg", mode="before")
     @classmethod
-    def _orientation_for_roof_type(cls, value: object, info: ValidationInfo) -> object:
-        roof_type = info.data.get("roof_type")
-        if roof_type is RoofType.FLAT:
-            return None
-        if roof_type is RoofType.PITCHED and value is None:
+    def _require_for_pitched(cls, value: object, info: ValidationInfo) -> object:
+        """Request-shape check only: what a flat roof does with the angles is the domain's."""
+        if value is None and info.data.get("roof_type") is RoofType.PITCHED:
             raise ValueError("required for a pitched roof")
         return value
 
@@ -245,7 +250,7 @@ class SubmittedConsumption(BaseModel):
 
 
 class SubmittedRequest(BaseModel):
-    """The submitted inputs at full precision. Flat Roof angles are ignored."""
+    """The submitted inputs at full precision, exactly as given."""
 
     customer: SubmittedCustomer
     site: SubmittedSite

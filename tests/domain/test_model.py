@@ -52,6 +52,35 @@ def test_invalid_domain_objects_are_rejected(build: object) -> None:
         build()  # type: ignore[operator]
 
 
+def test_a_flat_roof_keeps_the_angles_it_was_given_and_does_not_need_them() -> None:
+    given = Roof(
+        roof_type=RoofType.FLAT,
+        usable_area_m2=Decimal(20),
+        azimuth_deg=Decimal(90),
+        tilt_deg=Decimal(30),
+    )
+    absent = Roof(roof_type=RoofType.FLAT, usable_area_m2=Decimal(20))
+
+    assert (given.azimuth_deg, given.tilt_deg) == (Decimal(90), Decimal(30))
+    assert (absent.azimuth_deg, absent.tilt_deg) == (None, None)
+    # What the panels face is the Installer's, whatever was given.
+    assert given.effective_orientation(Decimal(15)) == (Decimal(180), Decimal(15))
+    assert absent.effective_orientation(Decimal(15)) == (Decimal(180), Decimal(15))
+
+
+@pytest.mark.parametrize(("azimuth_deg", "tilt_deg"), [("360", None), (None, "91"), ("-1", "0")])
+def test_a_flat_roof_rejects_angles_that_are_given_out_of_range(
+    azimuth_deg: str | None, tilt_deg: str | None
+) -> None:
+    with pytest.raises(ValueError, match="deg"):
+        Roof(
+            roof_type=RoofType.FLAT,
+            usable_area_m2=Decimal(20),
+            azimuth_deg=None if azimuth_deg is None else Decimal(azimuth_deg),
+            tilt_deg=None if tilt_deg is None else Decimal(tilt_deg),
+        )
+
+
 def test_boundary_values_are_accepted() -> None:
     roof(azimuth_deg="0", tilt_deg="0")
     roof(azimuth_deg="359.99", tilt_deg="90")

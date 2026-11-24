@@ -126,8 +126,10 @@ def test_flat_roof_uses_its_coverage_ratio_and_the_installer_orientation() -> No
     assert recorded.coverage_ratio == Decimal("0.50")
     assert recorded.effective_azimuth_deg == Decimal("180")
     assert recorded.effective_tilt_deg == Decimal("18")
-    assert recorded.submitted_request.site.roof.azimuth_deg is None
-    assert recorded.submitted_request.site.roof.tilt_deg is None
+    # The angles the Sales Rep gave stay in the submitted request, though they are not used.
+    assert recorded.submitted_request.site.roof.azimuth_deg == Decimal("90")
+    assert recorded.submitted_request.site.roof.tilt_deg == Decimal("30")
+    assert recorded.submitted_request == request
 
 
 def test_quote_carries_customer_date_and_the_assumptions_it_was_built_with() -> None:
