@@ -218,7 +218,12 @@ The server keeps no conversation: the client sends the whole conversation (1 to 
 at most 2,000 characters, the last one from `user`) with every request. The model never
 supplies Coordinates, since the tool takes only an Address, which is always geocoded. At most one
 Quote is created per request and the model is called at most three times, within
-`SUNQUOTE_ASSISTANT_TIMEOUT_SECONDS` (30 s).
+`SUNQUOTE_ASSISTANT_TIMEOUT_SECONDS` (30 s) for the model calls and the tools (geocoding, PVGIS,
+TCMB, Narrative) together.
+
+With the shipped placeholder catalog the example above gives a Quote with two options. A very
+small consumption (for example 300 kWh a month on 40 m²) is too small for any catalog inverter;
+the assistant then explains in Turkish that no compatible inverter was found.
 
 **Figures.** As with the Narrative, the model refers to figures through placeholders and the
 service fills them ([ADR 0001](docs/adr/0001-llm-never-writes-figures.md)). A reply that breaks
@@ -227,10 +232,12 @@ created, the reply is a fixed Turkish confirmation with the Quote Number, each o
 and total price, and the document link. When the model is unavailable before any Quote exists,
 the endpoint answers `503` with `urn:sunquote:problem:assistant-unavailable`.
 
-A reply without a Quote (a question or an explanation) may contain digits only as the Sales Rep
-wrote them; the model is asked again once, and then a fixed Turkish reply is used (the missing
-fields with labels, a generic "the Quote could not be created" sentence naming the problem, or a
-request to restate the information). If the three calls or the time budget run out without a
+A reply without a Quote (a question, an explanation or plain text) may contain digits only as the
+Sales Rep wrote them ([ADR 0004](docs/adr/0004-assistant-replies-may-echo-the-sales-reps-digits.md))
+and no placeholder syntax; the model is asked again once for each kind of reply (a question, a
+text), and then a fixed Turkish reply is used (the missing fields with labels, a generic "the
+Quote could not be created" sentence naming the problem, or a request to restate the
+information). If the three calls or the time budget run out without a
 Quote, the answer is `200` with that request to restate the information and no Quote.
 
 **Privacy.** Unlike the Narrative, the Sales Rep's own messages go to Gemini and may include the
@@ -257,7 +264,8 @@ fields allow a difference of 1% or 0.5, whichever is larger. Question scenarios 
 the expected `missing_fields` and no `create_quote` attempt.
 
 `SUNQUOTE_EVAL_DELAY_SECONDS` controls the pause between Gemini requests (15 seconds by default),
-including requests within a turn. The 20 scenarios contain up to 23 turns with at most three
+including requests within a turn. A call that fails (a rate limit or an outage) is repeated up to
+twice after one more pause, so a single HTTP 429 does not fail a scenario. The 20 scenarios contain up to 23 turns with at most three
 Gemini calls per turn. Check your project's free-tier limits before running both evals.
 
 ## Placeholder data

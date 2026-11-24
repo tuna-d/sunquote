@@ -45,7 +45,7 @@ async def test_real_gemini_turns_a_complete_turkish_message_into_a_create_quote_
         pytest.skip("SUNQUOTE_GEMINI_API_KEY is not set")
     message = (
         "Ayşe Yılmaz için teklif: Etimesgut, Ankara. 40 m² eğimli çatı, güneye bakıyor, "
-        "30 derece. Aylık 300 kWh tüketiyor."
+        "30 derece. Aylık 500 kWh tüketiyor."
     )
 
     async with httpx.AsyncClient() as client:
@@ -69,4 +69,4 @@ async def test_real_gemini_turns_a_complete_turkish_message_into_a_create_quote_
     assert arguments["roof"]["roof_type"] == "pitched"
     assert arguments["roof"]["azimuth_deg"] == 180
     assert arguments["roof"]["tilt_deg"] == 30
-    assert arguments["consumption"]["monthly_consumption_kwh"] == 300
+    assert arguments["consumption"]["monthly_consumption_kwh"] == 500

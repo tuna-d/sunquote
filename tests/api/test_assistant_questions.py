@@ -405,12 +405,122 @@ def test_the_time_budget_without_a_quote_is_a_200_with_the_restate_reply(
     assert "yeniden" in body["reply"]
 
 
+def test_the_time_budget_covers_the_tools_too(
+    client_factory: ClientFactory, geocoder: FakeGeocoder, quote_repository: FakeQuoteRepository
+) -> None:
+    geocoder.delay_seconds = 5.0
+    model = Script(create(), TextReply(REPLY))
+    client = client_with(client_factory, model, assistant_budget_seconds=0.3)
+
+    response = ask(client)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["quote"] is None
+    assert body["missing_fields"] == []
+    assert "yeniden" in body["reply"]
+    assert len(model.calls) == 1
+    assert quote_repository.stored == []
+
+
 def test_a_model_failure_before_any_quote_is_still_unavailable(
     client_factory: ClientFactory,
 ) -> None:
     client = client_with(client_factory, Script(ConversationUnavailableError("HTTP 500")))
 
     assert ask(client).status_code == 503
+
+
+def test_an_unknown_tool_is_a_tool_error_the_model_can_correct(
+    client_factory: ClientFactory,
+) -> None:
+    model = Script(ToolCall("send_email", {}), TextReply("Hangi ilde?"))
+    client = client_with(client_factory, model)
+
+    body = ask(client).json()
+
+    assert model.calls[1].exchanges[0].result["error"]["type"] == f"{URN}unknown-tool"
+    assert body["reply"] == "Hangi ilde?"
+
+
+def test_the_response_schema_lists_the_missing_field_values(
+    client_factory: ClientFactory,
+) -> None:
+    client = client_with(client_factory, Script())
+
+    schema = client.get("/openapi.json").json()["components"]["schemas"]
+
+    items = schema["AssistantResponse"]["properties"]["missing_fields"]["items"]
+    assert items == {"$ref": "#/components/schemas/MissingField"}
+    assert schema["MissingField"]["enum"] == ALL_FIELDS
+
+
+def test_a_question_that_holds_a_placeholder_is_refused_like_any_other_reply(
+    client_factory: ClientFactory,
+) -> None:
+    model = Script(
+        asking("roof.tilt_deg", question="Sayın {customer_name}, eğim nedir?"),
+        asking("roof.tilt_deg", question="Eğim nedir?"),
+    )
+    client = client_with(client_factory, model)
+
+    body = ask(client).json()
+
+    assert body["reply"] == "Eğim nedir?"
+    kinds = [v["kind"] for v in model.calls[1].exchanges[0].result["error"]["violations"]]
+    assert kinds == ["unavailable_placeholder"]
+
+
+def test_a_plain_text_with_braces_is_retried_then_replaced_by_the_restate_reply(
+    client_factory: ClientFactory,
+) -> None:
+    model = Script(TextReply("Merhaba {customer_name}"), TextReply("Merhaba {customer_name}"))
+    client = client_with(client_factory, model)
+
+    body = ask(client).json()
+
+    assert len(model.calls) == 2
+    assert "{" not in body["reply"]
+    assert "yeniden" in body["reply"]
+
+
+def test_a_refused_question_does_not_use_up_the_retry_of_the_text_that_follows(
+    client_factory: ClientFactory,
+) -> None:
+    model = Script(
+        asking("roof.tilt_deg", question="35 derece mi?"),
+        TextReply("35 m² mi?"),
+        TextReply("Kaç metrekare?"),
+    )
+    client = client_with(client_factory, model)
+
+    body = ask(client, conversation("Etimesgut'ta 40 m² çatı için teklif")).json()
+
+    assert body["reply"] == "Kaç metrekare?"
+    assert len(model.calls) == 3
+
+
+def test_a_superscript_in_the_reply_after_a_quote_is_not_a_stray_digit(
+    client_factory: ClientFactory,
+) -> None:
+    reply = "Çatı alanı m² olarak alındı; teklif numarası {quote_number}."
+    model = Script(create(), TextReply(reply))
+    client = client_with(client_factory, model)
+
+    body = ask(client).json()
+
+    assert len(model.calls) == 2
+    assert body["reply"] == reply.replace("{quote_number}", body["quote"]["quote_number"])
+
+
+def test_an_empty_text_reply_is_retried_and_then_replaced(client_factory: ClientFactory) -> None:
+    model = Script(TextReply("  "), TextReply(""))
+    client = client_with(client_factory, model)
+
+    body = ask(client).json()
+
+    assert len(model.calls) == 2
+    assert "yeniden" in body["reply"]
 
 
 def test_the_missing_fields_are_documented_as_a_list_of_field_paths(

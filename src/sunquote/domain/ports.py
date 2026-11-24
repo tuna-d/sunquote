@@ -84,7 +84,8 @@ class NarrativeWriter(Protocol):
 
 
 class ConversationModel(Protocol):
-    """The LLM behind the quote assistant: one step of a tool-calling conversation."""
+    """The LLM behind the quote assistant: one step of a tool-calling conversation. Its
+    instruction is the adapter's, like the Narrative writer's prompt."""
 
     @property
     def model_name(self) -> str:

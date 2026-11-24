@@ -141,10 +141,13 @@ class FakeGeocoder:
             province="Ankara",
         )
         self.error: DomainError | None = None
+        self.delay_seconds = 0.0
         self.addresses: list[str] = []
 
     async def geocode(self, address: str) -> GeocodingResult:
         self.addresses.append(address)
+        if self.delay_seconds:
+            await asyncio.sleep(self.delay_seconds)
         if self.error is not None:
             raise self.error
         return self.result
