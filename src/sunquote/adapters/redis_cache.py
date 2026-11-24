@@ -3,7 +3,7 @@
 import logging
 from collections.abc import Awaitable, Callable
 from datetime import date
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import Decimal
 from functools import partial
 
 from pydantic import TypeAdapter, ValidationError
@@ -11,6 +11,7 @@ from pydantic_core import PydanticSerializationError
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
+from sunquote.adapters.pvgis import pvgis_request
 from sunquote.domain.model import GeocodingResult
 from sunquote.domain.money import Currency, ExchangeRate
 from sunquote.domain.ports import (
@@ -28,8 +29,6 @@ _GEOCODING_JSON = TypeAdapter(GeocodingResult)
 _SPECIFIC_YIELD_JSON = TypeAdapter(SpecificYield)
 _EXCHANGE_RATE_JSON = TypeAdapter(ExchangeRate)
 _TURKISH_I = str.maketrans({"İ": "i", "I": "ı"})
-_COORDINATE_STEP = Decimal("0.001")
-_SOUTH_AZIMUTH_DEG = Decimal(180)
 
 
 async def _get_or_fetch[T](
@@ -82,15 +81,9 @@ class CachedSpecificYieldProvider:
         self._redis = redis
 
     async def fetch(self, query: SpecificYieldQuery) -> SpecificYield:
-        # Match PVGIS's coordinate rounding and aspect convention.
-        latitude = _coordinate_key(query.coordinates.latitude)
-        longitude = _coordinate_key(query.coordinates.longitude)
-        tilt = _decimal_key(query.tilt_deg)
-        aspect = _decimal_key(query.azimuth_deg - _SOUTH_AZIMUTH_DEG)
-        loss = _decimal_key(query.system_loss_percent)
         return await _get_or_fetch(
             self._redis,
-            f"{_KEY_PREFIX}:specific-yield:{latitude}:{longitude}:{tilt}:{aspect}:{loss}",
+            specific_yield_cache_key(query),
             _SPECIFIC_YIELD_JSON,
             partial(self._provider.fetch, query),
             ttl=_THIRTY_DAYS_SECONDS,
@@ -112,9 +105,20 @@ class CachedExchangeRateProvider:
         )
 
 
-def _coordinate_key(value: Decimal) -> str:
-    rounded = value.quantize(_COORDINATE_STEP, rounding=ROUND_HALF_UP)
-    return format(rounded, "z.3f")
+def specific_yield_cache_key(query: SpecificYieldQuery) -> str:
+    """The cache key of a Specific Yield: the values PVGIS is asked for (`pvgis_request`)."""
+    request = pvgis_request(query)
+    return ":".join(
+        (
+            _KEY_PREFIX,
+            "specific-yield",
+            format(request.latitude, "z.3f"),
+            format(request.longitude, "z.3f"),
+            _decimal_key(request.tilt_deg),
+            _decimal_key(request.aspect_deg),
+            _decimal_key(request.system_loss_percent),
+        )
+    )
 
 
 def _decimal_key(value: Decimal) -> str:

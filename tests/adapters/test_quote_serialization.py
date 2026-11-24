@@ -9,14 +9,10 @@ from sunquote.domain.quote import Quote, build_quote
 from tests.factories import (
     QUOTE_DATE,
     QUOTE_NUMBER,
-    make_assumptions,
-    make_catalog,
     make_exchange_rate,
-    make_financial_assumptions,
-    make_pricing_assumptions,
+    make_reference_data,
     make_request,
     make_specific_yield,
-    make_tariff,
 )
 from tests.fakes import FakeGeocoder
 
@@ -25,12 +21,8 @@ def build(monthly_consumption_kwh: str) -> Quote:
     return build_quote(
         request=make_request(monthly_consumption_kwh=monthly_consumption_kwh),
         specific_yield=make_specific_yield(),
-        catalog=make_catalog(),
-        assumptions=make_assumptions(),
-        pricing=make_pricing_assumptions(),
+        reference_data=make_reference_data(),
         exchange_rate=make_exchange_rate(),
-        tariff=make_tariff(),
-        financial=make_financial_assumptions(),
         quote_date=QUOTE_DATE,
         quote_number=QUOTE_NUMBER,
     )

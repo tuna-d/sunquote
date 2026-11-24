@@ -51,11 +51,15 @@ curl -i http://localhost:8000/quotes -H 'Content-Type: application/json' -d '{
 The response is `201 Created`. Copy the returned `id` (UUID). The response also includes
 the Quote Number, quote date and valid-until date, System Options with monthly production and yearly
 cash flow, and the Assumptions used to calculate them. Prices are shown in whole lira.
+In the Assumptions, money, rates, ratios and tariff prices are decimal strings at full
+precision (never a float), and measurements such as coordinates and angles are numbers.
 
 You can provide both `latitude` and `longitude` in `site` to skip Address lookup. The
 API uses those Coordinates when both forms are present. For a flat Roof, use
 `"roof": {"roof_type": "flat", "usable_area_m2": 40}` to use the configured tilt and
-south-facing azimuth. For consumption based on the bill, send `monthly_bill_try` instead
+south-facing azimuth (an `azimuth_deg` or `tilt_deg` you add is recorded as submitted but not
+used). A system is capped by the Contracted Power: the panel count follows the largest Catalog
+inverter whose AC power is at most the Contracted Power. For consumption based on the bill, send `monthly_bill_try` instead
 of `monthly_consumption_kwh`. If both are present, consumption in kWh takes precedence.
 
 ### List and open the stored Quote
@@ -79,7 +83,9 @@ Replace `{id}` below with that UUID.
 In your browser, visit `http://localhost:8000/quotes/{id}/document` and use the print
 dialog to print the Quote or save it as a PDF.
 
-Stored Quotes are immutable. The Quote Number sequence restarts each year. API errors use
+Stored Quotes are immutable. The Quote Number sequence restarts each year, and a request that
+fails validation, finds no viable system or hits an unavailable upstream does not use up a
+number. API errors use
 RFC 9457 `application/problem+json` with a stable `type`. Unknown Quote IDs return `404`.
 
 ## Architecture
@@ -127,7 +133,10 @@ The TOML files in [`src/sunquote/data/`](src/sunquote/data) contain placeholder 
 for the Catalog (panel and inverter specifications and unit prices), Residential Tariff
 (tiers, Export Price, Self-Consumption Ratio and default Contracted Power), and
 pricing, engineering and financial Assumptions (installation costs, Margin, VAT, Roof
-coverage, system loss and escalation rates).
+coverage, system loss and escalation rates). Every price entry declares its own currency
+(`price_currency` for Catalog items, `currency` for the pricing Assumptions); the Quote
+fetches the TCMB rate for that currency (USD in the placeholder data) and records it. The
+prices in one data set may use TRY and one foreign currency, not two.
 
 The [market-data research note](docs/research/placeholder-market-data.md) records sources,
 dates, owner decisions and open questions. Set `SUNQUOTE_DATA_DIR` to load your own files.

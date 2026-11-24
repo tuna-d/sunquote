@@ -5,14 +5,19 @@ from decimal import Decimal
 
 from sunquote.domain.assumptions import DcAcRatioRange, PricingAssumptions
 from sunquote.domain.catalog import Inverter, Panel
-from sunquote.domain.errors import NoCompatibleInverterError
+from sunquote.domain.errors import MissingExchangeRateError, NoCompatibleInverterError
 from sunquote.domain.money import Currency, ExchangeRate, Money
 
 
 def to_try(money: Money, rate: ExchangeRate) -> Money:
-    """TRY amounts pass through; anything else is converted with `rate`."""
+    """TRY amounts pass through; the rate's base currency is converted with it.
+
+    Raises `MissingExchangeRateError` for any other currency: the Quote holds one rate.
+    """
     if money.currency is Currency.TRY:
         return money
+    if money.currency is not rate.base:
+        raise MissingExchangeRateError(money.currency, rate.base)
     return rate.convert(money)
 
 
@@ -41,7 +46,7 @@ def select_inverter(
         and ratio_range.contains(dc_ac_ratio(capacity_kwp, inverter))
     ]
     if not compatible:
-        raise NoCompatibleInverterError(str(capacity_kwp))
+        raise NoCompatibleInverterError(capacity_kwp)
     return min(
         compatible,
         key=lambda inverter: (
@@ -50,6 +55,16 @@ def select_inverter(
             inverter.inverter_id,
         ),
     )
+
+
+def inverter_price_incl_vat(
+    inverter: Inverter, *, pricing: PricingAssumptions, rate: ExchangeRate
+) -> Money:
+    """What replacing the inverter costs the Customer today: its TRY price plus VAT.
+
+    A residential Customer cannot reclaim VAT, so the cash flow uses the price including it.
+    """
+    return to_try(inverter.unit_price, rate) * (1 + pricing.vat_rate)
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,21 +88,17 @@ def price_system(
 ) -> SystemPrice:
     """Installation Cost -> Sale Price (x (1 + Margin)) -> VAT -> total.
 
-    Installation Cost = (panels + inverter + BOS) converted to TRY + labour + fixed project cost.
+    Installation Cost = panels + inverter + BOS + labour + fixed project cost, each converted to
+    TRY at `rate` when it is priced in the rate's currency.
     """
-    equipment = [
+    parts = [
         panel.unit_price * panel_count,
         inverter.unit_price,
         pricing.bos_price_per_kwp * capacity_kwp,
+        pricing.labour_price_per_kwp * capacity_kwp,
+        pricing.fixed_project_cost,
     ]
-    installation_cost = Money.sum(
-        [
-            *(to_try(part, rate) for part in equipment),
-            pricing.labour_price_per_kwp * capacity_kwp,
-            pricing.fixed_project_cost,
-        ],
-        Currency.TRY,
-    )
+    installation_cost = Money.sum((to_try(part, rate) for part in parts), Currency.TRY)
     sale_price = installation_cost * (1 + pricing.margin)
     vat = sale_price * pricing.vat_rate
     return SystemPrice(

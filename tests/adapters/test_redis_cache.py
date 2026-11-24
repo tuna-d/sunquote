@@ -5,18 +5,22 @@ from collections.abc import AsyncIterator
 from dataclasses import replace
 from datetime import date, timedelta
 from decimal import Decimal
+from pathlib import Path
 from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
+import httpx
 import pytest
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 from redis.exceptions import TimeoutError as RedisTimeoutError
 
+from sunquote.adapters.pvgis import PvgisSpecificYieldProvider, pvgis_request
 from sunquote.adapters.redis_cache import (
     CachedExchangeRateProvider,
     CachedGeocoder,
     CachedSpecificYieldProvider,
+    specific_yield_cache_key,
 )
 from sunquote.domain.errors import AddressNotFoundError, UpstreamUnavailableError
 from sunquote.domain.model import Coordinates
@@ -124,6 +128,79 @@ async def test_specific_yield_is_cached_for_rounded_coordinates_and_roof_inputs(
                 await cache.fetch(different)
     finally:
         await redis_client.delete(key)
+
+
+def make_query(
+    *,
+    latitude: str = "39.9334",
+    longitude: str = "32.8597",
+    tilt_deg: str = "30",
+    azimuth_deg: str = "180",
+    system_loss_percent: str = "14",
+) -> SpecificYieldQuery:
+    return SpecificYieldQuery(
+        coordinates=Coordinates(Decimal(latitude), Decimal(longitude)),
+        tilt_deg=Decimal(tilt_deg),
+        azimuth_deg=Decimal(azimuth_deg),
+        system_loss_percent=Decimal(system_loss_percent),
+    )
+
+
+QUERIES = [
+    make_query(),
+    make_query(latitude="39.9335"),  # rounds up to 39.934
+    make_query(latitude="39.93349"),  # rounds to 39.933, as the default does
+    make_query(longitude="32.85970"),
+    make_query(longitude="32.8595"),  # half-up to 32.860
+    make_query(longitude="32.8604"),
+    make_query(tilt_deg="30.0"),
+    make_query(tilt_deg="31"),
+    make_query(azimuth_deg="180.0"),
+    make_query(azimuth_deg="181"),
+    make_query(azimuth_deg="0"),
+    make_query(azimuth_deg="359.5"),
+    make_query(system_loss_percent="14.00"),
+    make_query(system_loss_percent="12"),
+]
+
+
+def test_two_queries_share_a_cache_key_exactly_when_pvgis_would_receive_the_same_values() -> None:
+    for first in QUERIES:
+        for second in QUERIES:
+            same_key = specific_yield_cache_key(first) == specific_yield_cache_key(second)
+            same_request = pvgis_request(first) == pvgis_request(second)
+            assert same_key is same_request, (first, second)
+
+
+@pytest.mark.parametrize("query", QUERIES)
+async def test_the_cache_key_holds_the_values_pvgis_is_actually_asked_for(
+    query: SpecificYieldQuery,
+) -> None:
+    seen: list[httpx.Request] = []
+    body = (Path(__file__).parent / "recordings" / "pvgis_pvcalc_ankara.json").read_text(
+        encoding="utf-8"
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, text=body)
+
+    provider = PvgisSpecificYieldProvider(
+        client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        base_url="https://pvgis.example/api/v5_3",
+        timeout_seconds=5.0,
+    )
+
+    await provider.fetch(query)
+
+    [request] = seen
+    params = request.url.params
+    latitude, longitude, tilt, aspect, loss = specific_yield_cache_key(query).split(":")[-5:]
+    assert Decimal(latitude) == Decimal(params["lat"])
+    assert Decimal(longitude) == Decimal(params["lon"])
+    assert Decimal(tilt) == Decimal(params["angle"])
+    assert Decimal(aspect) == Decimal(params["aspect"])
+    assert Decimal(loss) == Decimal(params["loss"])
 
 
 async def test_exchange_rates_are_cached_indefinitely_by_quote_date_and_currency(

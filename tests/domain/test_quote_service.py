@@ -3,20 +3,23 @@ from decimal import Decimal
 
 import pytest
 
-from sunquote.domain.errors import NoViableSystemError, UpstreamUnavailableError
-from sunquote.domain.money import Currency, ExchangeRateOverride
+from sunquote.domain.errors import (
+    NoCompatibleInverterError,
+    NoViableSystemError,
+    UpstreamUnavailableError,
+)
+from sunquote.domain.money import Currency, ExchangeRate, ExchangeRateOverride
+from sunquote.domain.reference_data import ReferenceData
 from sunquote.domain.service import QuoteService
+from tests.domain.test_reference_data import in_currency
 from tests.factories import (
     QUOTE_DATE,
     RATE_DATE,
     make_assumptions,
-    make_catalog,
     make_exchange_rate,
-    make_financial_assumptions,
-    make_pricing_assumptions,
+    make_reference_data,
     make_request,
     make_specific_yield,
-    make_tariff,
 )
 from tests.fakes import (
     FakeExchangeRateProvider,
@@ -34,6 +37,7 @@ def make_service(
     rates: FakeExchangeRateProvider | None = None,
     repository: FakeQuoteRepository | None = None,
     clock: FixedClock | None = None,
+    reference_data: ReferenceData | None = None,
 ) -> QuoteService:
     return QuoteService(
         quote_repository=repository or FakeQuoteRepository(),
@@ -41,11 +45,8 @@ def make_service(
         specific_yield_provider=provider,
         exchange_rate_provider=rates or FakeExchangeRateProvider(),
         clock=clock or FixedClock(),
-        catalog=make_catalog(),
-        assumptions=make_assumptions(system_loss_percent="12"),
-        pricing=make_pricing_assumptions(),
-        tariff=make_tariff(),
-        financial=make_financial_assumptions(),
+        reference_data=reference_data
+        or make_reference_data(assumptions=make_assumptions(system_loss_percent="12")),
     )
 
 
@@ -97,6 +98,40 @@ async def test_an_override_replaces_the_provider_and_is_recorded() -> None:
     )
     # 1,850 USD x 45 = 83,250 + 12,000 labour + 20,000 fixed
     assert quote.system_options[0].price.installation_cost.amount == Decimal("115250")
+
+
+async def test_the_rate_is_fetched_for_the_currency_the_data_files_price_in() -> None:
+    euro_data = in_currency(make_reference_data(), Currency.EUR)
+    euro_rate = ExchangeRate(
+        base=Currency.EUR, quote=Currency.TRY, rate=Decimal(45), rate_date=RATE_DATE
+    )
+    rates = FakeExchangeRateProvider(euro_rate)
+
+    stored = await make_service(
+        FakeSpecificYieldProvider(), rates, reference_data=euro_data
+    ).create_quote(make_request())
+
+    assert rates.requests == [(Currency.EUR, QUOTE_DATE)]
+    assert stored.quote.assumptions.exchange_rate == euro_rate
+    # 1,850 EUR x 45 = 83,250 + 12,000 labour + 20,000 fixed
+    assert stored.quote.system_options[0].price.installation_cost.amount == Decimal("115250")
+
+
+async def test_an_override_is_in_the_currency_the_data_files_price_in() -> None:
+    euro_data = in_currency(make_reference_data(), Currency.EUR)
+    override = ExchangeRateOverride(rate=Decimal("46"), rate_date=date(2026, 11, 1))
+
+    stored = await make_service(FakeSpecificYieldProvider(), reference_data=euro_data).create_quote(
+        make_request(), exchange_rate_override=override
+    )
+
+    recorded = stored.quote.assumptions.exchange_rate
+    assert (recorded.base, recorded.quote, recorded.rate) == (
+        Currency.EUR,
+        Currency.TRY,
+        Decimal("46"),
+    )
+    assert recorded.overridden is True
 
 
 async def test_the_provider_rate_is_not_marked_overridden() -> None:
@@ -196,3 +231,18 @@ async def test_nothing_is_stored_when_no_system_is_viable() -> None:
         )
 
     assert repository.stored == []
+    assert repository.issued_numbers == []
+
+
+async def test_a_failed_build_does_not_use_up_a_quote_number() -> None:
+    repository = FakeQuoteRepository()
+    service = make_service(FakeSpecificYieldProvider(), repository=repository)
+
+    with pytest.raises(NoViableSystemError):
+        await service.create_quote(make_request(usable_area_m2="1"))
+    with pytest.raises(NoCompatibleInverterError):
+        await service.create_quote(make_request(usable_area_m2="6"))  # 1.0 kWp fits no inverter
+    stored = await service.create_quote(make_request())
+
+    assert stored.quote.quote_number == "SQ-2026-000001"
+    assert repository.issued_numbers == ["SQ-2026-000001"]

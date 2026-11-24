@@ -61,12 +61,22 @@ class _Positive(_SourcedValue):
     value: Decimal = Field(gt=0)
 
 
+class _PositivePrice(_Positive):
+    """A price: the value in the currency the file declares for it."""
+
+    currency: Currency
+
+
 class _Days(_SourcedValue):
     value: int = Field(gt=0)  # type: ignore[assignment]  # a whole number of days, not a Decimal
 
 
 class _NonNegative(_SourcedValue):
     value: Decimal = Field(ge=0)
+
+
+class _NonNegativePrice(_NonNegative):
+    currency: Currency
 
 
 class _Share(_SourcedValue):
@@ -91,8 +101,8 @@ class _CatalogItem(_Strict):
 
     manufacturer: str
     model: str
-    # Catalog prices are USD for now: the quote carries one Exchange Rate (USD/TRY).
-    unit_price_usd: Decimal = Field(gt=0)
+    unit_price: Decimal = Field(gt=0)
+    price_currency: Currency
     price_kind: Kind
     price_source: str = Field(min_length=1)
     price_date: date
@@ -137,9 +147,9 @@ class _AssumptionsFile(_Strict):
     system_loss_percent: _Percent
     dc_ac_ratio_min: _Positive
     dc_ac_ratio_max: _Positive
-    bos_usd_per_kwp: _Positive
-    labour_try_per_kwp: _Positive
-    fixed_project_cost_try: _NonNegative
+    bos_price_per_kwp: _PositivePrice
+    labour_price_per_kwp: _PositivePrice
+    fixed_project_cost: _NonNegativePrice
     margin: _NonNegative
     vat_rate: _NonNegative
     validity_period_days: _Days
@@ -176,6 +186,10 @@ def _read(path: Path) -> dict[str, Any]:
         return tomllib.load(file, parse_float=Decimal)
 
 
+def _money(price: _PositivePrice | _NonNegativePrice) -> Money:
+    return Money(price.value, price.currency)
+
+
 def load_catalog(path: Path) -> Catalog:
     file = _CatalogFile.model_validate(_read(path))
     return Catalog(
@@ -188,7 +202,7 @@ def load_catalog(path: Path) -> Catalog:
                 length_mm=entry.length_mm,
                 width_mm=entry.width_mm,
                 degradation_rate_per_year=entry.degradation_rate_per_year,
-                unit_price=Money(entry.unit_price_usd, Currency.USD),
+                unit_price=Money(entry.unit_price, entry.price_currency),
             )
             for entry in file.panels
         ),
@@ -199,7 +213,7 @@ def load_catalog(path: Path) -> Catalog:
                 manufacturer=entry.manufacturer,
                 model=entry.model,
                 ac_power_kw=entry.ac_power_kw,
-                unit_price=Money(entry.unit_price_usd, Currency.USD),
+                unit_price=Money(entry.unit_price, entry.price_currency),
             )
             for entry in file.inverters
         ),
@@ -227,9 +241,9 @@ def load_engineering_assumptions(path: Path) -> EngineeringAssumptions:
 def load_pricing_assumptions(path: Path) -> PricingAssumptions:
     file = _AssumptionsFile.model_validate(_read(path))
     return PricingAssumptions(
-        bos_price_per_kwp=Money(file.bos_usd_per_kwp.value, Currency.USD),
-        labour_price_per_kwp=Money(file.labour_try_per_kwp.value, Currency.TRY),
-        fixed_project_cost=Money(file.fixed_project_cost_try.value, Currency.TRY),
+        bos_price_per_kwp=_money(file.bos_price_per_kwp),
+        labour_price_per_kwp=_money(file.labour_price_per_kwp),
+        fixed_project_cost=_money(file.fixed_project_cost),
         margin=file.margin.value,
         vat_rate=file.vat_rate.value,
         validity_period_days=file.validity_period_days.value,

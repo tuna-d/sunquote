@@ -1,5 +1,6 @@
 """PVGIS `PVcalc` adapter: the Specific Yield for a Site and a fixed-mounted roof."""
 
+from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
 
 import httpx
@@ -18,6 +19,33 @@ def _plain(value: Decimal) -> str:
     return format(value, "f")
 
 
+@dataclass(frozen=True, slots=True)
+class PvgisRequest:
+    """The values PVGIS is asked for: after the coordinate rounding and the aspect conversion."""
+
+    latitude: Decimal
+    longitude: Decimal
+    tilt_deg: Decimal
+    aspect_deg: Decimal
+    system_loss_percent: Decimal
+
+
+def pvgis_request(query: SpecificYieldQuery) -> PvgisRequest:
+    """What PVGIS receives for `query`. The one definition of its rounding and aspect rules:
+    the call and the cache key (`redis_cache`) both read it, so they cannot drift apart.
+    """
+    return PvgisRequest(
+        # Coordinates are rounded to 3 decimals (about 100 m) before the call: finer than the
+        # data resolution, and it makes equal sites share one request.
+        latitude=query.coordinates.latitude.quantize(_COORDINATE_STEP, rounding=ROUND_HALF_UP),
+        longitude=query.coordinates.longitude.quantize(_COORDINATE_STEP, rounding=ROUND_HALF_UP),
+        tilt_deg=query.tilt_deg,
+        # PVGIS measures the aspect from south (0), west positive; the compass has south at 180.
+        aspect_deg=query.azimuth_deg - _SOUTH_AZIMUTH_DEG,
+        system_loss_percent=query.system_loss_percent,
+    )
+
+
 class PvgisSpecificYieldProvider:
     """Calls PVGIS for 1 kWp and returns the annual and 12 monthly yields in kWh/kWp.
 
@@ -31,20 +59,14 @@ class PvgisSpecificYieldProvider:
         self._timeout_seconds = timeout_seconds
 
     async def fetch(self, query: SpecificYieldQuery) -> SpecificYield:
-        # Coordinates are rounded to 3 decimals (about 100 m) before the call: finer than the
-        # data resolution, and it makes equal sites share one request.
-        latitude = query.coordinates.latitude.quantize(_COORDINATE_STEP, rounding=ROUND_HALF_UP)
-        longitude = query.coordinates.longitude.quantize(_COORDINATE_STEP, rounding=ROUND_HALF_UP)
-        # PVGIS measures the aspect from south (0), west positive; the compass has south at 180.
-        aspect_deg = query.azimuth_deg - _SOUTH_AZIMUTH_DEG
-
+        request = pvgis_request(query)
         params = {
-            "lat": _plain(latitude),
-            "lon": _plain(longitude),
+            "lat": _plain(request.latitude),
+            "lon": _plain(request.longitude),
             "peakpower": "1",
-            "loss": _plain(query.system_loss_percent),
-            "angle": _plain(query.tilt_deg),
-            "aspect": _plain(aspect_deg),
+            "loss": _plain(request.system_loss_percent),
+            "angle": _plain(request.tilt_deg),
+            "aspect": _plain(request.aspect_deg),
             "outputformat": "json",
         }
         response = await self._get(params)
@@ -52,11 +74,11 @@ class PvgisSpecificYieldProvider:
             response,
             SpecificYieldInputs(
                 source=self._endpoint,
-                latitude=latitude,
-                longitude=longitude,
-                tilt_deg=query.tilt_deg,
-                aspect_deg=aspect_deg,
-                system_loss_percent=query.system_loss_percent,
+                latitude=request.latitude,
+                longitude=request.longitude,
+                tilt_deg=request.tilt_deg,
+                aspect_deg=request.aspect_deg,
+                system_loss_percent=request.system_loss_percent,
             ),
         )
 

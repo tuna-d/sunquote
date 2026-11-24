@@ -99,7 +99,7 @@ def test_quote_from_shipped_data_files_and_recorded_pvgis_response(
     assert option["binding_limit"] == "consumption_target"
     assert option["annual_production_kwh"] == 5830  # 3.96 x 1472.13 = 5829.63
     assert option["panel"]["model"] == "Vertex S+ TSM-NEG9RH.25 (440 W)"
-    assert quote["assumptions"]["coverage_ratio"] == 0.8
+    assert quote["assumptions"]["coverage_ratio"] == "0.80"
     assert quote["assumptions"]["pvgis_inputs"] == {
         "source": "https://re.jrc.ec.europa.eu/api/v5_3/PVcalc",
         "latitude": 39.933,
@@ -130,7 +130,7 @@ def test_quote_is_priced_from_the_shipped_prices_and_the_tcmb_rate(
         "total_try": 191085,
     }
     rate = quote["assumptions"]["exchange_rate"]
-    assert (rate["rate"], rate["overridden"]) == (50.6026, False)
+    assert (rate["rate"], rate["overridden"]) == ("50.6026", False)
     tcmb_requests = [r for r in requests_seen if r.url.host == "www.tcmb.gov.tr"]
     assert tcmb_requests
     assert tcmb_requests[0].url.path.endswith(".xml")
@@ -206,7 +206,7 @@ def test_savings_come_from_the_shipped_tariff_and_financial_assumptions(
     assert first_year["export_income_try"] == 2553
     assert savings["first_year_annual_savings_try"] == 23598  # 23,597.79
     assumptions = quote["assumptions"]
-    assert assumptions["tariff"]["tier_threshold_kwh_per_year"] == 2920
+    assert assumptions["tariff"]["tier_threshold_kwh_per_year"] == "2920"
     assert assumptions["tariff"]["valid_from"] == "2026-04-04"
     assert assumptions["low_tier_consumption_kwh"] == 2920
     assert assumptions["high_tier_consumption_kwh"] == 3080

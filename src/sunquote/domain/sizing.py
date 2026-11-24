@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from decimal import ROUND_FLOOR, Decimal
 from enum import StrEnum
 
-from sunquote.domain.catalog import Panel
+from sunquote.domain.catalog import Inverter, Panel
 from sunquote.domain.errors import NoViableSystemError
 
 
@@ -23,7 +23,10 @@ class BindingLimit(StrEnum):
 _TIE_ORDER = (BindingLimit.CONTRACTED_POWER, BindingLimit.ROOF, BindingLimit.CONSUMPTION_TARGET)
 
 _NO_PANEL_REASON = {
-    BindingLimit.CONTRACTED_POWER: "the Contracted Power allows no panel",
+    BindingLimit.CONTRACTED_POWER: (
+        "the Contracted Power allows no panel (no catalog inverter fits within it, or the "
+        "largest one that does is too small for a panel)"
+    ),
     BindingLimit.ROOF: "the usable roof area fits no panel",
 }
 
@@ -43,11 +46,36 @@ def roof_capacity_panels(usable_area_m2: Decimal, coverage_ratio: Decimal, panel
     return _floor(usable_area_m2 * coverage_ratio / panel.area_m2)
 
 
+def usable_ac_power_kw(inverters: tuple[Inverter, ...], contracted_power_kw: Decimal) -> Decimal:
+    """The AC power of the largest inverter whose AC power is at most the Contracted Power.
+
+    Zero when no inverter fits within it.
+    """
+    return max(
+        (
+            inverter.ac_power_kw
+            for inverter in inverters
+            if inverter.ac_power_kw <= contracted_power_kw
+        ),
+        default=Decimal(0),
+    )
+
+
 def contracted_power_cap_panels(
-    contracted_power_kw: Decimal, max_dc_ac_ratio: Decimal, panel: Panel
+    *,
+    contracted_power_kw: Decimal,
+    inverters: tuple[Inverter, ...],
+    max_dc_ac_ratio: Decimal,
+    panel: Panel,
 ) -> int:
-    """Whole panels the grid connection allows: floor(Contracted Power x max DC/AC / panel kWp)."""
-    return _floor(contracted_power_kw * max_dc_ac_ratio / panel.capacity_kwp)
+    """Whole panels the grid connection allows: floor(usable AC x max DC/AC / panel kWp).
+
+    The usable AC power is that of the largest inverter within the Contracted Power (not the
+    Contracted Power itself, which may fall between two inverter sizes and leave a system no
+    inverter can carry).
+    """
+    usable_ac_kw = usable_ac_power_kw(inverters, contracted_power_kw)
+    return _floor(usable_ac_kw * max_dc_ac_ratio / panel.capacity_kwp)
 
 
 def consumption_target_kwp(

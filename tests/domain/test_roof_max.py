@@ -1,10 +1,12 @@
 """Roof-Max, the Contracted Power cap and the Binding Limit, through `build_quote`.
 
 Fixed inputs (tests/factories.py): panel 0.5 kWp / 2.0 m2, coverage ratio 0.80, specific yield
-1,500 kWh/kWp, DC/AC range 1.00-1.30, default Contracted Power 10 kW. So the Contracted Power
-cap is floor(Contracted Power x 1.30 / 0.5) = floor(2.6 x kW) panels, and a roof of A m2 fits
-floor(A x 0.8 / 2) panels (40 m2 -> 16, 18 m2 -> 7). A consumption of C kWh/month targets
-C x 12 / 1500 kWp, so 500 -> 8 panels and 437.5 -> 7 panels.
+1,500 kWh/kWp, DC/AC range 1.00-1.30, default Contracted Power 10 kW. The Contracted Power cap is
+floor(usable AC x 1.30 / 0.5) = floor(2.6 x usable AC) panels, where the usable AC power is that
+of the largest inverter whose AC power is at most the Contracted Power (the default catalog has
+0.5, 2.5, 3, 3.5, 4, 6 and 8 kW). A roof of A m2 fits floor(A x 0.8 / 2) panels (40 m2 -> 16,
+18 m2 -> 7). A consumption of C kWh/month targets C x 12 / 1500 kWp, so 500 -> 8 panels and
+437.5 -> 7 panels.
 """
 
 from decimal import Decimal
@@ -23,12 +25,10 @@ from tests.factories import (
     make_assumptions,
     make_catalog,
     make_exchange_rate,
-    make_financial_assumptions,
     make_inverter,
-    make_pricing_assumptions,
+    make_reference_data,
     make_request,
     make_specific_yield,
-    make_tariff,
 )
 
 
@@ -49,12 +49,11 @@ def build(
             contracted_power_kw=contracted_power_kw,
         ),
         specific_yield=make_specific_yield(),
-        catalog=make_catalog(inverters),
-        assumptions=make_assumptions(default_contracted_power_kw=default_contracted_power_kw),
-        pricing=make_pricing_assumptions(),
+        reference_data=make_reference_data(
+            catalog=make_catalog(inverters),
+            assumptions=make_assumptions(default_contracted_power_kw=default_contracted_power_kw),
+        ),
         exchange_rate=make_exchange_rate(),
-        tariff=make_tariff(),
-        financial=make_financial_assumptions(),
         quote_date=QUOTE_DATE,
         quote_number=QUOTE_NUMBER,
     )
@@ -112,14 +111,41 @@ def test_consumption_matched_comes_first() -> None:
 # --- Contracted Power ----------------------------------------------------------------------
 
 
-def test_the_cap_in_panels_is_the_floor_of_power_times_max_ratio_over_panel_kwp() -> None:
-    # 6 kW x 1.30 / 0.5 = 15.6 -> 15 panels, not 16 (the roof fits 16)
+def test_the_cap_in_panels_is_the_floor_of_usable_ac_times_max_ratio_over_panel_kwp() -> None:
+    # The 6 kW inverter is usable: 6 kW x 1.30 / 0.5 = 15.6 -> 15 panels, not 16 (the roof fits 16)
     quote = build(monthly_consumption_kwh="2000", contracted_power_kw="6")
 
     [option] = quote.system_options
     assert option.panel_count == 15
     assert option.binding_limit is BindingLimit.CONTRACTED_POWER
     assert option.inverter.inverter_id == "i6"
+
+
+def test_the_cap_uses_the_largest_inverter_within_the_contracted_power() -> None:
+    # 10 kW allows the 8 kW inverter: floor(8 x 1.30 / 0.5) = 20 panels, not floor(10 x 2.6) = 26.
+    # The 60 m2 roof fits 24 panels and the consumption target is 64.
+    quote = build(usable_area_m2="60", monthly_consumption_kwh="4000", contracted_power_kw="10")
+
+    [option] = quote.system_options
+    assert option.panel_count == 20
+    assert option.binding_limit is BindingLimit.CONTRACTED_POWER
+    assert option.inverter.inverter_id == "i8"  # 10.0 kWp / 8 kW = 1.25
+
+
+def test_a_contracted_power_between_two_inverters_uses_the_smaller_one() -> None:
+    # 7 kW with only 6 kW and 8 kW inverters: the 8 kW one is above the Contracted Power, so the
+    # cap is floor(6 x 1.30 / 0.5) = 15 panels (7.5 kWp, ratio 1.25 on the 6 kW inverter).
+    # Capping with the 7 kW itself gave 18 panels, which no inverter below 7 kW accepts.
+    inverters = (make_inverter("six", "6", "900"), make_inverter("eight", "8", "1100"))
+
+    quote = build(monthly_consumption_kwh="2000", contracted_power_kw="7", inverters=inverters)
+
+    [option] = quote.system_options
+    assert option.panel_count == 15
+    assert option.binding_limit is BindingLimit.CONTRACTED_POWER
+    assert option.capacity_kwp == Decimal("7.5")
+    assert option.inverter.inverter_id == "six"
+    assert option.dc_ac_ratio == Decimal("1.25")
 
 
 def test_both_strategies_respect_the_cap() -> None:
@@ -171,9 +197,16 @@ def test_an_absent_contracted_power_defaults_to_the_data_file_value_and_says_so(
     assert quote.system_options[-1].panel_count == 10  # the default caps Roof-Max too
 
 
-def test_a_contracted_power_too_small_for_one_panel_is_not_a_viable_system() -> None:
+def test_a_contracted_power_below_every_inverter_is_not_a_viable_system() -> None:
+    with pytest.raises(NoViableSystemError, match="Contracted Power"):
+        build(contracted_power_kw="0.3")  # the smallest inverter is 0.5 kW
+
+
+def test_a_usable_inverter_too_small_for_one_panel_is_not_a_viable_system() -> None:
+    tiny = (make_inverter("tiny", "0.3", "100"),)
+
     with pytest.raises(NoViableSystemError):
-        build(contracted_power_kw="0.3")  # floor(0.78) = 0 panels
+        build(contracted_power_kw="0.5", inverters=tiny)  # floor(0.3 x 1.30 / 0.5) = 0 panels
 
 
 # --- Binding Limit ties --------------------------------------------------------------------
@@ -264,11 +297,19 @@ def test_the_ac_cap_is_inclusive() -> None:
     assert option.inverter.inverter_id == "exactly"
 
 
-def test_no_compatible_inverter_when_every_fitting_inverter_exceeds_the_contracted_power() -> None:
-    only_wide = make_inverter("wide", "3.2", "500")  # ratio 1.09 for the 3.5 kWp cap system
+def test_no_viable_system_when_every_inverter_exceeds_the_contracted_power() -> None:
+    only_wide = make_inverter("wide", "3.2", "500")
+
+    with pytest.raises(NoViableSystemError, match="Contracted Power"):
+        build(monthly_consumption_kwh="2000", contracted_power_kw="3", inverters=(only_wide,))
+
+
+def test_no_compatible_inverter_when_the_usable_ones_miss_the_dc_ac_range() -> None:
+    # A one-panel system (0.5 kWp, consumption target) on the only 3 kW inverter: ratio 0.17.
+    only_large = make_inverter("large", "3", "500")
 
     with pytest.raises(NoCompatibleInverterError):
-        build(monthly_consumption_kwh="2000", contracted_power_kw="3", inverters=(only_wide,))
+        build(monthly_consumption_kwh="100", contracted_power_kw="3", inverters=(only_large,))
 
 
 def test_roof_max_picks_its_own_inverter() -> None:

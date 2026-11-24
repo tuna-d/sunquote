@@ -11,15 +11,15 @@ from sunquote.domain.assumptions import (
     FinancialAssumptions,
     PricingAssumptions,
 )
-from sunquote.domain.catalog import Catalog, Inverter, Panel
+from sunquote.domain.catalog import Inverter, Panel
 from sunquote.domain.model import Customer, GeocodingResult, QuoteRequest, RoofType
 from sunquote.domain.money import Currency, ExchangeRate, Money
 from sunquote.domain.pricing import (
     SystemPrice,
     dc_ac_ratio,
+    inverter_price_incl_vat,
     price_system,
     select_inverter,
-    to_try,
 )
 from sunquote.domain.production import (
     SpecificYield,
@@ -27,6 +27,7 @@ from sunquote.domain.production import (
     annual_production_kwh,
     monthly_production_kwh,
 )
+from sunquote.domain.reference_data import ReferenceData
 from sunquote.domain.savings import SavingsAnalysis, analyze_savings
 from sunquote.domain.sizing import (
     BindingLimit,
@@ -122,20 +123,17 @@ def _build_option(
     sizing: Sizing,
     panel: Panel,
     specific_yield: SpecificYield,
-    catalog: Catalog,
-    assumptions: EngineeringAssumptions,
-    pricing: PricingAssumptions,
+    reference_data: ReferenceData,
     exchange_rate: ExchangeRate,
     contracted_power: ContractedPower,
     annual_consumption_kwh: Decimal,
-    tariff: ResidentialTariff,
-    financial: FinancialAssumptions,
 ) -> SystemOption:
+    pricing = reference_data.pricing
     capacity_kwp = sizing.panel_count * panel.capacity_kwp
     inverter = select_inverter(
-        inverters=catalog.inverters,
+        inverters=reference_data.catalog.inverters,
         capacity_kwp=capacity_kwp,
-        ratio_range=assumptions.dc_ac_ratio_range,
+        ratio_range=reference_data.engineering.dc_ac_ratio_range,
         max_ac_power_kw=contracted_power.kw,
         rate=exchange_rate,
     )
@@ -152,9 +150,11 @@ def _build_option(
         year1_production_kwh=year1_production_kwh,
         annual_consumption_kwh=annual_consumption_kwh,
         degradation_rate_per_year=panel.degradation_rate_per_year,
-        tariff=tariff,
-        financial=financial,
-        inverter_price_incl_vat=to_try(inverter.unit_price, exchange_rate) * (1 + pricing.vat_rate),
+        tariff=reference_data.tariff,
+        financial=reference_data.financial,
+        inverter_price_incl_vat=inverter_price_incl_vat(
+            inverter, pricing=pricing, rate=exchange_rate
+        ),
         total_price_incl_vat=price.total,
     )
     return SystemOption(
@@ -176,12 +176,8 @@ def build_quote(
     *,
     request: QuoteRequest,
     specific_yield: SpecificYield,
-    catalog: Catalog,
-    assumptions: EngineeringAssumptions,
-    pricing: PricingAssumptions,
+    reference_data: ReferenceData,
     exchange_rate: ExchangeRate,
-    tariff: ResidentialTariff,
-    financial: FinancialAssumptions,
     quote_date: date,
     quote_number: str,
     geocoding_result: GeocodingResult | None = None,
@@ -195,6 +191,11 @@ def build_quote(
     `NoCompatibleInverterError` when no inverter keeps the DC/AC Ratio within the configured
     range with an AC power of at most the Contracted Power.
     """
+    catalog = reference_data.catalog
+    assumptions = reference_data.engineering
+    pricing = reference_data.pricing
+    tariff = reference_data.tariff
+    financial = reference_data.financial
     roof = request.site.roof
     panel = catalog.default_panel
     coverage_ratio = assumptions.coverage_ratio(roof.roof_type)
@@ -216,7 +217,10 @@ def build_quote(
 
     roof_panels = roof_capacity_panels(roof.usable_area_m2, coverage_ratio, panel)
     cap_panels = contracted_power_cap_panels(
-        contracted_power.kw, assumptions.dc_ac_ratio_range.maximum, panel
+        contracted_power_kw=contracted_power.kw,
+        inverters=catalog.inverters,
+        max_dc_ac_ratio=assumptions.dc_ac_ratio_range.maximum,
+        panel=panel,
     )
     consumption_matched = size_consumption_matched(
         monthly_consumption_kwh=monthly_consumption_kwh,
@@ -236,14 +240,10 @@ def build_quote(
             sizing=sizing,
             panel=panel,
             specific_yield=specific_yield,
-            catalog=catalog,
-            assumptions=assumptions,
-            pricing=pricing,
+            reference_data=reference_data,
             exchange_rate=exchange_rate,
             contracted_power=contracted_power,
             annual_consumption_kwh=annual_consumption_kwh,
-            tariff=tariff,
-            financial=financial,
         )
         for strategy, sizing in sizings
     )

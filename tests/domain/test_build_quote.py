@@ -25,6 +25,7 @@ from tests.factories import (
     make_financial_assumptions,
     make_inverter,
     make_pricing_assumptions,
+    make_reference_data,
     make_request,
     make_specific_yield,
     make_tariff,
@@ -42,12 +43,8 @@ def build(
             usable_area_m2=usable_area_m2, monthly_consumption_kwh=monthly_consumption_kwh
         ),
         specific_yield=make_specific_yield(annual=annual_yield),
-        catalog=make_catalog(),
-        assumptions=make_assumptions(),
-        pricing=make_pricing_assumptions(),
+        reference_data=make_reference_data(),
         exchange_rate=make_exchange_rate(),
-        tariff=make_tariff(),
-        financial=make_financial_assumptions(),
         quote_date=QUOTE_DATE,
         quote_number=QUOTE_NUMBER,
     )
@@ -114,12 +111,8 @@ def test_flat_roof_uses_its_coverage_ratio_and_the_installer_orientation() -> No
     quote = build_quote(
         request=request,
         specific_yield=make_specific_yield(tilt_deg="18"),
-        catalog=make_catalog(),
-        assumptions=make_assumptions(flat_roof_tilt_deg="18"),
-        pricing=make_pricing_assumptions(),
+        reference_data=make_reference_data(assumptions=make_assumptions(flat_roof_tilt_deg="18")),
         exchange_rate=make_exchange_rate(),
-        tariff=make_tariff(),
-        financial=make_financial_assumptions(),
         quote_date=QUOTE_DATE,
         quote_number=QUOTE_NUMBER,
     )
@@ -133,8 +126,10 @@ def test_flat_roof_uses_its_coverage_ratio_and_the_installer_orientation() -> No
     assert recorded.coverage_ratio == Decimal("0.50")
     assert recorded.effective_azimuth_deg == Decimal("180")
     assert recorded.effective_tilt_deg == Decimal("18")
-    assert recorded.submitted_request.site.roof.azimuth_deg is None
-    assert recorded.submitted_request.site.roof.tilt_deg is None
+    # The angles the Sales Rep gave stay in the submitted request, though they are not used.
+    assert recorded.submitted_request.site.roof.azimuth_deg == Decimal("90")
+    assert recorded.submitted_request.site.roof.tilt_deg == Decimal("30")
+    assert recorded.submitted_request == request
 
 
 def test_quote_carries_customer_date_and_the_assumptions_it_was_built_with() -> None:
@@ -142,12 +137,10 @@ def test_quote_carries_customer_date_and_the_assumptions_it_was_built_with() -> 
     quote = build_quote(
         request=request,
         specific_yield=make_specific_yield(),
-        catalog=make_catalog(),
-        assumptions=make_assumptions(pitched_coverage_ratio="0.75", system_loss_percent="12"),
-        pricing=make_pricing_assumptions(),
+        reference_data=make_reference_data(
+            assumptions=make_assumptions(pitched_coverage_ratio="0.75", system_loss_percent="12")
+        ),
         exchange_rate=make_exchange_rate(),
-        tariff=make_tariff(),
-        financial=make_financial_assumptions(),
         quote_date=QUOTE_DATE,
         quote_number=QUOTE_NUMBER,
     )
@@ -165,13 +158,11 @@ def test_quote_carries_its_number_and_is_valid_for_the_validity_period() -> None
     quote = build_quote(
         request=make_request(),
         specific_yield=make_specific_yield(),
-        catalog=make_catalog(),
-        assumptions=make_assumptions(),
-        pricing=make_pricing_assumptions(validity_period_days=15),
+        reference_data=make_reference_data(
+            pricing=make_pricing_assumptions(validity_period_days=15)
+        ),
         exchange_rate=make_exchange_rate(),
         quote_date=date(2026, 12, 20),
-        tariff=make_tariff(),
-        financial=make_financial_assumptions(),
         quote_number="SQ-2026-000123",
     )
 
@@ -261,12 +252,11 @@ def test_monthly_bill_converts_through_the_marginal_tariff_tiers(
             make_request(), consumption=Consumption(monthly_bill_try=Decimal(bill_try))
         ),
         specific_yield=make_specific_yield(),
-        catalog=make_catalog((*DEFAULT_INVERTERS, make_inverter("i2", "2", "375"))),
-        assumptions=make_assumptions(),
-        pricing=make_pricing_assumptions(),
+        reference_data=make_reference_data(
+            catalog=make_catalog((*DEFAULT_INVERTERS, make_inverter("i2", "2", "375"))),
+            tariff=tariff,
+        ),
         exchange_rate=make_exchange_rate(),
-        tariff=tariff,
-        financial=make_financial_assumptions(),
         quote_date=QUOTE_DATE,
         quote_number=QUOTE_NUMBER,
     )

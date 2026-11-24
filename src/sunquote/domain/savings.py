@@ -36,7 +36,9 @@ class SavingsAnalysis:
     """What a System Option saves the Customer.
 
     `payback_years` is None, with `payback_beyond_lifetime` set, when the total price is not
-    recovered within the lifetime.
+    recovered within the lifetime. `inverter_replaced_within_lifetime` says whether the cash
+    flow contains an inverter replacement, which it does only when the replacement year is
+    within the lifetime.
     """
 
     cash_flow: tuple[YearlyCashFlow, ...]
@@ -44,6 +46,7 @@ class SavingsAnalysis:
     lifetime_savings: Money
     payback_years: Decimal | None
     payback_beyond_lifetime: bool
+    inverter_replaced_within_lifetime: bool
 
 
 def analyze_savings(
@@ -78,11 +81,10 @@ def analyze_savings(
         exported = production - self_consumed
         tariff_factor = (1 + financial.tariff_escalation_rate_real) ** (year - 1)
 
-        bill_drop = (
-            tariff.annual_cost(annual_consumption_kwh).amount
-            - tariff.annual_cost(annual_consumption_kwh - self_consumed).amount
+        bill_drop = tariff.annual_cost(annual_consumption_kwh) - tariff.annual_cost(
+            annual_consumption_kwh - self_consumed
         )
-        self_consumption_savings = Money(bill_drop * tariff_factor, Currency.TRY)
+        self_consumption_savings = bill_drop * tariff_factor
         export_income = Money(
             exported * tariff.export_price_try_per_kwh * tariff_factor, Currency.TRY
         )
@@ -92,7 +94,7 @@ def analyze_savings(
             if year == financial.inverter_replacement_year
             else _ZERO_TRY
         )
-        net_savings = Money(annual_savings.amount - replacement.amount, Currency.TRY)
+        net_savings = annual_savings - replacement
         previous_cumulative = cumulative
         cumulative = cumulative + net_savings
 
@@ -100,8 +102,8 @@ def analyze_savings(
             payback_years is None
             and previous_cumulative.amount < total_price.amount <= cumulative.amount
         ):
-            remaining = total_price.amount - previous_cumulative.amount
-            payback_years = (year - 1) + remaining / net_savings.amount
+            remaining = total_price - previous_cumulative
+            payback_years = (year - 1) + remaining.amount / net_savings.amount
 
         rows.append(
             YearlyCashFlow(
@@ -124,6 +126,9 @@ def analyze_savings(
         lifetime_savings=cumulative,
         payback_years=payback_years,
         payback_beyond_lifetime=payback_years is None,
+        inverter_replaced_within_lifetime=(
+            financial.inverter_replacement_year <= financial.lifetime_years
+        ),
     )
 
 

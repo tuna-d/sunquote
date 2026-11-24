@@ -25,13 +25,24 @@ from sunquote.api.schemas import (
     quote_response,
 )
 from sunquote.domain.errors import QuoteNotFoundError
-from sunquote.domain.ports import QuoteRepository
+from sunquote.domain.ports import QuoteRepository, StoredQuote
 from sunquote.domain.service import QuoteService
 
 router = APIRouter(tags=["quotes"])
 
 DEFAULT_PAGE_SIZE = 20
 MAX_PAGE_SIZE = 100
+
+
+async def get_stored_quote(
+    quote_id: UUID,
+    repository: Annotated[QuoteRepository, Depends(get_quote_repository)],
+) -> StoredQuote:
+    """The stored Quote of the `quote_id` path parameter. Raises `QuoteNotFoundError` (404)."""
+    stored = await repository.get(quote_id)
+    if stored is None:
+        raise QuoteNotFoundError(quote_id)
+    return stored
 
 
 @router.post(
@@ -59,11 +70,12 @@ async def create_quote(
 
     The Quote holds a Consumption-Matched System Option and, when its panel count differs, a
     Roof-Max one after it. Neither is marked as recommended. Both are capped by the Contracted
-    Power (given, or the Subscriber Group's default) and each has its first-year production, its
+    Power (given, or the Subscriber Group's default: the cap uses the largest Catalog inverter
+    within it) and each has its first-year production, its
     inverter (AC power at most the Contracted Power) and its price in TRY (Installation Cost,
-    Sale Price, VAT and total, whole lira). Equipment prices are converted with TCMB's USD forex
-    selling rate of the last business day before today, unless `exchange_rate_override` is
-    given.
+    Sale Price, VAT and total, whole lira). Prices in a foreign currency (USD in the placeholder
+    data) are converted with TCMB's forex selling rate of the last business day before today,
+    unless `exchange_rate_override` is given.
 
     Each option also carries its own first-year Annual Savings, Payback Period, lifetime savings
     and yearly cash flow, from the residential tariff (marginal Tariff Tiers). Escalation rates
@@ -83,14 +95,8 @@ async def create_quote(
     summary="Get a stored Quote",
     responses=problem_responses(QUOTE_NOT_FOUND, VALIDATION_ERROR),
 )
-async def get_quote(
-    quote_id: UUID,
-    repository: Annotated[QuoteRepository, Depends(get_quote_repository)],
-) -> QuoteResponse:
+async def get_quote(stored: Annotated[StoredQuote, Depends(get_stored_quote)]) -> QuoteResponse:
     """The Quote exactly as it was created."""
-    stored = await repository.get(quote_id)
-    if stored is None:
-        raise QuoteNotFoundError(quote_id)
     return quote_response(stored)
 
 
@@ -101,16 +107,12 @@ async def get_quote(
     responses=problem_responses(QUOTE_NOT_FOUND, VALIDATION_ERROR),
 )
 async def get_quote_document(
-    quote_id: UUID,
-    repository: Annotated[QuoteRepository, Depends(get_quote_repository)],
+    stored: Annotated[StoredQuote, Depends(get_stored_quote)],
 ) -> HTMLResponse:
     """A stored Quote as an A4-printable Turkish HTML page, to send or print to PDF.
 
     Every figure is the Quote's own displayed value; the text around them is fixed Turkish.
     """
-    stored = await repository.get(quote_id)
-    if stored is None:
-        raise QuoteNotFoundError(quote_id)
     return HTMLResponse(render_quote_document(stored))
 
 

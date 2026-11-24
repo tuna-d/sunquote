@@ -159,6 +159,20 @@ def test_nothing_is_replaced_when_the_replacement_year_is_beyond_the_lifetime() 
     assert {row.inverter_replacement for row in result.cash_flow} == {try_("0")}
 
 
+@pytest.mark.parametrize(
+    ("lifetime_years", "replacement_year", "replaced"),
+    [(25, 12, True), (5, 5, True), (5, 6, False), (5, 12, False)],
+)
+def test_the_analysis_says_whether_the_inverter_is_replaced_within_the_lifetime(
+    lifetime_years: int, replacement_year: int, replaced: bool
+) -> None:
+    financial = make_financial_assumptions(
+        lifetime_years=lifetime_years, replacement_year=replacement_year
+    )
+
+    assert analyze(financial=financial).inverter_replaced_within_lifetime is replaced
+
+
 def test_replacement_in_the_last_year_of_the_lifetime_is_included() -> None:
     financial = make_financial_assumptions(lifetime_years=5, replacement_year=5)
 

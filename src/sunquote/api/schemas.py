@@ -1,8 +1,11 @@
 """Request and response schemas of the quote API, and the mapping to and from the domain.
 
 Rounding for display happens here, through the domain's rounding policy, and nowhere else.
-Displayed figures are rounded JSON numbers. Monthly Bills and their derived Monthly
-Consumption are recorded as decimal strings to preserve their precision.
+Displayed figures (whole lira, rounded kWp, kWh and Payback Period) and plain measurements
+(coordinates, areas, angles, kW) are JSON numbers. Money, rates, ratios and tariff prices are
+recorded at full precision as decimal strings, which Pydantic writes for `Decimal`: a JSON
+number would round-trip through `float`. Monthly Bills and their derived Monthly Consumption
+are decimal strings too.
 """
 
 import datetime as dt
@@ -47,6 +50,8 @@ from sunquote.domain.savings import SavingsAnalysis, YearlyCashFlow
 from sunquote.domain.sizing import BindingLimit, SizingStrategy
 from sunquote.domain.tariff import ResidentialTariff
 
+# A rounded display figure or a plain measurement, as a JSON number. Anything that must keep its
+# precision is a plain `Decimal` field instead, which serialises as a decimal string.
 JsonNumber = Annotated[
     Decimal, PlainSerializer(lambda value: float(value), return_type=float, when_used="json")
 ]
@@ -102,21 +107,26 @@ class RoofBody(BaseModel):
     azimuth_deg: Annotated[Decimal, Field(ge=0, lt=360)] | None = Field(
         default=None,
         validate_default=True,
-        description="Compass bearing (180 = south). Required for pitched roofs, ignored for flat.",
+        description=(
+            "Compass bearing (180 = south). Required for pitched roofs. A flat roof does not "
+            "need it and does not use it (panels face south); a value given is recorded as "
+            "submitted."
+        ),
     )
     tilt_deg: Annotated[Decimal, Field(ge=0, le=90)] | None = Field(
         default=None,
         validate_default=True,
-        description="Required for pitched roofs, ignored for flat roofs.",
+        description=(
+            "Required for pitched roofs. A flat roof does not need it and does not use it "
+            "(panels sit at the Installer's tilt); a value given is recorded as submitted."
+        ),
     )
 
     @field_validator("azimuth_deg", "tilt_deg", mode="before")
     @classmethod
-    def _orientation_for_roof_type(cls, value: object, info: ValidationInfo) -> object:
-        roof_type = info.data.get("roof_type")
-        if roof_type is RoofType.FLAT:
-            return None
-        if roof_type is RoofType.PITCHED and value is None:
+    def _require_for_pitched(cls, value: object, info: ValidationInfo) -> object:
+        """Request-shape check only: what a flat roof does with the angles is the domain's."""
+        if value is None and info.data.get("roof_type") is RoofType.PITCHED:
             raise ValueError("required for a pitched roof")
         return value
 
@@ -147,7 +157,12 @@ class ConsumptionBody(BaseModel):
 
 
 class ExchangeRateOverrideBody(BaseModel):
-    rate: Annotated[Decimal, Field(gt=0)] = Field(description="TRY per 1 USD.")
+    rate: Annotated[Decimal, Field(gt=0)] = Field(
+        description=(
+            "TRY per 1 unit of the currency the Catalog and pricing data are priced in "
+            "(USD in the placeholder data)."
+        )
+    )
     date: dt.date = Field(description="The date the rate applies to.")
 
 
@@ -168,8 +183,9 @@ class QuoteRequestBody(BaseModel):
     exchange_rate_override: ExchangeRateOverrideBody | None = Field(
         default=None,
         description=(
-            "USD/TRY rate to price with instead of TCMB's. When given, TCMB is not called "
-            "and the Quote records that the rate was overridden."
+            "Rate to price with instead of TCMB's, for the currency the Catalog and pricing data "
+            "are priced in (USD in the placeholder data). When given, TCMB is not called and the "
+            "Quote records that the rate was overridden."
         ),
     )
 
@@ -239,7 +255,7 @@ class SubmittedConsumption(BaseModel):
 
 
 class SubmittedRequest(BaseModel):
-    """The submitted inputs at full precision. Flat Roof angles are ignored."""
+    """The submitted inputs at full precision, exactly as given."""
 
     customer: SubmittedCustomer
     site: SubmittedSite
@@ -257,9 +273,10 @@ class PanelSummary(BaseModel):
 
 
 class MoneyResponse(BaseModel):
-    """An amount at full precision with its currency, for unit prices and rates."""
+    """An amount with its currency, for unit prices. `amount` is a decimal string at full
+    precision."""
 
-    amount: JsonNumber
+    amount: Decimal
     currency: Currency
 
 
@@ -267,7 +284,7 @@ class PanelDatasheet(PanelSummary):
     length_mm: int
     width_mm: int
     area_m2: JsonNumber
-    degradation_rate_per_year: JsonNumber
+    degradation_rate_per_year: Decimal
     unit_price: MoneyResponse
 
 
@@ -283,11 +300,11 @@ class InverterDatasheet(InverterSummary):
 
 
 class ExchangeRateResponse(BaseModel):
-    """1 `base_currency` buys `rate` `quote_currency` on `date`."""
+    """1 `base_currency` buys `rate` `quote_currency` on `date`. `rate` is a decimal string."""
 
     base_currency: Currency
     quote_currency: Currency
-    rate: JsonNumber
+    rate: Decimal
     date: dt.date
     overridden: bool
 
@@ -305,17 +322,22 @@ class ContractedPowerResponse(BaseModel):
 
 
 class PricingResponse(BaseModel):
+    """The prices the Installation Cost was built from. `margin` and `vat_rate` are shares as
+    decimal strings (0.25 is 25%)."""
+
     bos_price_per_kwp: MoneyResponse
     labour_price_per_kwp: MoneyResponse
     fixed_project_cost: MoneyResponse
-    margin: JsonNumber
-    vat_rate: JsonNumber
+    margin: Decimal
+    vat_rate: Decimal
     validity_period_days: int
 
 
 class DcAcRatioRangeResponse(BaseModel):
-    minimum: JsonNumber
-    maximum: JsonNumber
+    """The allowed DC/AC Ratio, as decimal strings."""
+
+    minimum: Decimal
+    maximum: Decimal
 
 
 class PriceResponse(BaseModel):
@@ -388,34 +410,40 @@ class SystemOptionResponse(BaseModel):
 
 
 class TariffResponse(BaseModel):
-    """The residential Retail Tariff the savings were calculated with (ADR 0002)."""
+    """The residential Retail Tariff the savings were calculated with (ADR 0002). Every figure
+    is a decimal string at full precision."""
 
-    tier_threshold_kwh_per_year: JsonNumber
-    low_tariff_try_per_kwh: JsonNumber
-    high_tariff_try_per_kwh: JsonNumber
-    export_price_try_per_kwh: JsonNumber
-    self_consumption_ratio: JsonNumber
+    tier_threshold_kwh_per_year: Decimal
+    low_tariff_try_per_kwh: Decimal
+    high_tariff_try_per_kwh: Decimal
+    export_price_try_per_kwh: Decimal
+    self_consumption_ratio: Decimal
     valid_from: dt.date
     source: str
 
 
 class FinancialResponse(BaseModel):
-    """Both escalation rates are real (inflation-adjusted): all figures are in today's lira."""
+    """Both escalation rates are real (inflation-adjusted): all figures are in today's lira.
+    The rates are decimal strings (0.02 is 2%)."""
 
-    tariff_escalation_rate_real: JsonNumber
-    equipment_escalation_rate_real: JsonNumber
+    tariff_escalation_rate_real: Decimal
+    equipment_escalation_rate_real: Decimal
     lifetime_years: int
     inverter_replacement_year: int
 
 
 class AssumptionsResponse(BaseModel):
+    """Everything the Quote was calculated with, at full precision. Money, rates, ratios and
+    tariff prices are decimal strings; measurements (coordinates, areas, angles, kW, kWh) are
+    JSON numbers."""
+
     submitted_request: SubmittedRequest
     geocoding_result: GeocodingResultResponse | None
     pvgis_inputs: PvgisInputs
     roof_type: RoofType
     effective_azimuth_deg: JsonNumber
     effective_tilt_deg: JsonNumber
-    coverage_ratio: JsonNumber
+    coverage_ratio: Decimal
     default_panel: PanelDatasheet
     inverters: list[InverterDatasheet]
     dc_ac_ratio_range: DcAcRatioRangeResponse
@@ -453,6 +481,11 @@ def _panel_summary(panel: Panel) -> PanelSummary:
     )
 
 
+def _whole_lira(money: Money) -> int:
+    """A TRY amount in whole lira, by the rounding policy."""
+    return rounding.round_try(money.amount)
+
+
 def _money(money: Money) -> MoneyResponse:
     return MoneyResponse(amount=money.amount, currency=money.currency)
 
@@ -468,10 +501,10 @@ def _inverter_summary(inverter: Inverter) -> InverterSummary:
 
 def _price_response(price: SystemPrice) -> PriceResponse:
     return PriceResponse(
-        installation_cost_try=rounding.round_try(price.installation_cost.amount),
-        sale_price_try=rounding.round_try(price.sale_price.amount),
-        vat_try=rounding.round_try(price.vat.amount),
-        total_try=rounding.round_try(price.total.amount),
+        installation_cost_try=_whole_lira(price.installation_cost),
+        sale_price_try=_whole_lira(price.sale_price),
+        vat_try=_whole_lira(price.vat),
+        total_try=_whole_lira(price.total),
     )
 
 
@@ -481,22 +514,22 @@ def _cash_flow_row(row: YearlyCashFlow) -> CashFlowRow:
         production_kwh=rounding.round_kwh(row.production_kwh),
         self_consumed_kwh=rounding.round_kwh(row.self_consumed_kwh),
         exported_kwh=rounding.round_kwh(row.exported_kwh),
-        self_consumption_savings_try=rounding.round_try(row.self_consumption_savings.amount),
-        export_income_try=rounding.round_try(row.export_income.amount),
-        annual_savings_try=rounding.round_try(row.annual_savings.amount),
-        inverter_replacement_try=rounding.round_try(row.inverter_replacement.amount),
-        net_savings_try=rounding.round_try(row.net_savings.amount),
-        cumulative_net_savings_try=rounding.round_try(row.cumulative_net_savings.amount),
+        self_consumption_savings_try=_whole_lira(row.self_consumption_savings),
+        export_income_try=_whole_lira(row.export_income),
+        annual_savings_try=_whole_lira(row.annual_savings),
+        inverter_replacement_try=_whole_lira(row.inverter_replacement),
+        net_savings_try=_whole_lira(row.net_savings),
+        cumulative_net_savings_try=_whole_lira(row.cumulative_net_savings),
     )
 
 
 def _savings_response(savings: SavingsAnalysis) -> SavingsResponse:
     payback = savings.payback_years
     return SavingsResponse(
-        first_year_annual_savings_try=rounding.round_try(savings.first_year_annual_savings.amount),
+        first_year_annual_savings_try=_whole_lira(savings.first_year_annual_savings),
         payback_period_years=None if payback is None else rounding.round_payback_years(payback),
         payback_beyond_lifetime=savings.payback_beyond_lifetime,
-        lifetime_savings_try=rounding.round_try(savings.lifetime_savings.amount),
+        lifetime_savings_try=_whole_lira(savings.lifetime_savings),
         cash_flow=[_cash_flow_row(row) for row in savings.cash_flow],
     )
 
@@ -710,7 +743,7 @@ def _list_item(stored: StoredQuote) -> QuoteListItem:
         province=stored.province,
         system_option_count=len(quote.system_options),
         capacity_kwp=rounding.round_capacity_kwp(first.capacity_kwp),
-        total_try=rounding.round_try(first.price.total.amount),
+        total_try=_whole_lira(first.price.total),
     )
 
 
