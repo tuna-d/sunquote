@@ -217,7 +217,10 @@ def build_quote(
 
     roof_panels = roof_capacity_panels(roof.usable_area_m2, coverage_ratio, panel)
     cap_panels = contracted_power_cap_panels(
-        contracted_power.kw, assumptions.dc_ac_ratio_range.maximum, panel
+        contracted_power_kw=contracted_power.kw,
+        inverters=catalog.inverters,
+        max_dc_ac_ratio=assumptions.dc_ac_ratio_range.maximum,
+        panel=panel,
     )
     consumption_matched = size_consumption_matched(
         monthly_consumption_kwh=monthly_consumption_kwh,

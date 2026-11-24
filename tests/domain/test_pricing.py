@@ -10,7 +10,11 @@ import pytest
 
 from sunquote.domain.assumptions import DcAcRatioRange
 from sunquote.domain.catalog import Inverter
-from sunquote.domain.errors import CurrencyMismatchError, NoCompatibleInverterError
+from sunquote.domain.errors import (
+    CurrencyMismatchError,
+    NoCompatibleInverterError,
+    NoViableSystemError,
+)
 from sunquote.domain.money import Currency, ExchangeRate, Money
 from sunquote.domain.pricing import inverter_price_incl_vat, select_inverter
 from sunquote.domain.quote import Quote, build_quote
@@ -72,14 +76,24 @@ def test_the_range_limits_are_inclusive() -> None:
     at_maximum = (make_inverter("max", "3.2", "600"),)  # 4.0 / 3.2 = 1.25
 
     assert build(inverters=at_minimum).system_options[0].inverter.inverter_id == "min"
-    assert (
-        build(inverters=at_maximum, assumptions=make_assumptions(dc_ac_ratio_max="1.25"))
-        .system_options[0]
-        .inverter.inverter_id
-        == "max"
-    )
-    with pytest.raises(NoCompatibleInverterError):
-        build(inverters=at_maximum, assumptions=make_assumptions(dc_ac_ratio_max="1.24"))
+    at_maximum_option = build(
+        inverters=at_maximum, assumptions=make_assumptions(dc_ac_ratio_max="1.25")
+    ).system_options[0]
+    assert at_maximum_option.inverter.inverter_id == "max"
+    assert at_maximum_option.panel_count == 8
+
+
+def test_the_largest_usable_inverter_caps_the_system_at_the_maximum_ratio() -> None:
+    # The target is 8 panels (4.0 kWp), 1.25 on the 3.2 kW inverter. With a maximum of 1.24 the
+    # cap is floor(3.2 x 1.24 / 0.5) = 7 panels, so the system shrinks instead of failing.
+    only = (make_inverter("max", "3.2", "600"),)
+
+    option = build(
+        inverters=only, assumptions=make_assumptions(dc_ac_ratio_max="1.24")
+    ).system_options[0]
+
+    assert option.panel_count == 7
+    assert option.inverter.inverter_id == "max"
 
 
 def test_equal_prices_tie_break_on_the_smaller_ac_power_then_the_id() -> None:
@@ -111,11 +125,18 @@ def test_inverters_are_compared_in_try_after_conversion() -> None:
 
 
 def test_no_compatible_inverter_is_a_domain_error() -> None:
-    too_big = (make_inverter("huge", "20", "2000"),)  # 4 / 20 = 0.2
-    too_small = (make_inverter("tiny", "1", "200"),)  # 4 / 1 = 4
+    # The 4.0 kWp system (8 panels) fits neither the 2 kW inverter (2.0) nor the 6 kW one (0.67).
+    gap = (make_inverter("small", "2", "200"), make_inverter("large", "6", "900"))
 
-    for inverters in (too_big, too_small, ()):
-        with pytest.raises(NoCompatibleInverterError):
+    with pytest.raises(NoCompatibleInverterError):
+        build(inverters=gap)
+
+
+def test_no_inverter_within_the_contracted_power_is_no_viable_system() -> None:
+    too_big = (make_inverter("huge", "20", "2000"),)  # above the default 10 kW Contracted Power
+
+    for inverters in (too_big, ()):
+        with pytest.raises(NoViableSystemError):
             build(inverters=inverters)
 
 
