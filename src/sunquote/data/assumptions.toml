@@ -1,0 +1,134 @@
+# PLACEHOLDER DATA. Not any installer's real engineering rules.
+#
+# Engineering and pricing assumptions for the quote calculation, from the research note
+# docs/research/placeholder-market-data.md (sections 4 and 5, research date 2026-11-24).
+# Every value carries its kind, source and date:
+#   direct   - copied from a primary source
+#   derived  - computed from direct figures (derivation in the source text)
+#   estimate - a judgment value with no primary source; replace when real data arrives
+#
+# The residential tariff is in tariff.toml; the financial assumptions are at the end of this file.
+
+[meta]
+placeholder = true
+description = "Placeholder engineering assumptions: market averages and judgment values."
+
+[coverage_ratio.pitched]
+value = 0.80
+kind = "estimate"
+source = "docs/research/placeholder-market-data.md section 5: allows edge and fire-access setbacks; flush panels follow the roof"
+date = 2026-11-24
+
+[coverage_ratio.flat]
+value = 0.50
+kind = "derived"
+source = "docs/research/placeholder-market-data.md section 5: row-spacing calculation with allowance for edges and walkways"
+date = 2026-11-24
+
+[flat_roof_tilt_deg]
+value = 15
+kind = "estimate"
+source = "docs/research/placeholder-market-data.md section 5: typical rack choice to limit row spacing and wind load"
+date = 2026-11-24
+
+[system_loss_percent]
+value = 14
+kind = "direct"
+source = "PVGIS PVcalc default system loss, as used by docs/research/placeholder-market-data.md section 5"
+date = 2026-11-24
+
+[dc_ac_ratio_min]
+value = 1.00
+kind = "estimate"
+source = "docs/research/placeholder-market-data.md section 5: below 1 wastes inverter capacity"
+date = 2026-11-24
+
+# The research note proposes 1.30. With string inverters in 3-10 kW steps, 1.30 leaves gaps: a
+# 3.96 kWp system (9 panels of 440 W) is 1.32 on a 3 kW and 0.99 on a 4 kW inverter, so no
+# inverter qualifies and the quote fails. 1.50 closes the gaps while staying well under the 2.0
+# the research note cites for the regulation and the manufacturer. The owner may tighten it.
+[dc_ac_ratio_max]
+value = 1.50
+kind = "estimate"
+source = "docs/research/placeholder-market-data.md section 5 (proposed 1.30), widened to 1.50 so the catalog has no sizing gaps; the regulation allows up to 2.0 and Huawei recommends up to about 2.0 for small units"
+date = 2026-11-24
+
+# The Contracted Power assumed when a quote request gives none. It is an installer placeholder,
+# not a regulatory figure: the regulation ties installed capacity to the Site's own Contracted
+# Power but sets no residential default (research note section 3, F2).
+[default_contracted_power_kw.residential]
+value = 10
+kind = "estimate"
+source = "docs/research/placeholder-market-data.md section 3, F2 (decided 2026-11-24, option A): an installer assumption, recorded on each Quote as defaulted; a real value comes from the Customer's connection agreement"
+date = 2026-11-24
+
+# Pricing. BOS (balance of system: mounting and cabling) is USD, labour and the fixed project
+# cost are TRY. Margin and VAT are shares: 0.25 is 25%.
+
+[bos_price_per_kwp]
+value = 120
+currency = "USD"
+kind = "estimate"
+source = "docs/research/placeholder-market-data.md section 4: typical pitched-roof rails, clamps, DC/AC cable and protection"
+date = 2026-11-24
+
+[labour_price_per_kwp]
+value = 4000
+currency = "TRY"
+kind = "estimate"
+source = "docs/research/placeholder-market-data.md section 4: about USD 80/kWp at 50.4 TRY/USD"
+date = 2026-11-24
+
+[fixed_project_cost]
+value = 20000
+currency = "TRY"
+kind = "estimate"
+source = "docs/research/placeholder-market-data.md section 4: permits, project file, grid application, meter change; about USD 400"
+date = 2026-11-24
+
+[margin]
+value = 0.25
+kind = "estimate"
+source = "docs/research/placeholder-market-data.md section 4: modelled 10 kWp system sits below a 2026 market price quote, so this is on the low side"
+date = 2026-11-24
+
+[vat_rate]
+value = 0.20
+kind = "estimate"
+source = "docs/research/placeholder-market-data.md section 4: general KDV rate; applicability to residential PV still to be confirmed (open point 1)"
+date = 2026-11-24
+
+# How long a Quote's price holds, counted from the quote date (the Validity Period).
+
+[validity_period_days]
+value = 15
+kind = "derived"
+source = "docs/research/placeholder-market-data.md section 6: USD/TRY moved about 1.5% a month, so 15 days is about 0.8% drift"
+date = 2026-11-24
+
+# Financial assumptions. Both escalation rates are REAL (inflation-adjusted) rates, shares per
+# year (0.02 is 2%): every lifetime figure is in today's lira (docs/adr/0003).
+
+[tariff_escalation_rate_real]
+value = 0.02
+kind = "estimate"
+source = "docs/research/placeholder-market-data.md section 6 and F4: real rate; a nominal 18-24%/year would make a 25-year TRY cash flow grow 50-80x"
+date = 2026-11-24
+
+[equipment_escalation_rate_real]
+value = 0
+kind = "estimate"
+source = "docs/research/placeholder-market-data.md section 6 and F4: module and inverter prices flat to falling in real terms"
+date = 2026-11-24
+
+[lifetime_years]
+value = 25
+kind = "direct"
+source = "docs/research/placeholder-market-data.md section 6: 25-year product warranty on all three catalog panels (datasheets)"
+date = 2026-11-24
+
+[inverter_replacement_year]
+value = 12
+kind = "estimate"
+source = "docs/research/placeholder-market-data.md section 6: typical string-inverter warranty of 10 years plus margin; warranty not read from the Huawei datasheet"
+date = 2026-11-24
