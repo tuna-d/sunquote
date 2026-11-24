@@ -210,6 +210,15 @@ def _assumption_views(stored: StoredQuote) -> tuple[AssumptionView, ...]:
     tariff_escalation = turkish.format_percent(financial.tariff_escalation_rate_real)
     equipment_escalation = turkish.format_percent(financial.equipment_escalation_rate_real)
     system_loss = turkish.format_decimal(recorded.pvgis_inputs.system_loss_percent)
+    bill = recorded.submitted_request.consumption.monthly_bill_try
+    if recorded.consumption_derived_from_bill and bill is not None:
+        consumption_text = (
+            f"Aylık elektrik faturanız {_try(bill)} olarak belirtildi; yukarıdaki tarifeyle "
+            f"bu fatura yıllık {annual_consumption} kWh tüketime karşılık gelir ve hesap bu "
+            f"tüketimle yapıldı."
+        )
+    else:
+        consumption_text = f"Yıllık tüketiminiz {annual_consumption} kWh olarak alındı."
     return (
         AssumptionView(
             "Döviz kuru",
@@ -218,9 +227,7 @@ def _assumption_views(stored: StoredQuote) -> tuple[AssumptionView, ...]:
             f"kuruyla çevrildi ({rate_source}, {turkish.format_date(rate.rate_date)}).",
         ),
         AssumptionView("KDV", f"Fiyatlara {turkish.format_percent(pricing.vat_rate)} KDV eklenir."),
-        AssumptionView(
-            "Elektrik tüketimi", f"Yıllık tüketiminiz {annual_consumption} kWh olarak alındı."
-        ),
+        AssumptionView("Elektrik tüketimi", consumption_text),
         AssumptionView(
             "Elektrik tarifesi",
             f"Yıllık {threshold} kWh değerine kadar olan tüketim {low}, bu değerin üzerindeki "

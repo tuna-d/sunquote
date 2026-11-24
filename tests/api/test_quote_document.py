@@ -255,3 +255,14 @@ def test_the_default_narrative_figures_come_from_the_quote(client: TestClient) -
     assert places(first["capacity_kwp"], 2) in summary
     assert turkish.format_try(first["price"]["total_try"]) in summary
     assert "{" not in page.split("<body")[1]
+
+
+def test_a_consumption_derived_from_a_monthly_bill_is_explained(client: TestClient) -> None:
+    quote = create(client, with_change("consumption", {"monthly_bill_try": 2000}))
+    annual = quote["assumptions"]["annual_consumption_kwh"]
+
+    page = document(client, quote)
+
+    assert "Aylık elektrik faturanız" in page
+    assert turkish.format_int(round(annual)) in page
+    assert "2.000 TL" in page
