@@ -25,7 +25,11 @@ from sunquote.domain.narrative import (
     Violation,
     ViolationKind,
 )
-from sunquote.domain.placeholders import available_placeholders
+from sunquote.domain.placeholders import (
+    PLACEHOLDER_PATTERN,
+    available_placeholders,
+    known_placeholders,
+)
 from sunquote.domain.sizing import BindingLimit, SizingStrategy
 
 pytestmark = pytest.mark.anyio
@@ -173,9 +177,9 @@ async def test_the_request_asks_for_json_with_a_schema_of_the_four_narrative_fie
 
     await writer_with(fake).write(context())
 
-    output_format = fake.body["generationConfig"]["responseFormat"]["text"]
-    assert output_format["mimeType"] == "APPLICATION_JSON"
-    schema = output_format["schema"]
+    generation_config = fake.body["generationConfig"]
+    assert generation_config["responseMimeType"] == "application/json"
+    schema = generation_config["responseJsonSchema"]
     assert schema["type"] == "object"
     assert set(schema["properties"]) == {"greeting", "summary", "options_comparison", "next_steps"}
     assert set(schema["required"]) == {"greeting", "summary", "next_steps"}
@@ -197,6 +201,25 @@ async def test_the_system_instruction_is_english_and_states_the_rules() -> None:
     assert "number word" in lowered
     assert "options_comparison" in instruction
     assert "binding_limit" in instruction
+
+
+async def test_the_system_instruction_names_only_placeholders_of_the_vocabulary() -> None:
+    fake = FakeGemini(recording("gemini_generate_content_success.json"))
+
+    await writer_with(fake).write(context())
+
+    instruction = fake.body["systemInstruction"]["parts"][0]["text"]
+    named = set(PLACEHOLDER_PATTERN.findall(instruction))
+    assert {"customer_name", "valid_until"} <= named
+    assert named <= known_placeholders()
+
+
+async def test_the_system_instruction_does_not_forbid_the_indefinite_article() -> None:
+    fake = FakeGemini(recording("gemini_generate_content_success.json"))
+
+    await writer_with(fake).write(context())
+
+    assert '"bir"' not in fake.body["systemInstruction"]["parts"][0]["text"]
 
 
 async def test_the_user_content_is_the_anonymised_context_as_json() -> None:

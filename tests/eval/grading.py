@@ -99,24 +99,27 @@ def _rate(passed: int, total: int) -> str:
 
 
 def format_report(results: Sequence[ScenarioGrade]) -> str:
-    """Render the per-scenario table and rates across all scenarios."""
-    # The numbered headings keep the table narrow. The rates below name each grader.
-    headers = ("Scenario", "Source", *(str(i) for i in range(1, len(GRADERS) + 1)), "Result")
-    width = max(len(headers[0]), *(len(result.name) for result in results))
-    lines = [f"{headers[0]:<{width}}  {headers[1]:<8}  {'  '.join(headers[2:])}"]
+    """Render the per-scenario table, one named column per grader, and rates across all
+    scenarios."""
+    name_width = max(len("Scenario"), *(len(result.name) for result in results))
+    grader_widths = [len(name) for name in GRADERS]
+    header = [f"{'Scenario':<{name_width}}", f"{'Source':<8}"]
+    header += [f"{name:<{width}}" for name, width in zip(GRADERS, grader_widths, strict=True)]
+    header.append("Result")
+    lines = ["  ".join(header)]
     for result in results:
-        cells = (
-            "-" if result.checks is None else ("Y" if result.checks[name] else "N")
-            for name in GRADERS
-        )
-        outcome = "PASS" if result.passed else "FAIL"
-        lines.append(f"{result.name:<{width}}  {result.source:<8}  {'  '.join(cells)}  {outcome}")
+        row = [f"{result.name:<{name_width}}", f"{result.source:<8}"]
+        for name, width in zip(GRADERS, grader_widths, strict=True):
+            cell = "-" if result.checks is None else ("Y" if result.checks[name] else "N")
+            row.append(f"{cell:<{width}}")
+        row.append("PASS" if result.passed else "FAIL")
+        lines.append("  ".join(row))
     lines += [
         "",
         "Y = pass, N = fail, - = no draft from the final attempt (counts as a failure).",
         f"Overall: {_rate(sum(result.passed for result in results), len(results))}",
     ]
-    for i, name in enumerate(GRADERS, start=1):
+    for name in GRADERS:
         passed = sum(result.checks is not None and result.checks[name] for result in results)
-        lines.append(f"{i}. {name}: {_rate(passed, len(results))}")
+        lines.append(f"{name}: {_rate(passed, len(results))}")
     return "\n".join(lines)

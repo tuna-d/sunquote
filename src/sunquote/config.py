@@ -6,6 +6,9 @@ from typing import Literal
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from sunquote.adapters.gemini import DEFAULT_GEMINI_BASE_URL, DEFAULT_GEMINI_MODEL
+from sunquote.domain.service import DEFAULT_NARRATIVE_BUDGET_SECONDS
+
 
 class Settings(BaseSettings):
     """Every setting has a default, so the service starts without any `.env`.
@@ -48,17 +51,17 @@ class Settings(BaseSettings):
 
     # Total time the Narrative writer gets for both of its attempts when a Quote is created.
     # Past it the Quote records the fixed text and is still created.
-    narrative_timeout_seconds: float = Field(default=15.0, gt=0)
+    narrative_timeout_seconds: float = Field(default=DEFAULT_NARRATIVE_BUDGET_SECONDS, gt=0)
 
     # The LLM that writes the Narrative. The writer is wired only when a key is set; without
     # one every Quote shows the fixed text. The key is a secret: it stays out of reprs and logs.
     gemini_api_key: SecretStr | None = None
-    # A model on Gemini's free tier. Checked 2026-11-24 on Google's pricing page; see
+    # A model on Gemini's free tier; the default and the date it was checked are documented at
     # `sunquote.adapters.gemini.DEFAULT_GEMINI_MODEL`.
-    gemini_model: str = "gemini-3.5-flash-lite"
+    gemini_model: str = DEFAULT_GEMINI_MODEL
     # Per-request timeout of the Gemini call; the Narrative budget above bounds both attempts.
     gemini_timeout_seconds: float = Field(default=10.0, gt=0)
-    gemini_base_url: str = "https://generativelanguage.googleapis.com/v1beta"
+    gemini_base_url: str = DEFAULT_GEMINI_BASE_URL
 
     @field_validator("gemini_api_key", mode="before")
     @classmethod

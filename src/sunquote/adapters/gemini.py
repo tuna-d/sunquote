@@ -28,7 +28,15 @@ from sunquote.domain.narrative import (
     NarrativeDraft,
     Violation,
 )
-from sunquote.domain.placeholders import MAX_OPTIONS
+from sunquote.domain.placeholders import (
+    BARE_NUMBER_UNITS,
+    CUSTOMER_NAME,
+    MAX_OPTIONS,
+    MONEY_SUFFIX,
+    OPTION_PLACEHOLDERS,
+    VALID_UNTIL,
+    option_placeholder,
+)
 
 DEFAULT_GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 # `gemini-3.5-flash-lite`: stable, structured outputs supported, and "Free of charge" in the
@@ -37,6 +45,11 @@ DEFAULT_GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 # submitted content to improve Google's products, which is why only the anonymised context is
 # sent. Re-check before changing it: free-tier availability changes between models and dates.
 DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite"
+
+# Placeholder names and units in the prompt come from the shared vocabulary, never from a copy.
+_OPTION_EXAMPLE = option_placeholder(1, OPTION_PLACEHOLDERS[0])
+_BARE_NUMBER_NAMES = ", ".join(BARE_NUMBER_UNITS)
+_BARE_NUMBER_UNITS = ", ".join(BARE_NUMBER_UNITS.values())
 
 SYSTEM_INSTRUCTION = f"""\
 You write the prose of a solar panel quotation for a customer in Turkey. You are given an \
@@ -50,18 +63,18 @@ Language and tone
 Placeholders (the only way to refer to figures and to the customer)
 - You never know the customer's name or any figure. Refer to them only through placeholders \
 written in curly braces, exactly as listed in "available_placeholders", for example \
-{{customer_name}}. Use no other placeholder and do not invent one.
+{{{CUSTOMER_NAME}}}. Use no other placeholder and do not invent one.
 - A template replaces each placeholder with the real value, so write the surrounding sentence \
-around it. Money placeholders (names ending in _try) already include the currency. Placeholders \
-for capacity_kwp, annual_production_kwh and payback_years are bare numbers: write the unit \
-after them (kWp, kWh, yıl).
+around it. Money placeholders (names ending in {MONEY_SUFFIX}) already include the currency. \
+Placeholders for {_BARE_NUMBER_NAMES} are bare numbers: write the unit after them \
+({_BARE_NUMBER_UNITS}).
 - Write no digit anywhere outside a placeholder, and no number word either: no written-out \
-numbers or counts such as "bir", "iki", "üç", "on" or "yirmi", and no ordinals such as \
+numbers or counts such as "iki", "üç", "on" or "yirmi", and no ordinals such as \
 "ikinci" or "üçüncü". Do not write dates, percentages or years yourself. Refer to the options \
 without counting them: "ilk seçenek", "diğer seçenek", "daha büyük seçenek".
 
 Content
-- greeting: a short salutation that names the customer through {{customer_name}}.
+- greeting: a short salutation that names the customer through {{{CUSTOMER_NAME}}}.
 - summary: describe the proposed system in plain language using placeholders for capacity, \
 production, price and payback. Explain what limited the size of the system, based on the \
 binding_limit of each option: "roof" means the usable roof area, "consumption_target" means the \
@@ -75,7 +88,7 @@ pay back within the system's lifetime and use no payback placeholder for it.
 trade-off between them using the "comparison" booleans (which option produces more, costs more \
 and pays back sooner). When there is one option, return null for options_comparison.
 - next_steps: the steps that follow the customer's acceptance (a site survey, the grid \
-application, the installation), and the validity of the offer through {{valid_until}}.
+application, the installation), and the validity of the offer through {{{VALID_UNTIL}}}.
 
 Length: stay within field_length_limits_characters for each field.
 
@@ -84,7 +97,7 @@ one of them in the new answer.
 
 About the description: sizing_strategy "consumption_matched" means the system is sized to \
 cover the yearly consumption and "roof_max" means as many panels as the roof fits. Options \
-are numbered from 1 in the placeholders, for example option_1_total_try, and there are at \
+are numbered from 1 in the placeholders, for example {_OPTION_EXAMPLE}, and there are at \
 most {MAX_OPTIONS}.
 """
 
@@ -217,7 +230,8 @@ def _request_body(context: NarrativeContext, violations: tuple[Violation, ...]) 
         "systemInstruction": {"parts": [{"text": SYSTEM_INSTRUCTION}]},
         "contents": [{"role": "user", "parts": [{"text": _user_content(context, violations)}]}],
         "generationConfig": {
-            "responseFormat": {"text": {"mimeType": "APPLICATION_JSON", "schema": _RESPONSE_SCHEMA}}
+            "responseMimeType": "application/json",
+            "responseJsonSchema": _RESPONSE_SCHEMA,
         },
     }
 

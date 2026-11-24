@@ -4,7 +4,7 @@ import pytest
 
 from sunquote.domain.errors import NarrativeUnavailableError
 from sunquote.domain.narrative import NarrativeDraft, NarrativeSource, ViolationKind
-from tests.eval.grading import evaluate_scenario, format_report
+from tests.eval.grading import GRADERS, evaluate_scenario, format_report
 from tests.eval.scenarios import SCENARIOS
 from tests.fakes import ScriptedNarrativeWriter
 
@@ -68,3 +68,16 @@ async def test_report_distinguishes_final_rejections_from_missing_drafts() -> No
     assert "Overall: 0/2 (0.0%)" in report
     assert "digit_outside_placeholder: 1/2 (50.0%)" in report
     assert "unavailable_placeholder: 0/2 (0.0%)" in report
+
+
+@pytest.mark.anyio
+async def test_the_report_table_names_every_grader_in_its_header() -> None:
+    writer = ScriptedNarrativeWriter(VALID_DRAFT)
+    result = await evaluate_scenario(SCENARIOS[0], writer=writer, budget_seconds=1, delay_seconds=0)
+
+    header, row = format_report([result]).splitlines()[:2]
+
+    for name in GRADERS:
+        assert name in header
+    assert row.split().count("Y") == len(GRADERS)
+    assert row.endswith("PASS")
