@@ -67,7 +67,7 @@ The all-in price per kWh the Customer pays for grid electricity, taxes and fees 
 _Avoid_: electricity price, rate
 
 **Tariff Tier**:
-The band of the Retail Tariff that applies, chosen by whether annual consumption is above the Subscriber Group's threshold.
+A marginal band of the Retail Tariff. Annual consumption up to the Subscriber Group's threshold is priced at the low tier; only the part above it is priced at the high tier.
 _Avoid_: kademe, step
 
 ### System and production
@@ -134,7 +134,7 @@ _Avoid_: currency rate, FX
 ### Financial result
 
 **Annual Savings**:
-The money a System Option saves the Customer in one year: self-consumed energy at the Retail Tariff plus Exported Energy at the Export Price.
+The money a System Option saves the Customer in one year: the drop in the grid bill from self-consumed energy (which comes off the highest Tariff Tier first) plus Exported Energy at the Export Price.
 _Avoid_: profit, return
 
 **Payback Period**:

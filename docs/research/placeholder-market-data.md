@@ -13,7 +13,7 @@ Confidence is stated where the source is secondary. "Secondary" means a trade or
 
 ## 0. Findings that need a repo owner decision
 
-Three findings touch the design of spec #1. They are **not resolved here**. Each is marked OPEN.
+Three findings touch the design of spec #1. The repo owner decided them on 2026-11-24; see section 7 "Decisions".
 
 ### F1. Hourly vs monthly netting: monthly for residential. No contradiction. (Resolved in favour of spec #1.)
 
@@ -42,12 +42,12 @@ Three findings touch the design of spec #1. They are **not resolved here**. Each
   paperwork threshold, not a cap. No 5 kW or 10 kW residential cap was found in the readable text.
 - **The spec's default Contracted Power of 10 kW is not a regulatory figure.** It is an installer placeholder. A real default
   would come from the connection agreement (typically tied to the Customer's phase and meter). Keep 10 kW as a clearly marked
-  placeholder. **OPEN - needs repo owner decision**: keep 10 kW as an assumption, or require Contracted Power as an input.
+  placeholder. **DECIDED (2026-11-24): Option A**, keep 10 kW as a marked installer assumption, recorded as defaulted.
   - Option A (keep 10 kW default): quotes work without the agreement; the Quote must say the figure is assumed (the spec
     already records "given or defaulted"). Risk: a customer with a smaller connection gets an oversized system.
   - Option B (require it): safest, but breaks user story 17.
 
-### F3. OPEN - the residential Tariff Tier is a daily 8 kWh marginal band, not an annual whole-bill threshold.
+### F3. DECIDED (marginal bands) - the residential Tariff Tier is a daily 8 kWh marginal band, not an annual whole-bill threshold.
 
 - The EPDK tariff table valid from 4 April 2026 has two mesken (AG tek terim) rows: "Mesken (8 kWh/gün ve altı)" and
   "Mesken (8 kWh/gün üstü)". The table's own note (truncated in the file) says the low price applies to consumption up to a
@@ -68,7 +68,7 @@ Three findings touch the design of spec #1. They are **not resolved here**. Each
   contract is moved to the high-consumption last-resort tariff. This is not the tier above and should not be used as the
   Tariff Tier threshold. A claim that the limit becomes 3,000 kWh from 2027 appeared in one secondary source only and is **unverified**.
 
-### F4. OPEN - nominal TRY escalation over 25 years is not meaningful.
+### F4. DECIDED (real rates) - nominal TRY escalation over 25 years is not meaningful.
 
 - TCMB Market Participants Survey, November 2026: year-end 2026 CPI expectation 30.04%, 12-month-ahead 24.04%, 24-month-ahead
   18.02%; USD/TRY year-end 2026 51.61, 12-month-ahead 60.77. Sources are secondary reports of the survey (below).
@@ -167,7 +167,7 @@ Notes:
 
 | Value | Proposed | Unit | Source / derivation | Source date | Kind |
 |---|---|---|---|---|---|
-| Tariff Tier threshold | 2,920 | kWh/year | 8 kWh/day x 365; see F3 (**OPEN**) | table valid 2026-04-04 | Derived |
+| Tariff Tier threshold | 2,920 | kWh/year | 8 kWh/day x 365; marginal band boundary (F3, decided) | table valid 2026-04-04 | Derived |
 | Low-tier energy + distribution, ex-tax | 2.9190 | TRY/kWh | (49.4065 + 242.49) kr/kWh from the EPDK table, AG tek terim "Mesken (8 kWh/gun ve alti)" | 2026-04-04 | Direct |
 | High-tier energy + distribution, ex-tax | 4.3207 | TRY/kWh | (189.5808 + 242.49) kr/kWh, "Mesken (8 kWh/gun ustu)" | 2026-04-04 | Direct |
 | **Low all-in Retail Tariff** | **3.24** | TRY/kWh | (1.05 x 0.494065 + 2.4249) x 1.10 = 3.2380 | 2026-04-04 | Derived |
@@ -257,8 +257,8 @@ Flat-roof Coverage Ratio derivation (portrait panel 1.762 m, tilt 15 degrees, la
 
 | Value | Proposed | Unit | Derivation | Kind |
 |---|---|---|---|---|
-| Tariff escalation | 2 | %/year (real) | **OPEN (F4)**: real rate; nominal would be 18-24% | Estimate |
-| Equipment price escalation (inverter replacement) | 0 | %/year (real) | **OPEN (F4)**: module/inverter prices flat to falling in real terms | Estimate |
+| Tariff escalation | 2 | %/year (real) | real rate (F4, decided); nominal would be 18-24% | Estimate |
+| Equipment price escalation (inverter replacement) | 0 | %/year (real) | real rate (F4, decided); module/inverter prices flat to falling in real terms | Estimate |
 | System lifetime | 25 | years | product warranty 25 years on all three panels; 30-year power guarantees on two of them | Direct (datasheets) |
 | Inverter replacement year | 12 | year | typical string-inverter warranty of 10 years plus margin; warranty not read from the Huawei sheet | Estimate |
 | Validity Period | 15 | days | USD/TRY moved from 43.99 (2026-03-05) to about 50.4 (2026-11-19), about 1.5% a month, so 15 days is about 0.8% drift | Derived |
@@ -268,13 +268,18 @@ TCMB survey figures (F4): <https://www.borsagundem.com.tr/yil-sonu-enflasyon-bek
 November 2026 TCMB Piyasa Katilimcilari Anketi). USD/TRY 43.99 on 2026-03-05: Bigpara TCMB table
 (<https://bigpara.hurriyet.com.tr/doviz/merkez-bankasi-doviz-kurlari/5-mart-2026/>).
 
-## 7. Open points for the repo owner
+## 7. Decisions (repo owner, 2026-11-24)
 
-1. **F3** tier model: marginal 8 kWh/day band vs spec's single annual tier (Option A vs B).
-2. **F2** default Contracted Power: 10 kW is an installer placeholder, not a regulation figure.
-3. **F4** real vs nominal escalation.
-4. Confirm the **KDV 10%** and **BTV 5%** assumptions for all-in tariffs, and the **VAT 20%** for the PV sale.
-5. Confirm the **Export Price** for a new residential plant (YEKDEM price, any veris yonlu dagitim bedeli, and carry-over of unused monthly surplus).
-6. Check the consolidated regulation on mevzuat.gov.tr for F1 and F2.
-7. Inverter and panel USD prices and BOS/labour/margin are Estimates; the owner may replace them with real price lists
+- **F3:** model two marginal bands. Annual consumption up to the threshold (2,920 kWh/year) is priced at the low Retail Tariff,
+  only the part above it at the high Retail Tariff. Spec #1 and tickets #8 and #9 were updated to match.
+- **F2:** keep the 10 kW default Contracted Power as a marked installer assumption (not a regulatory figure).
+- **F4:** escalation rates are real (inflation-adjusted): tariff 2%/year, equipment 0%/year. Lifetime figures are in today's lira.
+- **KDV/BTV on the Retail Tariff:** keep 10% KDV and 5% BTV (all-in 3.24 and 4.86 TRY/kWh).
+
+## 8. Remaining open points
+
+1. Confirm the **VAT 20%** for the PV sale.
+2. Confirm the **Export Price** for a new residential plant (YEKDEM price, any veris yonlu dagitim bedeli, and carry-over of unused monthly surplus).
+3. Check the consolidated regulation on mevzuat.gov.tr for F1 and F2.
+4. Inverter and panel USD prices and BOS/labour/margin are Estimates; the owner may replace them with real price lists
    (`needs-content`).
