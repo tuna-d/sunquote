@@ -1,0 +1,26 @@
+# PLACEHOLDER DATA. Not any installer's real engineering rules.
+#
+# Engineering assumptions for the quote calculation, from the research note
+# docs/research/placeholder-market-data.md (section 5, research date 2026-11-24).
+# Every value carries its kind, source and date:
+#   direct   - copied from a primary source
+#   derived  - computed from direct figures (derivation in the source text)
+#   estimate - a judgment value with no primary source; replace when real data arrives
+#
+# Pricing, tariff and financial assumptions join this file in later tickets.
+
+[meta]
+placeholder = true
+description = "Placeholder engineering assumptions: market averages and judgment values."
+
+[coverage_ratio.pitched]
+value = 0.80
+kind = "estimate"
+source = "docs/research/placeholder-market-data.md section 5: allows edge and fire-access setbacks; flush panels follow the roof"
+date = 2026-11-24
+
+[system_loss_percent]
+value = 14
+kind = "direct"
+source = "PVGIS PVcalc default system loss, as used by docs/research/placeholder-market-data.md section 5"
+date = 2026-11-24
