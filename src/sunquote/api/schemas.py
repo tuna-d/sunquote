@@ -217,7 +217,7 @@ class SubmittedCustomer(BaseModel):
 class SubmittedSite(BaseModel):
     latitude: JsonNumber | None
     longitude: JsonNumber | None
-    address: str | None
+    address: str | None = Field(default=None, exclude_if=lambda address: address is None)
 
 
 class GeocodingResultResponse(BaseModel):
