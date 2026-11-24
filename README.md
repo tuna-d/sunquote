@@ -2,165 +2,177 @@
 
 # sunquote
 
-A backend service that prepares a customer-ready rooftop solar (PV) quote for a Turkish
-installer. Input: the site's location, the roof (area, orientation, tilt) and the
-customer's electricity consumption or bill. Output: system size (kWp), panel and inverter
-choice, yearly production estimate, cost and sale price, savings and payback period.
+sunquote prepares residential rooftop solar Quotes for Turkish Installers. A Sales Rep enters
+the Customer, the Site's Address or Coordinates, the Roof and the average Monthly Consumption
+or Monthly Bill. The service sizes up to two System Options (Consumption-Matched and Roof-Max),
+selects the panel and inverter, estimates production, prices the installation, and calculates
+Annual Savings and the Payback Period.
 
-This is a portfolio project. It works with clearly marked placeholder data (catalog,
-prices, tariffs), each value with its source and date, not with a real company's data.
-
-Stack: Python 3.13, FastAPI, Pydantic, [uv](https://docs.astral.sh/uv/).
+Each Quote is stored with its Assumptions and can be opened as a printable Turkish document.
+The bundled Catalog, Tariff and pricing inputs are [placeholder data](#placeholder-data).
 
 ## Run with Docker Compose
+
+From the repository root, with Docker running:
 
 ```sh
 docker compose up --build
 ```
 
-- API: <http://localhost:8000>
-- Swagger UI: <http://localhost:8000/docs>
-- Health check: <http://localhost:8000/health>
+No `.env` or API keys are required. Compose starts the API, Postgres and Redis. The API
+applies the Alembic migrations at startup. Run `docker compose ps` in another terminal to
+check that all three services are healthy.
 
-No API keys are needed. To publish on another host port, set `API_HOST_PORT`:
+Open [Swagger UI](http://localhost:8000/docs) to try the API, or check
+[service health](http://localhost:8000/health). Set `API_HOST_PORT` in your shell to use
+another host port and use that port in the walkthrough. [`.env.example`](.env.example)
+lists optional settings, including the published Postgres and Redis ports.
 
-```sh
-API_HOST_PORT=8080 docker compose up --build
-```
+Quote creation needs internet access to the public providers listed under
+[Architecture](#architecture). If a provider is unavailable and Redis has no cached value,
+the API returns a `503` and stores no Quote.
 
-All variables are documented in [`.env.example`](.env.example). Copy it to `.env` to
-override a default; every variable is optional.
+## Create, list and open a Quote
 
-## Run locally
+### Create a Quote for an Ankara Address
 
-```sh
-uv sync
-uv run fastapi dev src/sunquote/api/app.py --port 8000
-```
-
-## Create a quote
-
-`POST /quotes` takes the customer, the site's address or coordinates, a pitched or flat roof and
-the monthly consumption, and returns a quote with one consumption-matched system option (panel count,
-`capacity_kwp`, first-year annual and monthly production, what limited its size, the chosen
-inverter, and its price: Installation Cost, Sale Price, VAT and total in whole lira). The
-production figure comes from [PVGIS](https://re.jrc.ec.europa.eu/pvg_tools/en/) for that
-site and roof. Equipment prices are USD and are converted to TRY with the USD forex selling
-rate that the central bank ([TCMB](https://www.tcmb.gov.tr/kurlar/kurlar_tr.html)) published
-on the last business day before the quote date. The service needs internet access; no key is
-needed. The Quote is stored (see below).
+Run the following in a POSIX shell, or paste the JSON body into `POST /quotes` in Swagger UI.
 
 ```sh
-curl -X POST http://localhost:8000/quotes -H 'content-type: application/json' -d '{
-  "customer": {"name": "Test Customer"},
-  "site": {"latitude": 39.9334, "longitude": 32.8597},
+curl -i http://localhost:8000/quotes -H 'Content-Type: application/json' -d '{
+  "customer": {"name": "Demo Customer"},
+  "site": {"address": "Anıtkabir, Ankara"},
   "roof": {"roof_type": "pitched", "usable_area_m2": 40, "azimuth_deg": 180, "tilt_deg": 30},
   "consumption": {"monthly_consumption_kwh": 500},
   "subscriber_group": "residential"
 }'
 ```
 
-For an address lookup within Turkey, send `"site": {"address": "Anıtkabir, Ankara"}`.
-If you give both latitude and longitude, the service uses those coordinates and keeps the
-address as entered. The lookup records its match in `assumptions.geocoding_result` and supplies
-the district and province for the quote list when available.
+The response is `201 Created`. Copy the returned `id` (UUID). The response also includes
+the Quote Number, quote date and valid-until date, System Options with monthly production and yearly
+cash flow, and the Assumptions used to calculate them. Prices are shown in whole lira.
 
-Address lookup uses [Nominatim](https://nominatim.openstreetmap.org/) with
-[© OpenStreetMap contributors](https://www.openstreetmap.org/copyright) data and a
-one-request-per-second process limit. For the public endpoint, follow the
-[Nominatim usage policy](https://operations.osmfoundation.org/policies/nominatim/),
-including its application-wide rate limit and privacy rules. Set `SUNQUOTE_NOMINATIM_BASE_URL`
-to use another Nominatim instance.
+You can provide both `latitude` and `longitude` in `site` to skip Address lookup. The
+API uses those Coordinates when both forms are present. For a flat Roof, use
+`"roof": {"roof_type": "flat", "usable_area_m2": 40}` to use the configured tilt and
+south-facing azimuth. For consumption based on the bill, send `monthly_bill_try` instead
+of `monthly_consumption_kwh`. If both are present, consumption in kWh takes precedence.
 
-For a pitched roof, give `tilt_deg` and the compass bearing `azimuth_deg` (180 = south).
-For a flat roof, send `"roof": {"roof_type": "flat", "usable_area_m2": 40}`.
-Flat roofs use the configured tilt and a south-facing azimuth. The Quote records the effective
-angles and the Coverage Ratio for that Roof Type in its Assumptions.
+### List and open the stored Quote
 
-To price with your own rate (and skip TCMB), add
-`"exchange_rate_override": {"rate": 45.5, "date": "2026-11-20"}` (TRY per USD); the quote
-records that the rate was overridden.
+```sh
+curl 'http://localhost:8000/quotes?page=1&page_size=20'
+```
 
-Errors are `application/problem+json` (RFC 9457) with a stable `type`, for example
-`urn:sunquote:problem:no-viable-system`.
+The `200 OK` response lists Quotes newest first in `items`. Find the entry with the UUID
+you copied. The example is listed with the Customer name, district and province from
+geocoding, Quote Number, creation time, System Option count, and the first option's
+capacity and total price.
 
-## Stored quotes
+Replace `{id}` below with that UUID.
 
-Every created Quote is stored in Postgres and never changes afterwards. It gets a UUID and a
-Quote Number like `SQ-2026-000123` (the sequence restarts each year), and a valid-until date:
-the quote date plus the Validity Period (15 days, from the placeholder assumptions).
+| Endpoint | Result |
+| --- | --- |
+| `GET /quotes/{id}` | Opens the stored Quote as JSON. |
+| `GET /quotes/{id}/document` | Opens the printable Turkish HTML document. |
 
-- `GET /quotes/{id}` returns the stored Quote, or a 404 problem.
-- `GET /quotes?page=1&page_size=20` lists Quotes, newest first, with the Customer name,
-  the number of System Options, and the first option's `capacity_kwp` and total price.
-  `district` and `province` stay null until address geocoding exists.
+In your browser, visit `http://localhost:8000/quotes/{id}/document` and use the print
+dialog to print the Quote or save it as a PDF.
 
-A request that fails with 422 or 503 stores nothing. A Quote Number is taken just before the
-calculation, so a request that then finds no viable system or no compatible inverter leaves a
-gap in the numbers.
+Stored Quotes are immutable. The Quote Number sequence restarts each year. API errors use
+RFC 9457 `application/problem+json` with a stable `type`. Unknown Quote IDs return `404`.
 
-Persistence is async SQLAlchemy 2.0 with asyncpg. The schema is managed with Alembic; the API
-applies the migrations when it starts (turn that off with `SUNQUOTE_MIGRATE_ON_STARTUP=false`).
-To run the API outside Compose, start the database with `docker compose up postgres` first.
+## Architecture
 
-## Lookup cache
+- [`domain`](src/sunquote/domain) holds the calculation engine and defines ports for the
+  Geocoder, Specific Yield provider, Exchange Rate provider, Quote repository and Clock.
+  The calculation takes its inputs explicitly.
+- [`api`](src/sunquote/api) handles FastAPI requests, Pydantic validation, error mapping and
+  response rendering. Jinja2 renders the Turkish document from the stored Quote.
+- [`adapters`](src/sunquote/adapters) implement the ports and load the bundled TOML data.
+  [`bootstrap.py`](src/sunquote/bootstrap.py) wires them into the application.
 
-Compose starts Redis and enables caching for Specific Yield, geocoding and Exchange Rates.
-Specific Yield and geocoding matches are kept for 30 days. Exchange Rates are kept by quote
-date and currency without expiry. A quote with `exchange_rate_override` skips the Exchange
-Rate cache. If Redis is unreachable, the API uses the providers directly.
+[Nominatim](https://nominatim.openstreetmap.org/) resolves Turkish Addresses using
+[© OpenStreetMap contributors](https://www.openstreetmap.org/copyright) data. When using the
+public endpoint, follow its [usage policy](https://operations.osmfoundation.org/policies/nominatim/),
+including the application-wide one-request-per-second limit and privacy rules.
+`SUNQUOTE_NOMINATIM_BASE_URL` can point to another instance.
 
-To enable caching when running the API outside Compose, start Redis with
-`docker compose up redis` and set `SUNQUOTE_REDIS_URL=redis://localhost:6379/0`.
+[PVGIS](https://re.jrc.ec.europa.eu/pvg_tools/en/) provides Specific Yield for the Site and
+effective Roof angles. [TCMB](https://www.tcmb.gov.tr/kurlar/kurlar_tr.html) provides the
+forex selling rate from the latest published business day before the Quote date.
+An `exchange_rate_override` containing a `rate` and `date` bypasses the TCMB lookup.
+
+Postgres stores Quotes through async SQLAlchemy and asyncpg. Redis caches geocoding and
+Specific Yield for 30 days and keeps Exchange Rates by Quote date and currency without
+expiry. If Redis is unreachable, the API calls the providers directly.
+
+## Run locally
+
+With Python 3.13 and [uv](https://docs.astral.sh/uv/) installed, start the backing services
+and run the API on a separate port:
+
+```sh
+docker compose up -d --wait postgres redis
+uv sync
+SUNQUOTE_REDIS_URL=redis://127.0.0.1:6379/0 uv run fastapi dev src/sunquote/api/app.py --port 8102
+```
+
+The API defaults to the Postgres URL published on localhost by Compose. Redis caching is
+optional outside Compose. Use [`.env.example`](.env.example) to configure either service.
 
 ## Placeholder data
 
-The catalog (panels and inverters, with USD unit prices) and the engineering and pricing
-assumptions (DC/AC range, BOS, labour, fixed project cost, Margin, VAT) are TOML files in
-[`src/sunquote/data/`](src/sunquote/data). They are placeholders: every value names its
-kind (direct, derived or estimate), its source and its date, taken from
-[`docs/research/placeholder-market-data.md`](docs/research/placeholder-market-data.md).
-Set `SUNQUOTE_DATA_DIR` to load your own files instead.
+The TOML files in [`src/sunquote/data/`](src/sunquote/data) contain placeholder inputs
+for the Catalog (panel and inverter specifications and unit prices), Residential Tariff
+(tiers, Export Price, Self-Consumption Ratio and default Contracted Power), and
+pricing, engineering and financial Assumptions (installation costs, Margin, VAT, Roof
+coverage, system loss and escalation rates).
 
-## Tests and checks
+The [market-data research note](docs/research/placeholder-market-data.md) records sources,
+dates, owner decisions and open questions. Set `SUNQUOTE_DATA_DIR` to load your own files.
+See the ADRs on [figures in the Quote document](docs/adr/0001-llm-never-writes-figures.md),
+[marginal Tariff Tiers](docs/adr/0002-marginal-tariff-tiers.md) and
+[real escalation rates](docs/adr/0003-real-escalation-rates.md).
+
+## Tests and CI
 
 ```sh
-uv run pytest                  # unit tests; offline, fast (default run)
-uv run pytest -m integration   # tests against real external services (run by hand)
+uv sync
 uv run ruff check .
 uv run ruff format --check .
 uv run mypy src
+uv run pytest
+uv run pytest -m integration
 ```
 
-The Postgres repository tests need a database. Start one with `docker compose up postgres`,
-then run `SUNQUOTE_TEST_DATABASE_URL=postgresql+asyncpg://sunquote:sunquote@localhost:5432/sunquote
-uv run pytest`. Without that variable they are skipped. Each test works in its own temporary
-schema.
+The default pytest run excludes the `integration` and `eval` markers. It includes
+offline tests and the Postgres and Redis adapter contracts when their test URLs are
+configured. To run those contracts locally, start the backing services with
+`docker compose up -d --wait postgres redis`, then run:
 
-For the real Redis cache tests, start `docker compose up redis` and run
-`SUNQUOTE_TEST_REDIS_URL=redis://localhost:6379/15 uv run pytest`. These tests skip locally
-when the URL is unset or Redis is unreachable. In CI, either condition fails the cache tests.
-
-The `integration` and `eval` markers are excluded from the default `uv run pytest` run.
-CI (GitHub Actions) runs lint, format check, type check and the default tests on every
-push and pull request, with service containers for the Postgres and Redis tests. The integration
-tests (real Nominatim, PVGIS and TCMB calls) run from a separate
-workflow that is started by hand from the Actions tab.
-
-## Layout
-
-```text
-src/sunquote/
-  domain/     pure calculation engine (no FastAPI, Pydantic, database, network or clock)
-  api/        thin FastAPI layer: schemas, validation, error mapping
-  adapters/   external sources (irradiance, exchange rate, catalog, persistence)
-  data/       placeholder catalog and assumptions (TOML)
-  bootstrap.py  wires the real adapters (the composition root)
-  config.py   settings read from environment variables
+```sh
+SUNQUOTE_TEST_DATABASE_URL=postgresql+asyncpg://sunquote:sunquote@127.0.0.1:5432/sunquote \
+SUNQUOTE_TEST_REDIS_URL=redis://127.0.0.1:6379/15 \
+uv run pytest
 ```
 
-A test (`tests/test_architecture.py`) fails if `domain` imports FastAPI, Pydantic, the
-`api` or `adapters` layers, or `config`.
+Without the test URLs, the service-backed tests skip locally. The examples use `127.0.0.1`
+because Compose publishes both services on IPv4 loopback. Update the URLs if you changed
+the published ports. Postgres tests use temporary schemas, and Redis tests use a separate
+database from the API cache.
+
+[CI](.github/workflows/ci.yml) runs dependency sync, lint, format check, type check and the
+default pytest suite with Postgres and Redis service containers on every push and pull
+request. The [manual integration workflow](.github/workflows/integration.yml) runs the same
+`pytest -m integration` command against live Nominatim, PVGIS and TCMB without keys.
+
+## What comes next
+
+- [Spec #2](https://github.com/tuna-d/sunquote/issues/2) adds an LLM-written Narrative that
+  refers to calculated figures through placeholders.
+- [Spec #3](https://github.com/tuna-d/sunquote/issues/3) adds a natural-language quote
+  assistant and an extraction evaluation suite.
 
 ---
 
