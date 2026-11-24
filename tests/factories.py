@@ -12,6 +12,7 @@ from decimal import Decimal
 from sunquote.domain.assumptions import (
     DcAcRatioRange,
     EngineeringAssumptions,
+    FinancialAssumptions,
     PricingAssumptions,
 )
 from sunquote.domain.catalog import Catalog, Inverter, Panel
@@ -27,6 +28,7 @@ from sunquote.domain.model import (
 )
 from sunquote.domain.money import Currency, ExchangeRate, Money
 from sunquote.domain.production import SpecificYield, SpecificYieldInputs
+from sunquote.domain.tariff import ResidentialTariff
 
 QUOTE_DATE = date(2026, 11, 24)
 QUOTE_NUMBER = "SQ-2026-000001"
@@ -117,6 +119,7 @@ def make_assumptions(
     system_loss_percent: str = "14",
     dc_ac_ratio_min: str = "1.00",
     dc_ac_ratio_max: str = "1.30",
+    default_contracted_power_kw: str = "10",
 ) -> EngineeringAssumptions:
     return EngineeringAssumptions(
         coverage_ratio_by_roof_type={
@@ -124,10 +127,47 @@ def make_assumptions(
             RoofType.FLAT: Decimal("0.50"),
         },
         flat_roof_tilt_deg=Decimal(flat_roof_tilt_deg),
+        default_contracted_power_kw_by_subscriber_group={
+            SubscriberGroup.RESIDENTIAL: Decimal(default_contracted_power_kw)
+        },
         system_loss_percent=Decimal(system_loss_percent),
         dc_ac_ratio_range=DcAcRatioRange(
             minimum=Decimal(dc_ac_ratio_min), maximum=Decimal(dc_ac_ratio_max)
         ),
+    )
+
+
+def make_financial_assumptions(
+    *,
+    tariff_escalation: str = "0.02",
+    equipment_escalation: str = "0",
+    lifetime_years: int = 25,
+    replacement_year: int = 12,
+) -> FinancialAssumptions:
+    return FinancialAssumptions(
+        tariff_escalation_rate_real=Decimal(tariff_escalation),
+        equipment_escalation_rate_real=Decimal(equipment_escalation),
+        lifetime_years=lifetime_years,
+        inverter_replacement_year=replacement_year,
+    )
+
+
+def make_tariff(
+    *,
+    threshold_kwh_per_year: str = "3000",
+    low_try_per_kwh: str = "3",
+    high_try_per_kwh: str = "5",
+    export_try_per_kwh: str = "2",
+    self_consumption_ratio: str = "0.8",
+) -> ResidentialTariff:
+    return ResidentialTariff(
+        tier_threshold_kwh_per_year=Decimal(threshold_kwh_per_year),
+        low_tariff_try_per_kwh=Decimal(low_try_per_kwh),
+        high_tariff_try_per_kwh=Decimal(high_try_per_kwh),
+        export_price_try_per_kwh=Decimal(export_try_per_kwh),
+        self_consumption_ratio=Decimal(self_consumption_ratio),
+        valid_from=date(2026, 4, 4),
+        source="test tariff",
     )
 
 
@@ -158,6 +198,7 @@ def make_request(
     azimuth_deg: str = "180",
     tilt_deg: str = "30",
     roof_type: RoofType = RoofType.PITCHED,
+    contracted_power_kw: str | None = None,
 ) -> QuoteRequest:
     return QuoteRequest(
         customer=Customer(name="Şule Öztürk", phone="+90 555 000 00 00", email="sule@example.com"),
@@ -172,4 +213,5 @@ def make_request(
         ),
         consumption=Consumption(monthly_consumption_kwh=Decimal(monthly_consumption_kwh)),
         subscriber_group=SubscriberGroup.RESIDENTIAL,
+        contracted_power_kw=None if contracted_power_kw is None else Decimal(contracted_power_kw),
     )

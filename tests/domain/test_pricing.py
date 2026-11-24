@@ -20,10 +20,12 @@ from tests.factories import (
     make_assumptions,
     make_catalog,
     make_exchange_rate,
+    make_financial_assumptions,
     make_inverter,
     make_pricing_assumptions,
     make_request,
     make_specific_yield,
+    make_tariff,
 )
 
 
@@ -35,12 +37,16 @@ def build(
     assumptions=None,
 ) -> Quote:
     return build_quote(
-        request=make_request(),  # 500 kWh/month -> 4.0 kWp, 8 panels
+        request=make_request(
+            usable_area_m2="20"
+        ),  # 500 kWh/month -> 4.0 kWp, 8 panels; the roof fits 8
         specific_yield=make_specific_yield(),
         catalog=make_catalog(inverters),
         assumptions=assumptions or make_assumptions(),
         pricing=pricing or make_pricing_assumptions(),
         exchange_rate=exchange_rate or make_exchange_rate(),
+        tariff=make_tariff(),
+        financial=make_financial_assumptions(),
         quote_date=QUOTE_DATE,
         quote_number=QUOTE_NUMBER,
     )

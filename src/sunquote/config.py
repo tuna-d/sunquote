@@ -23,8 +23,8 @@ class Settings(BaseSettings):
 
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
 
-    # Directory holding `catalog.toml` and `assumptions.toml`. None means the placeholder
-    # files that ship inside the package.
+    # Directory holding `catalog.toml`, `assumptions.toml` and `tariff.toml`. None means the
+    # placeholder files that ship inside the package.
     data_dir: Path | None = None
 
     # Where Quotes are stored. The default matches the Postgres service in `compose.yaml` when

@@ -88,7 +88,7 @@ def test_the_list_is_newest_first_and_each_item_summarises_the_quote(client: Tes
         "customer_name": "Ceren",
         "district": None,
         "province": None,
-        "system_option_count": 1,
+        "system_option_count": 2,  # Consumption-Matched and Roof-Max
         "capacity_kwp": 4.0,
         "total_try": 159000,
     }

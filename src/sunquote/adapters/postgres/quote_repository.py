@@ -1,6 +1,7 @@
 """The Postgres implementation of the domain's `QuoteRepository` port."""
 
 from datetime import datetime
+from typing import Any
 from uuid import UUID, uuid4
 
 from pydantic import TypeAdapter
@@ -16,6 +17,16 @@ from sunquote.domain.quote import Quote, format_quote_number
 # field added to the Quote is stored and restored without touching this module. Decimals are
 # written as strings, so no figure passes through a float.
 _QUOTE_JSON = TypeAdapter(Quote)
+
+
+def quote_to_json(quote: Quote) -> dict[str, Any]:
+    """The JSON document stored in the `quote` column. Decimals are strings."""
+    document: dict[str, Any] = _QUOTE_JSON.dump_python(quote, mode="json")
+    return document
+
+
+def quote_from_json(document: dict[str, Any]) -> Quote:
+    return _QUOTE_JSON.validate_python(document)
 
 
 def create_engine(database_url: str) -> AsyncEngine:
@@ -59,7 +70,7 @@ class PostgresQuoteRepository:
                 customer_name=quote.customer.name,
                 district=district,
                 province=province,
-                quote=_QUOTE_JSON.dump_python(quote, mode="json"),
+                quote=quote_to_json(quote),
             )
             .returning(quotes.c.created_at)
         )
@@ -95,7 +106,7 @@ def _stored_quote(row: RowMapping) -> StoredQuote:
     return StoredQuote(
         id=row["id"],
         created_at=row["created_at"],
-        quote=_QUOTE_JSON.validate_python(row["quote"]),
+        quote=quote_from_json(row["quote"]),
         district=row["district"],
         province=row["province"],
     )

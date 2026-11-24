@@ -13,7 +13,9 @@ from sunquote.adapters.data_files import (
     default_data_dir,
     load_catalog,
     load_engineering_assumptions,
+    load_financial_assumptions,
     load_pricing_assumptions,
+    load_residential_tariff,
 )
 from sunquote.adapters.postgres.migrate import upgrade_to_head
 from sunquote.adapters.postgres.quote_repository import PostgresQuoteRepository, create_engine
@@ -41,6 +43,8 @@ def build_dependencies(
     catalog = load_catalog(data_dir / "catalog.toml")
     assumptions = load_engineering_assumptions(data_dir / "assumptions.toml")
     pricing = load_pricing_assumptions(data_dir / "assumptions.toml")
+    financial = load_financial_assumptions(data_dir / "assumptions.toml")
+    tariff = load_residential_tariff(data_dir / "tariff.toml")
 
     http_client = httpx.AsyncClient(timeout=settings.pvgis_timeout_seconds, transport=transport)
     provider = PvgisSpecificYieldProvider(
@@ -70,6 +74,8 @@ def build_dependencies(
         catalog=catalog,
         assumptions=assumptions,
         pricing=pricing,
+        tariff=tariff,
+        financial=financial,
     )
     return AppDependencies(
         quote_service=service,

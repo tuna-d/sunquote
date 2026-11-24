@@ -32,9 +32,11 @@ from tests.factories import (
     make_assumptions,
     make_catalog,
     make_exchange_rate,
+    make_financial_assumptions,
     make_pricing_assumptions,
     make_request,
     make_specific_yield,
+    make_tariff,
 )
 
 pytestmark = pytest.mark.anyio
@@ -85,6 +87,8 @@ def make_quote(quote_number: str = "SQ-2026-000001", customer_name: str = "Şule
         pricing=make_pricing_assumptions(),
         exchange_rate=make_exchange_rate(),
         quote_date=QUOTE_DATE,
+        tariff=make_tariff(),
+        financial=make_financial_assumptions(),
         quote_number=quote_number,
     )
 

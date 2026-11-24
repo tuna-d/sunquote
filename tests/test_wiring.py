@@ -52,7 +52,7 @@ def test_quote_from_shipped_data_files_and_recorded_pvgis_response(
 
     assert response.status_code == 201
     quote = response.json()
-    [option] = quote["system_options"]
+    option = quote["system_options"][0]  # Consumption-Matched
     # 6000 kWh / 1472.13 kWh/kWp = 4.076 kWp; 4.076 / 0.44 kWp = 9.26 -> 9 panels = 3.96 kWp.
     assert option["panel_count"] == 9
     assert option["capacity_kwp"] == 3.96
@@ -78,7 +78,7 @@ def test_quote_is_priced_from_the_shipped_prices_and_the_tcmb_rate(
     quote = wired_client.post("/quotes", json=valid_body()).json()
 
     # 9 Trina panels (3.96 kWp). The 3 kW Huawei is the cheapest in range (3.96 / 3 = 1.32).
-    [option] = quote["system_options"]
+    option = quote["system_options"][0]  # Consumption-Matched
     assert option["inverter"]["model"] == "SUN2000-3KTL-M1"
     # USD: 9 x 76 + 650 + 120 x 3.96 = 684 + 650 + 475.2 = 1,809.2 -> x 50.6026 = 91,550.25
     # + labour 4,000 x 3.96 = 15,840 + fixed 20,000 = 127,390.25 (Installation Cost)
@@ -131,3 +131,28 @@ def test_an_injected_repository_means_no_migration_and_no_database() -> None:
     dependencies = build_dependencies(Settings(), quote_repository=FakeQuoteRepository())
 
     assert dependencies.startup == ()
+
+
+def test_savings_come_from_the_shipped_tariff_and_financial_assumptions(
+    wired_client: TestClient,
+) -> None:
+    quote = wired_client.post("/quotes", json=valid_body()).json()
+
+    option = quote["system_options"][0]  # Consumption-Matched
+    savings = option["savings"]
+    assert len(savings["cash_flow"]) == 25
+    # 3.96 kWp x 1,472.13 = 5,829.63 kWh; 85% self-consumed = 4,955.19 kWh of the 6,000 kWh a
+    # year. The grid bill (2,920 kWh at 3.24 + 3,080 kWh at 4.86 = 24,429.60) drops to
+    # 1,044.81 kWh x 3.24 = 3,385.19: 21,044.41 saved. The other 874.45 kWh export at 2.92.
+    first_year = savings["cash_flow"][0]
+    assert first_year["self_consumed_kwh"] == 4955
+    assert first_year["exported_kwh"] == 874
+    assert first_year["self_consumption_savings_try"] == 21044
+    assert first_year["export_income_try"] == 2553
+    assert savings["first_year_annual_savings_try"] == 23598  # 23,597.79
+    assumptions = quote["assumptions"]
+    assert assumptions["tariff"]["tier_threshold_kwh_per_year"] == 2920
+    assert assumptions["tariff"]["valid_from"] == "2026-04-04"
+    assert assumptions["low_tier_consumption_kwh"] == 2920
+    assert assumptions["high_tier_consumption_kwh"] == 3080
+    assert assumptions["financial"]["lifetime_years"] == 25
