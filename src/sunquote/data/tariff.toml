@@ -1,0 +1,50 @@
+# PLACEHOLDER DATA. Not any installer's or distributor's contract terms.
+#
+# Residential Retail Tariff, Export Price and Self-Consumption Ratio, from the research note
+# docs/research/placeholder-market-data.md (section 3, research date 2026-11-24).
+# Every value carries its kind, source and date:
+#   direct   - copied from a primary source
+#   derived  - computed from direct figures (derivation in the source text)
+#   estimate - a judgment value with no primary source; replace when real data arrives
+#
+# The tariff changes quarterly: `valid_from` below is the date the EPDK table that the Retail
+# Tariff comes from took effect. Tariff Tiers are marginal bands (docs/adr/0002): annual
+# consumption up to the threshold is priced at the low tier, only the part above it at the high.
+
+[meta]
+placeholder = true
+description = "Placeholder residential tariff: derived from the EPDK table of 2026-04-04."
+
+[tariff]
+valid_from = 2026-04-04
+source = "EPDK electricity tariff table valid from 2026-04-04 (AG tek terim, mesken), https://www.epdk.gov.tr/Detay/DownloadDocument?id=pI+XZjfJIU0=; taxes per https://enerjiajansi.com.tr/elektrik-birim-fiyatlari/ (BTV 5% on energy, KDV 10%)"
+
+[tier_threshold_kwh_per_year]
+value = 2920
+kind = "derived"
+source = "docs/research/placeholder-market-data.md section 3: 8 kWh/day x 365 days, the EPDK mesken band boundary"
+date = 2026-04-04
+
+[low_tariff_try_per_kwh]
+value = 3.24
+kind = "derived"
+source = "docs/research/placeholder-market-data.md section 3: (1.05 x 0.494065 + 2.4249) x 1.10 = 3.2380 TRY/kWh from the EPDK 'Mesken (8 kWh/gun ve alti)' row; BTV 5% and KDV 10% not confirmed from a legal text"
+date = 2026-04-04
+
+[high_tariff_try_per_kwh]
+value = 4.86
+kind = "derived"
+source = "docs/research/placeholder-market-data.md section 3: (1.05 x 1.895808 + 2.4249) x 1.10 = 4.8570 TRY/kWh from the EPDK 'Mesken (8 kWh/gun ustu)' row; BTV 5% and KDV 10% not confirmed from a legal text"
+date = 2026-04-04
+
+[export_price_try_per_kwh]
+value = 2.92
+kind = "estimate"
+source = "docs/research/placeholder-market-data.md section 3: YEKDEM solar unit price 292.49 kr/kWh (EPIAS, effective 2026-11-01); unverified for a new residential plant, an indicative upper estimate"
+date = 2026-11-01
+
+[self_consumption_ratio]
+value = 0.85
+kind = "derived"
+source = "docs/research/placeholder-market-data.md section 3: monthly netting, PVGIS-SARAH3 monthly output vs flat consumption, Istanbul end (Ankara 0.88, Antalya 0.92); lower for a system larger than consumption"
+date = 2026-11-24

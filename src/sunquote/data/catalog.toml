@@ -1,0 +1,146 @@
+# PLACEHOLDER DATA. Not any installer's real catalog.
+#
+# Datasheet values for panels and inverters, and their unit prices, taken from the research note
+# docs/research/placeholder-market-data.md (sections 2.1-2.3, research date 2026-11-24).
+# Each item names the datasheet it comes from and that datasheet's date. Unit prices are USD,
+# delivered to a Turkish installer; they are estimates (no price list was reachable), and each
+# carries its own price_source and price_date. Every price declares its currency (price_currency);
+# the Quote converts it to TRY with the Exchange Rate of that currency.
+# Replace this file with the installer's real catalog and price list when they arrive.
+
+# The panel used for every System Option.
+default_panel = "trina-vertex-s-plus-neg9rh25-440"
+
+[meta]
+placeholder = true
+description = "Placeholder panel catalog compiled from public manufacturer datasheets."
+
+[[panels]]
+panel_id = "trina-vertex-s-plus-neg9rh25-440"
+manufacturer = "Trina Solar"
+model = "Vertex S+ TSM-NEG9RH.25 (440 W)"
+power_w = 440
+length_mm = 1762
+width_mm = 1134
+# Constant annual rate (share of year-1 output lost per year). Derived: the datasheet guarantees
+# 1% in year 1 then 0.40%/yr, which is 89.4% at year 25; the constant rate that reaches 89.4%
+# in 24 steps is 1 - 0.894^(1/24) = 0.47%. A guarantee (worst case), not a typical field value.
+degradation_rate_per_year = 0.0047
+unit_price = 76
+price_currency = "USD"
+price_kind = "estimate"
+price_source = "docs/research/placeholder-market-data.md section 2.3: USD 0.17/W x 440 W, between the InfoLink TOPCon and all-black spot prices (https://www.infolink-group.com/energy-article/pv-spot-price-20261118) plus a freight/customs/distributor uplift"
+price_date = 2026-11-24
+source = "https://www-cdn.trinasolar.com/wwwstorage/sites/17/DT-M-0130-NA-EN-A-Datasheet_Vertex-S_NEG9RH.25_2026_A.pdf"
+source_date = 2026-05-27
+kind = "direct"
+notes = "Full black, dual glass, 30-year power guarantee. Degradation rate is derived (see above). Source date is when the PDF was saved."
+
+[[panels]]
+panel_id = "trina-vertex-s-plus-ne09rh05-440"
+manufacturer = "Trina Solar"
+model = "Vertex S+ TSM-NE09RH.05 (440 W)"
+power_w = 440
+length_mm = 1762
+width_mm = 1134
+# Derived the same way as above (datasheet: 1% first year, 0.4% per year after).
+degradation_rate_per_year = 0.0047
+unit_price = 74
+price_currency = "USD"
+price_kind = "estimate"
+price_source = "docs/research/placeholder-market-data.md section 2.3: USD 0.17/W x 440 W, between the InfoLink TOPCon and all-black spot prices (https://www.infolink-group.com/energy-article/pv-spot-price-20261118) plus a freight/customs/distributor uplift"
+price_date = 2026-11-24
+source = "https://www-cdn.trinasolar.com/wwwstorage/sites/17/VertexS_TSM-NE09RH.05_420-445W_2025_A.pdf"
+source_date = 2025-04-30
+kind = "direct"
+notes = "25-year power guarantee. Degradation rate is derived (see above). Source date is when the PDF was saved."
+
+[[inverters]]
+inverter_id = "huawei-sun2000-3ktl-m1"
+manufacturer = "Huawei"
+model = "SUN2000-3KTL-M1"
+ac_power_kw = 3
+unit_price = 650
+price_currency = "USD"
+price_kind = "estimate"
+price_source = "docs/research/placeholder-market-data.md section 2.2: no distributor price list was reachable; scaled from marketplace asking prices for the 10KTL-M1 (https://www.secondsol.com/en/anzeige/48793//huawei/sun2000-10ktl-m1)"
+price_date = 2026-11-24
+source = "https://www.solartraders.com/uploads/production/data_sheet/file/7599/Datasheet_SUN2000MA-3-20KTL-M_1_2.pdf"
+source_date = 2019-04-01
+kind = "direct"
+notes = "String inverter, three-phase. Rated AC power is the model number. Datasheet version 01-(20190401), a distributor-hosted copy. Price is low-confidence."
+
+[[inverters]]
+inverter_id = "huawei-sun2000-4ktl-m1"
+manufacturer = "Huawei"
+model = "SUN2000-4KTL-M1"
+ac_power_kw = 4
+unit_price = 725
+price_currency = "USD"
+price_kind = "estimate"
+price_source = "interpolated between the research note's 3 kW (USD 650) and 5 kW (USD 800) estimates; the 4 kW model is in the same datasheet but not in the research table"
+price_date = 2026-11-24
+source = "https://www.solartraders.com/uploads/production/data_sheet/file/7599/Datasheet_SUN2000MA-3-20KTL-M_1_2.pdf"
+source_date = 2019-04-01
+kind = "direct"
+notes = "String inverter, three-phase. Rated AC power is the model number. Datasheet version 01-(20190401), a distributor-hosted copy. Price is low-confidence."
+
+[[inverters]]
+inverter_id = "huawei-sun2000-5ktl-m1"
+manufacturer = "Huawei"
+model = "SUN2000-5KTL-M1"
+ac_power_kw = 5
+unit_price = 800
+price_currency = "USD"
+price_kind = "estimate"
+price_source = "docs/research/placeholder-market-data.md section 2.2: no distributor price list was reachable; scaled from marketplace asking prices for the 10KTL-M1 (https://www.secondsol.com/en/anzeige/48793//huawei/sun2000-10ktl-m1)"
+price_date = 2026-11-24
+source = "https://www.solartraders.com/uploads/production/data_sheet/file/7599/Datasheet_SUN2000MA-3-20KTL-M_1_2.pdf"
+source_date = 2019-04-01
+kind = "direct"
+notes = "String inverter, three-phase. Rated AC power is the model number. Datasheet version 01-(20190401), a distributor-hosted copy. Price is low-confidence."
+
+[[inverters]]
+inverter_id = "huawei-sun2000-6ktl-m1"
+manufacturer = "Huawei"
+model = "SUN2000-6KTL-M1"
+ac_power_kw = 6
+unit_price = 900
+price_currency = "USD"
+price_kind = "estimate"
+price_source = "interpolated between the research note's 5 kW (USD 800) and 8 kW (USD 1,050) estimates; the 6 kW model is in the same datasheet but not in the research table"
+price_date = 2026-11-24
+source = "https://www.solartraders.com/uploads/production/data_sheet/file/7599/Datasheet_SUN2000MA-3-20KTL-M_1_2.pdf"
+source_date = 2019-04-01
+kind = "direct"
+notes = "String inverter, three-phase. Rated AC power is the model number. Datasheet version 01-(20190401), a distributor-hosted copy. Price is low-confidence."
+
+[[inverters]]
+inverter_id = "huawei-sun2000-8ktl-m1"
+manufacturer = "Huawei"
+model = "SUN2000-8KTL-M1"
+ac_power_kw = 8
+unit_price = 1050
+price_currency = "USD"
+price_kind = "estimate"
+price_source = "docs/research/placeholder-market-data.md section 2.2: no distributor price list was reachable; scaled from marketplace asking prices for the 10KTL-M1 (https://www.secondsol.com/en/anzeige/48793//huawei/sun2000-10ktl-m1)"
+price_date = 2026-11-24
+source = "https://www.solartraders.com/uploads/production/data_sheet/file/7599/Datasheet_SUN2000MA-3-20KTL-M_1_2.pdf"
+source_date = 2019-04-01
+kind = "direct"
+notes = "String inverter, three-phase. Rated AC power is the model number. Datasheet version 01-(20190401), a distributor-hosted copy. Price is low-confidence."
+
+[[inverters]]
+inverter_id = "huawei-sun2000-10ktl-m1"
+manufacturer = "Huawei"
+model = "SUN2000-10KTL-M1"
+ac_power_kw = 10
+unit_price = 1200
+price_currency = "USD"
+price_kind = "estimate"
+price_source = "docs/research/placeholder-market-data.md section 2.2: no distributor price list was reachable; scaled from marketplace asking prices for the 10KTL-M1 (https://www.secondsol.com/en/anzeige/48793//huawei/sun2000-10ktl-m1)"
+price_date = 2026-11-24
+source = "https://www.solartraders.com/uploads/production/data_sheet/file/7599/Datasheet_SUN2000MA-3-20KTL-M_1_2.pdf"
+source_date = 2019-04-01
+kind = "direct"
+notes = "String inverter, three-phase. Rated AC power is the model number. Datasheet version 01-(20190401), a distributor-hosted copy. Price is low-confidence."

@@ -1,0 +1,59 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: sunquote
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sunquote}
+      POSTGRES_DB: sunquote
+    ports:
+      # Published on localhost only, so the repository tests can reach it:
+      # `SUNQUOTE_TEST_DATABASE_URL=postgresql+asyncpg://sunquote:sunquote@localhost:5432/sunquote`.
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sunquote -d sunquote"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "127.0.0.1:${REDIS_HOST_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      # Host port is configurable: `API_HOST_PORT=8080 docker compose up`.
+      - "${API_HOST_PORT:-8000}:8000"
+    environment:
+      SUNQUOTE_LOG_LEVEL: ${SUNQUOTE_LOG_LEVEL:-INFO}
+      # The API applies the database migrations itself when it starts.
+      SUNQUOTE_DATABASE_URL: postgresql+asyncpg://sunquote:${POSTGRES_PASSWORD:-sunquote}@postgres:5432/sunquote
+      SUNQUOTE_REDIS_URL: redis://redis:6379/0
+      # Optional free Gemini key from `.env`: empty means no LLM, and the fixed text is used.
+      SUNQUOTE_GEMINI_API_KEY: ${SUNQUOTE_GEMINI_API_KEY:-}
+      SUNQUOTE_GEMINI_MODEL: ${SUNQUOTE_GEMINI_MODEL:-gemini-3.5-flash-lite}
+    healthcheck:
+      # The slim image has no curl, so probe /health with the Python standard library.
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+volumes:
+  postgres-data:

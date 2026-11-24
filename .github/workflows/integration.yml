@@ -1,0 +1,17 @@
+name: Integration tests
+
+# Talks to the real external services (PVGIS, Nominatim and TCMB), so it never runs on push or
+# pull request. Start it by hand from the Actions tab.
+on:
+  workflow_dispatch:
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync
+      - run: uv run pytest -m integration

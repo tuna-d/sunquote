@@ -1,0 +1,53 @@
+[project]
+name = "sunquote"
+version = "0.1.0"
+description = "Prepares customer-ready rooftop PV quotes for a Turkish solar installer."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "alembic>=1.20.1",
+    "asyncpg>=0.32.0",
+    "fastapi[standard]>=0.115",
+    "httpx>=0.27",
+    "jinja2>=3.1",
+    "pydantic-settings>=2.6",
+    "redis>=8.2.0",
+    "sqlalchemy[asyncio]>=2.0",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.13",
+    "pytest>=8.3",
+    "ruff>=0.8",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/sunquote"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-m 'not integration and not eval'"
+markers = [
+    "integration: talks to real external services (PVGIS, Nominatim, TCMB, ...); run with `pytest -m integration`",
+    "eval: LLM evaluation runs; excluded from the default run",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "C4", "RUF"]
+# Turkish customer-facing text legitimately contains dotless i and similar letters.
+ignore = ["RUF001", "RUF002", "RUF003"]
+
+[tool.mypy]
+strict = true
+plugins = ["pydantic.mypy"]
+files = ["src"]
