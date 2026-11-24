@@ -3,7 +3,7 @@ from decimal import Decimal
 
 import pytest
 
-from sunquote.domain.errors import UpstreamUnavailableError
+from sunquote.domain.errors import NoViableSystemError, UpstreamUnavailableError
 from sunquote.domain.money import Currency, ExchangeRateOverride
 from sunquote.domain.service import QuoteService
 from tests.factories import (
@@ -16,7 +16,12 @@ from tests.factories import (
     make_request,
     make_specific_yield,
 )
-from tests.fakes import FakeExchangeRateProvider, FakeSpecificYieldProvider, FixedClock
+from tests.fakes import (
+    FakeExchangeRateProvider,
+    FakeQuoteRepository,
+    FakeSpecificYieldProvider,
+    FixedClock,
+)
 
 pytestmark = pytest.mark.anyio
 
@@ -24,11 +29,14 @@ pytestmark = pytest.mark.anyio
 def make_service(
     provider: FakeSpecificYieldProvider,
     rates: FakeExchangeRateProvider | None = None,
+    repository: FakeQuoteRepository | None = None,
+    clock: FixedClock | None = None,
 ) -> QuoteService:
     return QuoteService(
+        quote_repository=repository or FakeQuoteRepository(),
         specific_yield_provider=provider,
         exchange_rate_provider=rates or FakeExchangeRateProvider(),
-        clock=FixedClock(),
+        clock=clock or FixedClock(),
         catalog=make_catalog(),
         assumptions=make_assumptions(system_loss_percent="12"),
         pricing=make_pricing_assumptions(),
@@ -38,9 +46,10 @@ def make_service(
 async def test_service_fetches_the_yield_for_the_roof_and_builds_the_quote() -> None:
     provider = FakeSpecificYieldProvider(make_specific_yield(annual="1500"))
 
-    quote = await make_service(provider).create_quote(
+    stored = await make_service(provider).create_quote(
         make_request(azimuth_deg="225", tilt_deg="35")
     )
+    quote = stored.quote
 
     [query] = provider.queries
     assert query.coordinates.latitude == Decimal("39.9334")
@@ -55,7 +64,8 @@ async def test_service_fetches_the_yield_for_the_roof_and_builds_the_quote() -> 
 async def test_service_prices_with_the_usd_rate_for_the_quote_date() -> None:
     rates = FakeExchangeRateProvider(make_exchange_rate("40"))
 
-    quote = await make_service(FakeSpecificYieldProvider(), rates).create_quote(make_request())
+    stored = await make_service(FakeSpecificYieldProvider(), rates).create_quote(make_request())
+    quote = stored.quote
 
     assert rates.requests == [(Currency.USD, QUOTE_DATE)]
     assert quote.assumptions.exchange_rate == make_exchange_rate("40")
@@ -66,9 +76,10 @@ async def test_an_override_replaces_the_provider_and_is_recorded() -> None:
     rates = FakeExchangeRateProvider(make_exchange_rate("40"))
     override = ExchangeRateOverride(rate=Decimal("45"), rate_date=date(2026, 11, 1))
 
-    quote = await make_service(FakeSpecificYieldProvider(), rates).create_quote(
+    stored = await make_service(FakeSpecificYieldProvider(), rates).create_quote(
         make_request(), exchange_rate_override=override
     )
+    quote = stored.quote
 
     assert rates.requests == []
     recorded = quote.assumptions.exchange_rate
@@ -83,7 +94,8 @@ async def test_an_override_replaces_the_provider_and_is_recorded() -> None:
 
 
 async def test_the_provider_rate_is_not_marked_overridden() -> None:
-    quote = await make_service(FakeSpecificYieldProvider()).create_quote(make_request())
+    stored = await make_service(FakeSpecificYieldProvider()).create_quote(make_request())
+    quote = stored.quote
 
     assert quote.assumptions.exchange_rate.overridden is False
     assert quote.assumptions.exchange_rate.rate_date == RATE_DATE
@@ -107,9 +119,10 @@ async def test_an_override_works_while_tcmb_is_down() -> None:
     rates = FakeExchangeRateProvider(error=UpstreamUnavailableError("TCMB", "timed out"))
     override = ExchangeRateOverride(rate=Decimal("45"), rate_date=date(2026, 11, 1))
 
-    quote = await make_service(FakeSpecificYieldProvider(), rates).create_quote(
+    stored = await make_service(FakeSpecificYieldProvider(), rates).create_quote(
         make_request(), exchange_rate_override=override
     )
+    quote = stored.quote
 
     assert quote.assumptions.exchange_rate.overridden is True
 
@@ -118,3 +131,62 @@ async def test_an_override_works_while_tcmb_is_down() -> None:
 def test_an_override_rate_must_be_positive(rate: str) -> None:
     with pytest.raises(ValueError, match="rate"):
         ExchangeRateOverride(rate=Decimal(rate), rate_date=date(2026, 11, 1))
+
+
+async def test_the_quote_is_numbered_by_the_repository_for_the_quote_year_and_stored() -> None:
+    repository = FakeQuoteRepository()
+    service = make_service(FakeSpecificYieldProvider(), repository=repository)
+
+    first = await service.create_quote(make_request())
+    second = await service.create_quote(make_request())
+
+    assert first.quote.quote_number == "SQ-2026-000001"
+    assert second.quote.quote_number == "SQ-2026-000002"
+    assert first.quote.valid_until == date(2026, 12, 9)  # 2026-11-24 + 15 days
+    assert first.id != second.id
+    assert repository.stored == [first, second]
+    assert await repository.get(first.id) == first
+
+
+async def test_the_sequence_restarts_in_a_new_year() -> None:
+    repository = FakeQuoteRepository()
+    old = make_service(
+        FakeSpecificYieldProvider(), repository=repository, clock=FixedClock(date(2026, 12, 31))
+    )
+    new = make_service(
+        FakeSpecificYieldProvider(), repository=repository, clock=FixedClock(date(2027, 1, 1))
+    )
+
+    numbers = [
+        (await old.create_quote(make_request())).quote.quote_number,
+        (await new.create_quote(make_request())).quote.quote_number,
+    ]
+
+    assert numbers == ["SQ-2026-000001", "SQ-2027-000001"]
+
+
+async def test_nothing_is_stored_or_numbered_when_an_upstream_is_down() -> None:
+    repository = FakeQuoteRepository()
+    provider = FakeSpecificYieldProvider(error=UpstreamUnavailableError("PVGIS", "timed out"))
+    rates = FakeExchangeRateProvider(error=UpstreamUnavailableError("TCMB", "timed out"))
+
+    with pytest.raises(UpstreamUnavailableError):
+        await make_service(provider, repository=repository).create_quote(make_request())
+    with pytest.raises(UpstreamUnavailableError):
+        await make_service(FakeSpecificYieldProvider(), rates, repository=repository).create_quote(
+            make_request()
+        )
+
+    assert repository.stored == []
+    assert repository.issued_numbers == []
+
+
+async def test_nothing_is_stored_when_no_system_is_viable() -> None:
+    repository = FakeQuoteRepository()
+
+    with pytest.raises(NoViableSystemError):
+        await make_service(FakeSpecificYieldProvider(), repository=repository).create_quote(
+            make_request(usable_area_m2="1")
+        )
+
+    assert repository.stored == []

@@ -85,3 +85,11 @@ value = 0.20
 kind = "estimate"
 source = "docs/research/placeholder-market-data.md section 4: general KDV rate; applicability to residential PV still to be confirmed (open point 1)"
 date = 2026-11-24
+
+# How long a Quote's price holds, counted from the quote date (the Validity Period).
+
+[validity_period_days]
+value = 15
+kind = "derived"
+source = "docs/research/placeholder-market-data.md section 6: USD/TRY moved about 1.5% a month, so 15 days is about 0.8% drift"
+date = 2026-11-24

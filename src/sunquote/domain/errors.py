@@ -12,6 +12,14 @@ class NoViableSystemError(DomainError):
         super().__init__("no viable system: the usable roof area fits no panel")
 
 
+class QuoteNotFoundError(DomainError):
+    """No stored Quote has the requested id."""
+
+    def __init__(self, quote_id: object) -> None:
+        self.quote_id = quote_id
+        super().__init__(f"no quote with id {quote_id}")
+
+
 class UnsupportedSubscriberGroupError(DomainError):
     """The Subscriber Group is not one this version prices."""
 

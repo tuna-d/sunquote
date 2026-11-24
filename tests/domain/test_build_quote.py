@@ -4,6 +4,7 @@ Fixed inputs: panel 0.5 kWp / 2.0 m2, coverage ratio 0.80, annual specific yield
 kWh/kWp (monthly values sum to 1,500).
 """
 
+from datetime import date
 from decimal import Decimal
 
 import pytest
@@ -14,6 +15,7 @@ from sunquote.domain.quote import build_quote
 from sunquote.domain.sizing import BindingLimit, SizingStrategy
 from tests.factories import (
     QUOTE_DATE,
+    QUOTE_NUMBER,
     make_assumptions,
     make_catalog,
     make_exchange_rate,
@@ -39,6 +41,7 @@ def build(
         pricing=make_pricing_assumptions(),
         exchange_rate=make_exchange_rate(),
         quote_date=QUOTE_DATE,
+        quote_number=QUOTE_NUMBER,
     )
 
 
@@ -109,6 +112,7 @@ def test_flat_roof_uses_its_coverage_ratio_and_the_installer_orientation() -> No
         pricing=make_pricing_assumptions(),
         exchange_rate=make_exchange_rate(),
         quote_date=QUOTE_DATE,
+        quote_number=QUOTE_NUMBER,
     )
 
     # The consumption target is 32 panels. A flat Roof fits 10, while a pitched one fits 16.
@@ -134,6 +138,7 @@ def test_quote_carries_customer_date_and_the_assumptions_it_was_built_with() -> 
         pricing=make_pricing_assumptions(),
         exchange_rate=make_exchange_rate(),
         quote_date=QUOTE_DATE,
+        quote_number=QUOTE_NUMBER,
     )
 
     assert quote.customer == request.customer
@@ -143,6 +148,23 @@ def test_quote_carries_customer_date_and_the_assumptions_it_was_built_with() -> 
     assert recorded.pvgis_inputs == make_specific_yield().inputs
     assert recorded.coverage_ratio == Decimal("0.75")
     assert recorded.default_panel == make_catalog().default_panel
+
+
+def test_quote_carries_its_number_and_is_valid_for_the_validity_period() -> None:
+    quote = build_quote(
+        request=make_request(),
+        specific_yield=make_specific_yield(),
+        catalog=make_catalog(),
+        assumptions=make_assumptions(),
+        pricing=make_pricing_assumptions(validity_period_days=15),
+        exchange_rate=make_exchange_rate(),
+        quote_date=date(2026, 12, 20),
+        quote_number="SQ-2026-000123",
+    )
+
+    assert quote.quote_number == "SQ-2026-000123"
+    assert quote.valid_until == date(2027, 1, 4)  # 15 days after 2026-12-20, across the new year
+    assert quote.assumptions.pricing.validity_period_days == 15
 
 
 def test_same_inputs_give_an_identical_quote() -> None:

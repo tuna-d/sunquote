@@ -48,7 +48,7 @@ production figure comes from [PVGIS](https://re.jrc.ec.europa.eu/pvg_tools/en/) 
 site and roof. Equipment prices are USD and are converted to TRY with the USD forex selling
 rate that the central bank ([TCMB](https://www.tcmb.gov.tr/kurlar/kurlar_tr.html)) published
 on the last business day before the quote date. The service needs internet access; no key is
-needed. Nothing is stored yet.
+needed. The Quote is stored (see below).
 
 ```sh
 curl -X POST http://localhost:8000/quotes -H 'content-type: application/json' -d '{
@@ -72,6 +72,25 @@ records that the rate was overridden.
 Errors are `application/problem+json` (RFC 9457) with a stable `type`, for example
 `urn:sunquote:problem:no-viable-system`.
 
+## Stored quotes
+
+Every created Quote is stored in Postgres and never changes afterwards. It gets a UUID and a
+Quote Number like `SQ-2026-000123` (the sequence restarts each year), and a valid-until date:
+the quote date plus the Validity Period (15 days, from the placeholder assumptions).
+
+- `GET /quotes/{id}` returns the stored Quote, or a 404 problem.
+- `GET /quotes?page=1&page_size=20` lists Quotes, newest first, with the Customer name,
+  the number of System Options, and the first option's `capacity_kwp` and total price.
+  `district` and `province` stay null until address geocoding exists.
+
+A request that fails with 422 or 503 stores nothing. A Quote Number is taken just before the
+calculation, so a request that then finds no viable system or no compatible inverter leaves a
+gap in the numbers.
+
+Persistence is async SQLAlchemy 2.0 with asyncpg. The schema is managed with Alembic; the API
+applies the migrations when it starts (turn that off with `SUNQUOTE_MIGRATE_ON_STARTUP=false`).
+To run the API outside Compose, start the database with `docker compose up postgres` first.
+
 ## Placeholder data
 
 The catalog (panels and inverters, with USD unit prices) and the engineering and pricing
@@ -91,9 +110,14 @@ uv run ruff format --check .
 uv run mypy src
 ```
 
+The Postgres repository tests need a database. Start one with `docker compose up postgres`,
+then run `SUNQUOTE_TEST_DATABASE_URL=postgresql+asyncpg://sunquote:sunquote@localhost:5432/sunquote
+uv run pytest`. Without that variable they are skipped. Each test works in its own temporary
+schema.
+
 The `integration` and `eval` markers are excluded from the default `uv run pytest` run.
 CI (GitHub Actions) runs lint, format check, type check and the default tests on every
-push and pull request. The integration tests (real PVGIS and TCMB calls) run from a separate
+push and pull request, with a Postgres service container for the repository tests. The integration tests (real PVGIS and TCMB calls) run from a separate
 workflow that is started by hand from the Actions tab.
 
 ## Layout

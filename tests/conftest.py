@@ -8,7 +8,12 @@ from sunquote.api.dependencies import AppDependencies
 from sunquote.config import Settings
 from sunquote.domain.service import QuoteService
 from tests.factories import make_assumptions, make_catalog, make_pricing_assumptions
-from tests.fakes import FakeExchangeRateProvider, FakeSpecificYieldProvider, FixedClock
+from tests.fakes import (
+    FakeExchangeRateProvider,
+    FakeQuoteRepository,
+    FakeSpecificYieldProvider,
+    FixedClock,
+)
 
 
 @pytest.fixture
@@ -29,12 +34,20 @@ def exchange_rate_provider() -> FakeExchangeRateProvider:
 
 
 @pytest.fixture
+def quote_repository() -> FakeQuoteRepository:
+    """The in-memory repository behind `client`; tests inspect what was stored."""
+    return FakeQuoteRepository()
+
+
+@pytest.fixture
 def client(
     specific_yield_provider: FakeSpecificYieldProvider,
     exchange_rate_provider: FakeExchangeRateProvider,
+    quote_repository: FakeQuoteRepository,
 ) -> Iterator[TestClient]:
     """An app built by the factory with explicit settings and fake collaborators."""
     service = QuoteService(
+        quote_repository=quote_repository,
         specific_yield_provider=specific_yield_provider,
         exchange_rate_provider=exchange_rate_provider,
         clock=FixedClock(),
@@ -42,6 +55,9 @@ def client(
         assumptions=make_assumptions(),
         pricing=make_pricing_assumptions(),
     )
-    app = create_app(settings=Settings(), dependencies=AppDependencies(quote_service=service))
+    app = create_app(
+        settings=Settings(),
+        dependencies=AppDependencies(quote_service=service, quote_repository=quote_repository),
+    )
     with TestClient(app) as test_client:
         yield test_client

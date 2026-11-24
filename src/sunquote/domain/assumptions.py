@@ -42,7 +42,8 @@ class PricingAssumptions:
     """The prices and rates the Installation Cost and Sale Price are built from.
 
     The BOS (mounting and cabling) price may be in a foreign currency; labour and the fixed
-    project cost are TRY. `margin` and `vat_rate` are shares (0.25 is 25%).
+    project cost are TRY. `margin` and `vat_rate` are shares (0.25 is 25%). `validity_period_days`
+    is how long a Quote's price holds, counted from the quote date.
     """
 
     bos_price_per_kwp: Money
@@ -50,8 +51,11 @@ class PricingAssumptions:
     fixed_project_cost: Money
     margin: Decimal
     vat_rate: Decimal
+    validity_period_days: int
 
     def __post_init__(self) -> None:
+        if self.validity_period_days <= 0:
+            raise ValueError("the validity period must be at least one day")
         if self.labour_price_per_kwp.currency is not Currency.TRY:
             raise ValueError("the labour price per kWp must be in TRY")
         if self.fixed_project_cost.currency is not Currency.TRY:

@@ -15,6 +15,7 @@ from sunquote.domain.quote import Quote, build_quote
 from tests.factories import (
     DEFAULT_INVERTERS,
     QUOTE_DATE,
+    QUOTE_NUMBER,
     RATE_DATE,
     make_assumptions,
     make_catalog,
@@ -41,6 +42,7 @@ def build(
         pricing=pricing or make_pricing_assumptions(),
         exchange_rate=exchange_rate or make_exchange_rate(),
         quote_date=QUOTE_DATE,
+        quote_number=QUOTE_NUMBER,
     )
 
 

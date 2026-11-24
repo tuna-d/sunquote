@@ -29,6 +29,7 @@ from sunquote.domain.money import Currency, ExchangeRate, Money
 from sunquote.domain.production import SpecificYield, SpecificYieldInputs
 
 QUOTE_DATE = date(2026, 11, 24)
+QUOTE_NUMBER = "SQ-2026-000001"
 RATE_DATE = date(2026, 11, 23)  # the business day before QUOTE_DATE
 
 # Sums to 1,500 kWh/kWp.
@@ -97,6 +98,7 @@ def make_pricing_assumptions(
     fixed_project_cost_try: str = "20000",
     margin: str = "0.25",
     vat_rate: str = "0.20",
+    validity_period_days: int = 15,
 ) -> PricingAssumptions:
     return PricingAssumptions(
         bos_price_per_kwp=Money(Decimal(bos_usd_per_kwp), Currency.USD),
@@ -104,6 +106,7 @@ def make_pricing_assumptions(
         fixed_project_cost=Money(Decimal(fixed_project_cost_try), Currency.TRY),
         margin=Decimal(margin),
         vat_rate=Decimal(vat_rate),
+        validity_period_days=validity_period_days,
     )
 
 

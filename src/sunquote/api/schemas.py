@@ -8,6 +8,7 @@ inputs recorded in the assumptions are short decimals that survive the trip exac
 import datetime as dt
 from decimal import Decimal
 from typing import Annotated
+from uuid import UUID
 
 from pydantic import (
     BaseModel,
@@ -34,9 +35,10 @@ from sunquote.domain.model import (
     SubscriberGroup,
 )
 from sunquote.domain.money import Currency, ExchangeRate, ExchangeRateOverride, Money
+from sunquote.domain.ports import QuotePage, StoredQuote
 from sunquote.domain.pricing import SystemPrice
 from sunquote.domain.production import SpecificYieldInputs
-from sunquote.domain.quote import Quote, SystemOption
+from sunquote.domain.quote import SystemOption
 from sunquote.domain.sizing import BindingLimit, SizingStrategy
 
 JsonNumber = Annotated[
@@ -219,6 +221,7 @@ class PricingResponse(BaseModel):
     fixed_project_cost: MoneyResponse
     margin: JsonNumber
     vat_rate: JsonNumber
+    validity_period_days: int
 
 
 class DcAcRatioRangeResponse(BaseModel):
@@ -280,8 +283,12 @@ class AssumptionsResponse(BaseModel):
 class QuoteResponse(BaseModel):
     model_config = ConfigDict(title="Quote")
 
+    id: UUID
+    quote_number: str = Field(description="Readable identifier, `SQ-<year>-<6-digit sequence>`.")
+    created_at: dt.datetime
     customer: SubmittedCustomer
     quote_date: dt.date
+    valid_until: dt.date = Field(description="The last day the quoted price holds.")
     system_options: list[SystemOptionResponse]
     assumptions: AssumptionsResponse
 
@@ -375,6 +382,7 @@ def _pricing_response(pricing: PricingAssumptions) -> PricingResponse:
         fixed_project_cost=_money(pricing.fixed_project_cost),
         margin=pricing.margin,
         vat_rate=pricing.vat_rate,
+        validity_period_days=pricing.validity_period_days,
     )
 
 
@@ -392,14 +400,19 @@ def _dc_ac_range_response(ratio_range: DcAcRatioRange) -> DcAcRatioRangeResponse
     return DcAcRatioRangeResponse(minimum=ratio_range.minimum, maximum=ratio_range.maximum)
 
 
-def quote_response(quote: Quote) -> QuoteResponse:
+def quote_response(stored: StoredQuote) -> QuoteResponse:
+    quote = stored.quote
     recorded = quote.assumptions
     panel = recorded.default_panel
     return QuoteResponse(
+        id=stored.id,
+        quote_number=quote.quote_number,
+        created_at=stored.created_at,
         customer=SubmittedCustomer(
             name=quote.customer.name, phone=quote.customer.phone, email=quote.customer.email
         ),
         quote_date=quote.quote_date,
+        valid_until=quote.valid_until,
         system_options=[_option_response(option) for option in quote.system_options],
         assumptions=AssumptionsResponse(
             submitted_request=_submitted_request(recorded.submitted_request),
@@ -430,4 +443,53 @@ def quote_response(quote: Quote) -> QuoteResponse:
             pricing=_pricing_response(recorded.pricing),
             exchange_rate=_exchange_rate_response(recorded.exchange_rate),
         ),
+    )
+
+
+# --- Quote list -----------------------------------------------------------------------------
+
+
+class QuoteListItem(BaseModel):
+    """What the Sales Rep needs to recognise a Quote without opening it."""
+
+    id: UUID
+    quote_number: str
+    created_at: dt.datetime
+    customer_name: str
+    district: str | None = Field(description="Null until address geocoding exists.")
+    province: str | None = Field(description="Null until address geocoding exists.")
+    system_option_count: int
+    capacity_kwp: JsonNumber = Field(description="Of the first System Option.")
+    total_try: int = Field(description="Total price including VAT of the first System Option.")
+
+
+class QuoteListResponse(BaseModel):
+    items: list[QuoteListItem]
+    page: int
+    page_size: int
+    total: int = Field(description="The number of stored Quotes, across all pages.")
+
+
+def _list_item(stored: StoredQuote) -> QuoteListItem:
+    quote = stored.quote
+    first = quote.system_options[0]
+    return QuoteListItem(
+        id=stored.id,
+        quote_number=quote.quote_number,
+        created_at=stored.created_at,
+        customer_name=quote.customer.name,
+        district=stored.district,
+        province=stored.province,
+        system_option_count=len(quote.system_options),
+        capacity_kwp=rounding.round_capacity_kwp(first.capacity_kwp),
+        total_try=rounding.round_try(first.price.total.amount),
+    )
+
+
+def quote_list_response(page: QuotePage, *, page_number: int, page_size: int) -> QuoteListResponse:
+    return QuoteListResponse(
+        items=[_list_item(stored) for stored in page.items],
+        page=page_number,
+        page_size=page_size,
+        total=page.total,
     )

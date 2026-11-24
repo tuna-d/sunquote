@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 
 from sunquote.api.app import create_app
+from sunquote.config import Settings
 
 
 def test_health_reports_ok(client: TestClient) -> None:
@@ -18,5 +19,5 @@ def test_docs_serves_swagger_ui(client: TestClient) -> None:
 
 
 def test_factory_builds_app_without_arguments() -> None:
-    with TestClient(create_app()) as client:
+    with TestClient(create_app(Settings(migrate_on_startup=False))) as client:
         assert client.get("/health").status_code == 200

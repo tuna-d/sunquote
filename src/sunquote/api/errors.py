@@ -17,6 +17,7 @@ from sunquote.domain.errors import (
     LocationNotSupportedError,
     NoCompatibleInverterError,
     NoViableSystemError,
+    QuoteNotFoundError,
     UnsupportedSubscriberGroupError,
     UpstreamUnavailableError,
 )
@@ -42,6 +43,7 @@ UNSUPPORTED_SUBSCRIBER_GROUP = ProblemType(
 NO_VIABLE_SYSTEM = ProblemType("no-viable-system", "No viable system", 422)
 NO_COMPATIBLE_INVERTER = ProblemType("no-compatible-inverter", "No compatible inverter", 422)
 LOCATION_NOT_SUPPORTED = ProblemType("location-not-supported", "Location not supported", 422)
+QUOTE_NOT_FOUND = ProblemType("quote-not-found", "Quote not found", 404)
 UPSTREAM_UNAVAILABLE = ProblemType("upstream-unavailable", "Upstream service unavailable", 503)
 
 PROBLEMS_BY_EXCEPTION: dict[type[DomainError], ProblemType] = {
@@ -50,6 +52,7 @@ PROBLEMS_BY_EXCEPTION: dict[type[DomainError], ProblemType] = {
     NoCompatibleInverterError: NO_COMPATIBLE_INVERTER,
     LocationNotSupportedError: LOCATION_NOT_SUPPORTED,
     UpstreamUnavailableError: UPSTREAM_UNAVAILABLE,
+    QuoteNotFoundError: QUOTE_NOT_FOUND,
 }
 
 
@@ -92,7 +95,9 @@ def problem_responses(*problem_types: ProblemType) -> dict[int | str, dict[str, 
 
 
 def _field_path(location: tuple[int | str, ...]) -> str:
-    parts = [str(part) for part in location if part != "body"]
+    # The first element says where the field was read from; the field name is what matters.
+    named = location[1:] if location and location[0] in ("body", "path", "query") else location
+    parts = [str(part) for part in named]
     return ".".join(parts) if parts else "body"
 
 

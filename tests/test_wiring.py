@@ -14,6 +14,7 @@ from sunquote.api.app import create_app
 from sunquote.bootstrap import build_dependencies
 from sunquote.config import Settings
 from tests.api.test_quotes import valid_body
+from tests.fakes import FakeQuoteRepository
 
 RECORDINGS = Path(__file__).parent / "adapters" / "recordings"
 RECORDING = RECORDINGS / "pvgis_pvcalc_ankara.json"
@@ -35,7 +36,11 @@ def wired_client(requests_seen: list[httpx.Request]) -> Iterator[TestClient]:
         return httpx.Response(200, text=RECORDING.read_text(encoding="utf-8"))
 
     settings = Settings()
-    dependencies = build_dependencies(settings, transport=httpx.MockTransport(upstream))
+    dependencies = build_dependencies(
+        settings,
+        transport=httpx.MockTransport(upstream),
+        quote_repository=FakeQuoteRepository(),
+    )
     with TestClient(create_app(settings, dependencies)) as client:
         yield client
 
@@ -112,3 +117,17 @@ def test_system_clock_reports_a_date() -> None:
     today = SystemClock().today()
 
     assert abs(today - datetime.now(UTC).date()) <= timedelta(days=1)
+
+
+def test_the_real_wiring_migrates_the_database_on_startup_without_connecting() -> None:
+    # Building the dependencies opens no connection: the engine connects lazily.
+    dependencies = build_dependencies(Settings())
+
+    assert len(dependencies.startup) == 1
+    assert build_dependencies(Settings(migrate_on_startup=False)).startup == ()
+
+
+def test_an_injected_repository_means_no_migration_and_no_database() -> None:
+    dependencies = build_dependencies(Settings(), quote_repository=FakeQuoteRepository())
+
+    assert dependencies.startup == ()
