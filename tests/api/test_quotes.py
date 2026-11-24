@@ -618,6 +618,25 @@ def test_the_no_compatible_inverter_detail_shows_the_capacity_rounded_by_the_pol
     assert "0.874" not in detail
 
 
+def test_a_failed_quote_does_not_use_up_a_quote_number(
+    client: TestClient,
+    quote_repository: FakeQuoteRepository,
+    specific_yield_provider: FakeSpecificYieldProvider,
+) -> None:
+    unviable = client.post("/quotes", json=with_change("roof.usable_area_m2", 1))
+    no_inverter = client.post("/quotes", json=with_change("roof.usable_area_m2", 6))
+    specific_yield_provider.error = UpstreamUnavailableError("PVGIS", "the request timed out")
+    outage = client.post("/quotes", json=valid_body())
+    specific_yield_provider.error = None
+
+    created = client.post("/quotes", json=valid_body())
+
+    assert (unviable.status_code, no_inverter.status_code, outage.status_code) == (422, 422, 503)
+    assert created.status_code == 201
+    assert created.json()["quote_number"] == "SQ-2026-000001"
+    assert quote_repository.issued_numbers == ["SQ-2026-000001"]
+
+
 def test_a_location_pvgis_rejects_is_a_422_problem_carrying_its_message(
     client: TestClient, specific_yield_provider: FakeSpecificYieldProvider
 ) -> None:

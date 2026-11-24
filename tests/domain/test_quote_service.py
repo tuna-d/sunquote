@@ -3,7 +3,11 @@ from decimal import Decimal
 
 import pytest
 
-from sunquote.domain.errors import NoViableSystemError, UpstreamUnavailableError
+from sunquote.domain.errors import (
+    NoCompatibleInverterError,
+    NoViableSystemError,
+    UpstreamUnavailableError,
+)
 from sunquote.domain.money import Currency, ExchangeRate, ExchangeRateOverride
 from sunquote.domain.reference_data import ReferenceData
 from sunquote.domain.service import QuoteService
@@ -227,3 +231,18 @@ async def test_nothing_is_stored_when_no_system_is_viable() -> None:
         )
 
     assert repository.stored == []
+    assert repository.issued_numbers == []
+
+
+async def test_a_failed_build_does_not_use_up_a_quote_number() -> None:
+    repository = FakeQuoteRepository()
+    service = make_service(FakeSpecificYieldProvider(), repository=repository)
+
+    with pytest.raises(NoViableSystemError):
+        await service.create_quote(make_request(usable_area_m2="1"))
+    with pytest.raises(NoCompatibleInverterError):
+        await service.create_quote(make_request(usable_area_m2="6"))  # 1.0 kWp fits no inverter
+    stored = await service.create_quote(make_request())
+
+    assert stored.quote.quote_number == "SQ-2026-000001"
+    assert repository.issued_numbers == ["SQ-2026-000001"]

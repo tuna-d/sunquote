@@ -13,16 +13,17 @@ from sunquote.domain.ports import (
     SpecificYieldQuery,
     StoredQuote,
 )
-from sunquote.domain.quote import build_quote
+from sunquote.domain.quote import Quote, build_quote, format_quote_number
 from sunquote.domain.reference_data import ReferenceData
 
 
 class QuoteService:
     """Orchestrates the ports around `build_quote`. It holds no rules of its own.
 
-    Resolve the Coordinates, fetch the Specific Yield and Exchange Rate, take the next Quote
-    Number, build and save. An upstream outage leaves the sequence untouched. A build that
-    fails after the number is issued leaves a gap in the sequence.
+    Resolve the Coordinates, fetch the Specific Yield and Exchange Rate, check that a system can
+    be built, take the next Quote Number, build the final Quote and save. An upstream outage or
+    a build that fails with a domain error leaves the sequence untouched: the number is taken
+    only once the Quote is known to build. (A failure of the save itself can still leave a gap.)
     """
 
     def __init__(
@@ -68,16 +69,21 @@ class QuoteService:
             )
         )
         exchange_rate = await self._exchange_rate(quote_date, exchange_rate_override)
-        quote_number = await self._quote_repository.next_quote_number(quote_date.year)
-        quote = build_quote(
-            request=request,
-            specific_yield=specific_yield,
-            reference_data=self._reference_data,
-            exchange_rate=exchange_rate,
-            quote_date=quote_date,
-            quote_number=quote_number,
-            geocoding_result=geocoding_result,
-        )
+
+        def build(quote_number: str) -> Quote:
+            return build_quote(
+                request=request,
+                specific_yield=specific_yield,
+                reference_data=self._reference_data,
+                exchange_rate=exchange_rate,
+                quote_date=quote_date,
+                quote_number=quote_number,
+                geocoding_result=geocoding_result,
+            )
+
+        # Validate with a provisional number first: a domain error must not use up a real one.
+        build(format_quote_number(quote_date.year, 1))
+        quote = build(await self._quote_repository.next_quote_number(quote_date.year))
         return await self._quote_repository.save(
             quote,
             district=geocoding_result.district if geocoding_result else None,
