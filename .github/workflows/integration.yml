@@ -1,7 +1,7 @@
 name: Integration tests
 
-# Talks to real external services (PVGIS today; Nominatim and TCMB join later), so it never
-# runs on push or pull request. Start it by hand from the Actions tab.
+# Talks to the real external services (PVGIS, Nominatim and TCMB), so it never runs on push or
+# pull request. Start it by hand from the Actions tab.
 on:
   workflow_dispatch:
 
