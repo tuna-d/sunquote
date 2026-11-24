@@ -6,19 +6,17 @@ system gets the 3.5 kW inverter and costs 106,000 TRY (Sale Price 132,500, VAT 2
 """
 
 from dataclasses import replace
+from datetime import date
 from decimal import Decimal
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 
-from sunquote.api.app import create_app
-from sunquote.api.dependencies import AppDependencies
-from sunquote.config import Settings
 from sunquote.domain.catalog import Catalog
 from sunquote.domain.errors import LocationNotSupportedError, UpstreamUnavailableError
 from sunquote.domain.money import Currency
-from sunquote.domain.service import QuoteService
+from tests.conftest import ClientFactory
 from tests.factories import (
     DEFAULT_INVERTERS,
     MONTHLY_YIELD_KWH_PER_KWP,
@@ -30,7 +28,6 @@ from tests.factories import (
 )
 from tests.fakes import (
     FakeExchangeRateProvider,
-    FakeGeocoder,
     FakeQuoteRepository,
     FakeSpecificYieldProvider,
     FixedClock,
@@ -651,27 +648,16 @@ def test_a_system_no_inverter_fits_is_a_no_compatible_inverter_problem(
     assert "1.00 kWp" in problem["detail"]
 
 
-def test_the_no_compatible_inverter_detail_shows_the_capacity_rounded_by_the_policy() -> None:
+def test_the_no_compatible_inverter_detail_shows_the_capacity_rounded_by_the_policy(
+    client_factory: ClientFactory,
+) -> None:
     odd_panel = replace(make_panel(), panel_id="odd-437w", power_w=437)  # 2 panels = 0.874 kWp
     catalog = Catalog(
         panels=(odd_panel,), default_panel_id=odd_panel.panel_id, inverters=DEFAULT_INVERTERS
     )
-    repository = FakeQuoteRepository()
-    service = QuoteService(
-        quote_repository=repository,
-        geocoder=FakeGeocoder(),
-        specific_yield_provider=FakeSpecificYieldProvider(),
-        exchange_rate_provider=FakeExchangeRateProvider(),
-        clock=FixedClock(),
-        reference_data=make_reference_data(catalog=catalog),
-    )
-    app = create_app(
-        settings=Settings(),
-        dependencies=AppDependencies(quote_service=service, quote_repository=repository),
-    )
+    odd_client = client_factory(reference_data=make_reference_data(catalog=catalog))
 
-    with TestClient(app) as odd_client:
-        response = odd_client.post("/quotes", json=with_change("roof.usable_area_m2", 6))
+    response = odd_client.post("/quotes", json=with_change("roof.usable_area_m2", 6))
 
     assert response.status_code == 422
     detail = response.json()["detail"]
@@ -696,6 +682,26 @@ def test_a_failed_quote_does_not_use_up_a_quote_number(
     assert created.status_code == 201
     assert created.json()["quote_number"] == "SQ-2026-000001"
     assert quote_repository.issued_numbers == ["SQ-2026-000001"]
+
+
+@pytest.mark.parametrize(
+    ("quote_date", "valid_until"),
+    [
+        (date(2026, 12, 17), "2027-01-01"),  # the first day of the next year
+        (date(2026, 12, 20), "2027-01-04"),
+        (date(2026, 12, 31), "2027-01-15"),
+    ],
+)
+def test_valid_until_crosses_into_the_next_year(
+    client_factory: ClientFactory, quote_date: date, valid_until: str
+) -> None:
+    year_end_client = client_factory(clock=FixedClock(quote_date))
+
+    quote = year_end_client.post("/quotes", json=valid_body()).json()
+
+    assert quote["quote_date"] == quote_date.isoformat()
+    assert quote["valid_until"] == valid_until  # quote date + the 15-day Validity Period
+    assert quote["quote_number"] == "SQ-2026-000001"  # numbered by the quote date's year
 
 
 def test_a_location_pvgis_rejects_is_a_422_problem_carrying_its_message(
