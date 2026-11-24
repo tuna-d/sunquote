@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field, StringConstraints, field_validator
 
 from sunquote.api.assistant_loop import Assistant
-from sunquote.api.assistant_tools import create_quote_tool
+from sunquote.api.assistant_tools import ask_for_missing_fields_tool, create_quote_tool
 from sunquote.api.dependencies import AppDependencies, get_quote_service
 from sunquote.api.errors import (
     ASSISTANT_NOT_CONFIGURED,
@@ -63,7 +63,12 @@ class AssistantResponse(BaseModel):
         description="The Quote created in this turn, or null when none was."
     )
     missing_fields: list[str] = Field(
-        description="Required fields the assistant still needs. Always empty for now."
+        description=(
+            "When the turn ends with a question: the `create_quote` field paths still missing "
+            "(`customer.name`, `site.address`, `roof.roof_type`, `roof.tilt_deg`, "
+            "`roof.azimuth_deg`, `roof.usable_area_m2`, `consumption`, `subscriber_group`) "
+            "and `reply` is that question. Otherwise empty."
+        )
     )
 
 
@@ -84,6 +89,15 @@ async def post_assistant_messages(
     the Quote. The reply explains the Quote; every figure in it is filled from the Quote, never
     written by the model. The response gives the Quote's id, Quote Number and document link.
     The model never sets Coordinates: the Address is always geocoded.
+
+    When something a Quote needs is missing, the assistant asks for all of it in one Turkish
+    question (`reply`) and lists the fields in `missing_fields`; answer in a further message and
+    the Quote is created once everything is there. When Quote creation fails (Address not found,
+    invalid value, no viable system, unsupported Subscriber Group, a service unavailable), the
+    reply explains in Turkish what to change. A reply without a Quote may hold digits only as
+    the Sales Rep wrote them; if the model breaks that twice, a fixed Turkish reply is used. If
+    the three calls or the time budget run out without a Quote, the reply asks to restate the
+    information (200, no Quote).
 
     The server keeps no conversation state: send the whole conversation every time (1 to 20
     messages of at most 2000 characters, the last one from the `user`). At most one Quote is
@@ -110,7 +124,7 @@ async def post_assistant_messages(
 
     assistant = Assistant(
         model=model,
-        tools=[create_quote_tool(service)],
+        tools=[create_quote_tool(service), ask_for_missing_fields_tool()],
         document_url=document_url,
         budget_seconds=dependencies.assistant_budget_seconds,
     )
@@ -127,5 +141,5 @@ async def post_assistant_messages(
                 document_url=document_url(stored.id),
             )
         ),
-        missing_fields=[],
+        missing_fields=list(outcome.missing_fields),
     )

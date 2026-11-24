@@ -204,7 +204,15 @@ Gemini turns the message into a `create_quote` tool call, which runs the normal 
 
 - `reply`: a Turkish explanation of the Quote with every figure filled from the Quote;
 - `quote`: `{id, quote_number, document_url}` when a Quote was created in this turn, else `null`;
-- `missing_fields`: an empty list for now.
+- `missing_fields`: when the message lacks something a Quote needs, the assistant asks for all of
+  it in one Turkish question (the `reply`) and lists the field paths here (`customer.name`,
+  `site.address`, `roof.roof_type`, `roof.tilt_deg`, `roof.azimuth_deg`, `roof.usable_area_m2`,
+  `consumption`, `subscriber_group`); otherwise the list is empty.
+
+Answer in a further message, resending the whole conversation, and the Quote is created once
+everything is there. When Quote creation fails (Address not found, invalid value, no viable
+system, unsupported Subscriber Group, a service unavailable), the reply explains in Turkish what
+to change.
 
 The server keeps no conversation: the client sends the whole conversation (1 to 20 messages of
 at most 2,000 characters, the last one from `user`) with every request. The model never
@@ -218,6 +226,12 @@ the rules is requested once more. If it breaks them again, or the model fails af
 created, the reply is a fixed Turkish confirmation with the Quote Number, each option's capacity
 and total price, and the document link. When the model is unavailable before any Quote exists,
 the endpoint answers `503` with `urn:sunquote:problem:assistant-unavailable`.
+
+A reply without a Quote (a question or an explanation) may contain digits only as the Sales Rep
+wrote them; the model is asked again once, and then a fixed Turkish reply is used (the missing
+fields with labels, a generic "the Quote could not be created" sentence naming the problem, or a
+request to restate the information). If the three calls or the time budget run out without a
+Quote, the answer is `200` with that request to restate the information and no Quote.
 
 **Privacy.** Unlike the Narrative, the Sales Rep's own messages go to Gemini and may include the
 Customer's name and Address. Google's free tier may use submitted content for training.

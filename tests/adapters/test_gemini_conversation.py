@@ -113,6 +113,19 @@ async def test_a_recorded_function_call_becomes_a_tool_call_with_its_signature()
     assert reply.signature == "c2lnbmF0dXJlLTE="
 
 
+async def test_a_recorded_ask_for_missing_fields_call_becomes_a_tool_call() -> None:
+    reply = await ask(FakeGemini(recording("gemini_conversation_ask_for_missing_fields.json")))
+
+    assert reply == ToolCall(
+        name="ask_for_missing_fields",
+        arguments={
+            "fields": ["customer.name", "roof.tilt_deg", "consumption"],
+            "question": "Müşterinin adı, çatının eğimi ve aylık tüketimi nedir?",
+        },
+        signature="c2lnbmF0dXJlLTI=",
+    )
+
+
 async def test_a_recorded_text_answer_becomes_a_text_reply() -> None:
     reply = await ask(FakeGemini(recording("gemini_conversation_text.json")))
 

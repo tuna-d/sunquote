@@ -137,7 +137,7 @@ def test_the_model_gets_the_conversation_the_tool_and_then_the_quotes_placeholde
     assert [(m.role.value, m.content) for m in first.messages] == [
         (m["role"], m["content"]) for m in history["messages"]
     ]
-    assert [tool.name for tool in first.tools] == ["create_quote"]
+    assert [tool.name for tool in first.tools] == ["create_quote", "ask_for_missing_fields"]
     assert first.exchanges == ()
     assert first.rejected_reply is None
     assert "Turkish" in first.system_instruction
@@ -296,22 +296,6 @@ def test_the_loop_stops_after_three_model_calls_and_confirms_the_quote(
     assert "{" not in body["reply"]
 
 
-def test_a_loop_that_never_creates_a_quote_ends_as_unavailable_after_three_calls(
-    client_factory: ClientFactory, quote_repository: FakeQuoteRepository
-) -> None:
-    bad = create(roof__tilt_deg=120)
-    model = Script(bad, bad, bad, TextReply("hiç okunmaz"))
-    client = client_with(client_factory, model)
-
-    response = ask(client)
-
-    assert len(model.calls) == 3
-    assert response.status_code == 503
-    assert response.headers["content-type"] == PROBLEM_JSON
-    assert response.json()["type"] == f"{URN}assistant-unavailable"
-    assert quote_repository.stored == []
-
-
 def test_a_confirmation_follows_when_the_time_budget_runs_out_after_a_quote(
     client_factory: ClientFactory,
 ) -> None:
@@ -323,17 +307,6 @@ def test_a_confirmation_follows_when_the_time_budget_runs_out_after_a_quote(
     assert response.status_code == 200
     body = response.json()
     assert body["quote"]["quote_number"] in body["reply"]
-
-
-def test_the_time_budget_running_out_before_any_quote_is_unavailable(
-    client_factory: ClientFactory,
-) -> None:
-    client = client_with(client_factory, Script(5.0), assistant_budget_seconds=0.2)
-
-    response = ask(client)
-
-    assert response.status_code == 503
-    assert response.json()["type"] == f"{URN}assistant-unavailable"
 
 
 # --- Tool errors -----------------------------------------------------------------------------

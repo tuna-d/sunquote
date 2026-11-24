@@ -6,7 +6,10 @@ the model's own reply cannot be used after a Quote was created; its figures come
 placeholders, filled from the Quote.
 """
 
-from sunquote.api.assistant_tools import CREATE_QUOTE
+from collections.abc import Sequence
+
+from sunquote.api import errors
+from sunquote.api.assistant_tools import ASK_FOR_MISSING_FIELDS, CREATE_QUOTE, MissingField
 from sunquote.api.narrative_text import placeholder_figures
 from sunquote.api.option_views import option_views
 from sunquote.domain.conversation import REPLY_MAX_CHARACTERS
@@ -41,8 +44,26 @@ doğu 90, güneydoğu 135, güney 180, güneybatı 225, batı 270, kuzeybatı 31
 words ("bin beş yüz lira") as numbers. A flat roof (düz çatı, teras) is roof_type flat and a \
 sloped one pitched.
 - subscriber_group is always residential.
-- If a required value is missing, ask the Sales Rep for it in one short Turkish question and do \
-not call the tool. Call the tool once, when everything it needs is known.
+- Call {CREATE_QUOTE} once, only when every required value is known: the Customer's name, the \
+Address, the roof type, the usable roof area, the tilt and the azimuth of a pitched roof, the \
+consumption (kWh or bill) and the subscriber group.
+- When a required value is missing, do not guess it and do not call {CREATE_QUOTE}: call \
+{ASK_FOR_MISSING_FIELDS} instead. List all the missing fields at once, never one at a time, and \
+write one short Turkish question that asks for all of them. A value the Sales Rep already gave \
+anywhere in the conversation is not missing.
+
+Questions and explanations
+- The same rule applies to every reply that is not about a created Quote (a question, the \
+explanation of an error, any other text): write no digit except figures the Sales Rep wrote \
+themselves, and then only as they wrote them. Never state a number you made up or computed.
+- When {CREATE_QUOTE} returns an error, its `type` and `errors` say what is wrong. Explain it \
+to the Sales Rep in Turkish and say what to change: an address that cannot be found (ask for a \
+clearer one), an invalid value (name the field), no viable system for the roof or the \
+consumption, no compatible inverter, an unsupported subscriber group. Do not call the tool \
+again until the Sales Rep has answered, unless you can fix the call yourself from what they \
+already wrote.
+- When the error is that an upstream service is unavailable, say that the service is \
+temporarily unavailable and the Sales Rep can try again in a little while.
 
 After the Quote is created
 - The tool result lists available_placeholders. Explain the result to the Sales Rep in a short \
@@ -82,3 +103,47 @@ def fixed_confirmation(stored: StoredQuote, document_url: str) -> str:
     options = len(stored.quote.system_options)
     text = fill_placeholders(_confirmation_template(options), figures)
     return f"{text}\nTeklif belgesi: {document_url}"
+
+
+# The fixed Turkish replies for when there is no Quote and the model's own text cannot be used.
+# They hold no digit and no model text.
+RESTATE_REPLY = (
+    "İsteğinizi tamamlayamadım. Lütfen müşteri, adres, çatı ve tüketim bilgilerini yeniden "
+    "yazar mısınız?"
+)
+
+FIELD_LABELS: dict[MissingField, str] = {
+    MissingField.CUSTOMER_NAME: "Müşteri adı",
+    MissingField.SITE_ADDRESS: "Adres",
+    MissingField.ROOF_TYPE: "Çatı tipi (eğimli veya düz)",
+    MissingField.ROOF_TILT: "Çatı eğimi",
+    MissingField.ROOF_AZIMUTH: "Çatının baktığı yön",
+    MissingField.ROOF_USABLE_AREA: "Çatının kullanılabilir alanı",
+    MissingField.CONSUMPTION: "Aylık elektrik tüketimi (kWh) veya fatura tutarı",
+    MissingField.SUBSCRIBER_GROUP: "Abone grubu",
+}
+
+PROBLEM_LABELS: dict[str, str] = {
+    errors.VALIDATION_ERROR.type_uri: "geçersiz değer",
+    errors.ADDRESS_NOT_FOUND.type_uri: "adres bulunamadı",
+    errors.NO_VIABLE_SYSTEM.type_uri: "uygun bir sistem bulunamadı",
+    errors.NO_COMPATIBLE_INVERTER.type_uri: "uyumlu bir inverter bulunamadı",
+    errors.UNSUPPORTED_SUBSCRIBER_GROUP.type_uri: "desteklenmeyen abone grubu",
+    errors.LOCATION_NOT_SUPPORTED.type_uri: "konum desteklenmiyor",
+    errors.UPSTREAM_UNAVAILABLE.type_uri: "harici bir hizmet geçici olarak kullanılamıyor",
+}
+
+
+def fixed_question(fields: Sequence[MissingField]) -> str:
+    """The Turkish question that lists the missing fields with their labels."""
+    lines = [f"- {FIELD_LABELS[field]}" for field in fields]
+    return "Teklifi hazırlamak için şu bilgileri yazar mısınız?\n" + "\n".join(lines)
+
+
+def fixed_error_explanation(problem_type: str) -> str | None:
+    """The generic Turkish "the Quote could not be created, check the information" sentence
+    naming the problem, or None for a problem type it has no name for."""
+    label = PROBLEM_LABELS.get(problem_type)
+    if label is None:
+        return None
+    return f"Teklif oluşturulamadı ({label}). Lütfen bilgileri kontrol edip yeniden yazar mısınız?"

@@ -51,8 +51,9 @@ LOCATION_NOT_SUPPORTED = ProblemType("location-not-supported", "Location not sup
 ADDRESS_NOT_FOUND = ProblemType("address-not-found", "Address not found", 422)
 QUOTE_NOT_FOUND = ProblemType("quote-not-found", "Quote not found", 404)
 UPSTREAM_UNAVAILABLE = ProblemType("upstream-unavailable", "Upstream service unavailable", 503)
-# Only ever a tool error of the quote assistant, never an HTTP response.
+# Only ever tool errors of the quote assistant, never HTTP responses.
 QUOTE_ALREADY_CREATED = ProblemType("quote-already-created", "A Quote was already created", 409)
+REPLY_REJECTED = ProblemType("reply-rejected", "Reply rejected", 422)
 ASSISTANT_NOT_CONFIGURED = ProblemType("assistant-not-configured", "Assistant not configured", 503)
 ASSISTANT_UNAVAILABLE = ProblemType("assistant-unavailable", "Assistant unavailable", 503)
 

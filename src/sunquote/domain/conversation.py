@@ -6,12 +6,13 @@ messages, the tools the model may call, the calls it made with their results, an
 answers. They hold no prose of their own and no provider format.
 """
 
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
-from sunquote.domain.narrative import Violation
+from sunquote.domain.narrative import Violation, ViolationKind
 
 # The assistant calls the model at most this often for one request, and for at most this long
 # in total (settings can change the time).
@@ -79,3 +80,35 @@ class ReplyRejection:
 
 
 ModelReply = TextReply | ToolCall
+
+_DIGIT_SEQUENCE = re.compile(r"\d+")
+
+
+def validate_echoed_digits(
+    text: str, *, field: str, messages: Sequence[ChatMessage]
+) -> tuple[Violation, ...]:
+    """The rule for a reply that gives no Quote figures (a question, the explanation of an
+    error, plain text): it may hold digits only as digit sequences that appear in the Sales
+    Rep's own (`user`) messages. That echoes their input; any other digit is a figure the model
+    made up. A superscript such as the 2 of "m²" is not a digit here."""
+    allowed = {
+        sequence
+        for message in messages
+        if message.role is MessageRole.USER
+        for sequence in _DIGIT_SEQUENCE.findall(message.content)
+    }
+    foreign = [
+        sequence
+        for sequence in dict.fromkeys(_DIGIT_SEQUENCE.findall(text))
+        if sequence not in allowed
+    ]
+    if not foreign:
+        return ()
+    return (
+        Violation(
+            ViolationKind.DIGIT_NOT_IN_USER_MESSAGES,
+            field,
+            f"the figures {', '.join(foreign)} do not appear in the Sales Rep's messages; "
+            "write no figure the Sales Rep did not write",
+        ),
+    )

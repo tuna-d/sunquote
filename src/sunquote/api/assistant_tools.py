@@ -1,33 +1,45 @@
-"""The `create_quote` tool of the quote assistant.
+"""The tools of the quote assistant: `create_quote` and the control tool `ask_for_missing_fields`.
 
 Its parameters are the `POST /quotes` request model's JSON Schema, flattened for a model to read
 and without what the model must never supply: Coordinates and an Exchange Rate override. The
 Address is required instead, so every Quote the assistant creates is geocoded. Its arguments are
 validated by the same request model before the quote-creation service is called.
+
+`ask_for_missing_fields` ends the turn with a question instead of a Quote. It is a control tool,
+not a feature tool: it gives the response's `missing_fields` and the extraction eval a
+structured source.
 """
 
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any
 
-from pydantic import ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
 from sunquote.api.errors import (
     PROBLEMS_BY_EXCEPTION,
     QUOTE_ALREADY_CREATED,
+    REPLY_REJECTED,
     VALIDATION_ERROR,
     ProblemType,
     error_detail,
     field_errors,
 )
 from sunquote.api.schemas import QuoteRequestBody
-from sunquote.domain.conversation import REPLY_MAX_CHARACTERS, ToolDeclaration
-from sunquote.domain.errors import DomainError
+from sunquote.domain.conversation import (
+    REPLY_MAX_CHARACTERS,
+    ChatMessage,
+    ToolDeclaration,
+    validate_echoed_digits,
+)
+from sunquote.domain.errors import AddressNotFoundError, DomainError
 from sunquote.domain.narrative_context import build_narrative_context
 from sunquote.domain.ports import StoredQuote
 from sunquote.domain.service import QuoteService
 
 CREATE_QUOTE = "create_quote"
+ASK_FOR_MISSING_FIELDS = "ask_for_missing_fields"
 
 CREATE_QUOTE_DESCRIPTION = (
     "Create a solar panel Quote for a Customer from the Sales Rep's description. Call it once, "
@@ -38,6 +50,7 @@ _ADDRESS_DESCRIPTION = (
     "The place of the Site exactly as the Sales Rep wrote it (street, district, province). "
     "Never a guess at coordinates."
 )
+ADDRESS_FIELD = "site.address"
 _COORDINATES = ("latitude", "longitude")
 _EXCHANGE_RATE_OVERRIDE = "exchange_rate_override"
 
@@ -112,11 +125,40 @@ def create_quote_request(arguments: Mapping[str, Any]) -> QuoteRequestBody:
     return QuoteRequestBody.model_validate(cleaned)
 
 
+class MissingField(StrEnum):
+    """The `create_quote` field paths the model can say are still missing."""
+
+    CUSTOMER_NAME = "customer.name"
+    SITE_ADDRESS = "site.address"
+    ROOF_TYPE = "roof.roof_type"
+    ROOF_TILT = "roof.tilt_deg"
+    ROOF_AZIMUTH = "roof.azimuth_deg"
+    ROOF_USABLE_AREA = "roof.usable_area_m2"
+    CONSUMPTION = "consumption"
+    SUBSCRIBER_GROUP = "subscriber_group"
+
+
+@dataclass(frozen=True, slots=True)
+class AskedQuestion:
+    """The turn ends with a question about `fields`. `text` is None when the model's own
+    question was refused twice and the fixed template for `fields` is to be used."""
+
+    fields: tuple[MissingField, ...]
+    text: str | None
+
+
 @dataclass
 class ConversationState:
-    """What has happened so far in one assistant request. Tools read and update it."""
+    """What has happened so far in one assistant request. Tools read and update it.
 
+    `messages` is the conversation, so a tool can check what it echoes. `reply_retried` is set
+    once a reply was sent back to the model for a rule violation: it gets one retry per request.
+    """
+
+    messages: Sequence[ChatMessage] = ()
     created: StoredQuote | None = None
+    question: AskedQuestion | None = None
+    reply_retried: bool = False
 
 
 ToolHandler = Callable[[Mapping[str, Any], ConversationState], Awaitable[dict[str, Any]]]
@@ -163,7 +205,12 @@ def create_quote_tool(service: QuoteService) -> AssistantTool:
             problem = PROBLEMS_BY_EXCEPTION.get(type(error))
             if problem is None:
                 raise
-            return tool_error(problem, error_detail(error))
+            extra = (
+                {"errors": [{"field": ADDRESS_FIELD, "message": error_detail(error)}]}
+                if isinstance(error, AddressNotFoundError)
+                else {}
+            )
+            return tool_error(problem, error_detail(error), **extra)
         state.created = stored
         context = build_narrative_context(stored.quote)
         return {
@@ -174,3 +221,92 @@ def create_quote_tool(service: QuoteService) -> AssistantTool:
         }
 
     return AssistantTool(declaration=create_quote_declaration(), handler=run)
+
+
+ASK_DESCRIPTION = (
+    "Ask the Sales Rep for the required values that are still missing, instead of calling "
+    f"{CREATE_QUOTE}. List every missing field at once and write one short Turkish question "
+    "that asks for all of them. No Quote is created."
+)
+
+
+class AskArguments(BaseModel):
+    fields: list[MissingField] = Field(min_length=1)
+    question: str = Field(min_length=1)
+
+
+def ask_for_missing_fields_declaration() -> ToolDeclaration:
+    """The control tool as the model sees it."""
+    return ToolDeclaration(
+        name=ASK_FOR_MISSING_FIELDS,
+        description=ASK_DESCRIPTION,
+        parameters={
+            "type": "object",
+            "properties": {
+                "fields": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {"type": "string", "enum": [item.value for item in MissingField]},
+                    "description": (
+                        f"Every {CREATE_QUOTE} field that is required, still unknown and not "
+                        "stated anywhere in the conversation. `consumption` means the monthly "
+                        "kWh or the monthly bill."
+                    ),
+                },
+                "question": {
+                    "type": "string",
+                    "description": (
+                        "The question for the Sales Rep, in Turkish, asking for all the listed "
+                        "fields. Write no figure the Sales Rep did not write."
+                    ),
+                },
+            },
+            "required": ["fields", "question"],
+        },
+    )
+
+
+def ask_for_missing_fields_tool() -> AssistantTool:
+    """`ask_for_missing_fields`: its question becomes the reply and its fields the response's
+    `missing_fields`; no Quote is created.
+
+    The question may hold digits only as the Sales Rep wrote them. A violation goes back to the
+    model as a tool error once; when the next question breaks the rule too, the question is
+    dropped (`AskedQuestion.text` is None) and the fixed template is used.
+    """
+
+    async def run(arguments: Mapping[str, Any], state: ConversationState) -> dict[str, Any]:
+        if state.created is not None:
+            return tool_error(
+                QUOTE_ALREADY_CREATED,
+                "A Quote was already created in this request. Nothing is missing; explain "
+                "the Quote to the Sales Rep.",
+            )
+        try:
+            asked = AskArguments.model_validate(arguments)
+        except ValidationError as error:
+            return tool_error(
+                VALIDATION_ERROR,
+                "The arguments are invalid.",
+                errors=field_errors(error.errors(include_url=False, include_context=False)),
+            )
+        fields = tuple(dict.fromkeys(asked.fields))
+        violations = validate_echoed_digits(
+            asked.question, field="question", messages=state.messages
+        )
+        if not violations:
+            state.question = AskedQuestion(fields, asked.question)
+        elif state.reply_retried:
+            state.question = AskedQuestion(fields, None)
+        else:
+            state.reply_retried = True
+            return tool_error(
+                REPLY_REJECTED,
+                "The question was rejected. Ask again and fix every violation.",
+                violations=[
+                    {"kind": v.kind.value, "field": v.field, "detail": v.detail} for v in violations
+                ],
+            )
+        return {"status": "asked"}
+
+    return AssistantTool(declaration=ask_for_missing_fields_declaration(), handler=run)

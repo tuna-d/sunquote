@@ -92,6 +92,7 @@ class NarrativeDraft:
 
 class ViolationKind(StrEnum):
     DIGIT_OUTSIDE_PLACEHOLDER = "digit_outside_placeholder"
+    DIGIT_NOT_IN_USER_MESSAGES = "digit_not_in_user_messages"
     UNKNOWN_PLACEHOLDER = "unknown_placeholder"
     UNAVAILABLE_PLACEHOLDER = "unavailable_placeholder"
     MISSING_FIELD = "missing_field"
