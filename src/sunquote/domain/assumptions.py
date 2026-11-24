@@ -76,3 +76,26 @@ class PricingAssumptions:
             raise ValueError("the fixed project cost must be in TRY")
         if self.margin < 0 or self.vat_rate < 0:
             raise ValueError("margin and VAT rate must not be negative")
+
+
+@dataclass(frozen=True, slots=True)
+class FinancialAssumptions:
+    """What the yearly cash flow is built from.
+
+    Both escalation rates are real, inflation-adjusted rates (ADR 0003), so every lifetime
+    figure is in today's lira. `inverter_replacement_year` counts from 1 and may lie beyond the
+    lifetime, in which case no replacement happens.
+    """
+
+    tariff_escalation_rate_real: Decimal
+    equipment_escalation_rate_real: Decimal
+    lifetime_years: int
+    inverter_replacement_year: int
+
+    def __post_init__(self) -> None:
+        if self.tariff_escalation_rate_real <= -1 or self.equipment_escalation_rate_real <= -1:
+            raise ValueError("escalation rates must be above -100%")
+        if self.lifetime_years < 1:
+            raise ValueError("the lifetime must be at least one year")
+        if self.inverter_replacement_year < 1:
+            raise ValueError("the inverter replacement year must be at least 1")

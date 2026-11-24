@@ -112,3 +112,28 @@ def test_system_clock_reports_a_date() -> None:
     today = SystemClock().today()
 
     assert abs(today - datetime.now(UTC).date()) <= timedelta(days=1)
+
+
+def test_savings_come_from_the_shipped_tariff_and_financial_assumptions(
+    wired_client: TestClient,
+) -> None:
+    quote = wired_client.post("/quotes", json=valid_body()).json()
+
+    option = quote["system_options"][0]  # Consumption-Matched
+    savings = option["savings"]
+    assert len(savings["cash_flow"]) == 25
+    # 3.96 kWp x 1,472.13 = 5,829.63 kWh; 85% self-consumed = 4,955.19 kWh of the 6,000 kWh a
+    # year. The grid bill (2,920 kWh at 3.24 + 3,080 kWh at 4.86 = 24,429.60) drops to
+    # 1,044.81 kWh x 3.24 = 3,385.19: 21,044.41 saved. The other 874.45 kWh export at 2.92.
+    first_year = savings["cash_flow"][0]
+    assert first_year["self_consumed_kwh"] == 4955
+    assert first_year["exported_kwh"] == 874
+    assert first_year["self_consumption_savings_try"] == 21044
+    assert first_year["export_income_try"] == 2553
+    assert savings["first_year_annual_savings_try"] == 23598  # 23,597.79
+    assumptions = quote["assumptions"]
+    assert assumptions["tariff"]["tier_threshold_kwh_per_year"] == 2920
+    assert assumptions["tariff"]["valid_from"] == "2026-04-04"
+    assert assumptions["low_tier_consumption_kwh"] == 2920
+    assert assumptions["high_tier_consumption_kwh"] == 3080
+    assert assumptions["financial"]["lifetime_years"] == 25

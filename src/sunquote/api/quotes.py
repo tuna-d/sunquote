@@ -43,7 +43,11 @@ async def create_quote(
     inverter (AC power at most the Contracted Power) and its price in TRY (Installation Cost,
     Sale Price, VAT and total, whole lira). Equipment prices are converted with TCMB's USD forex
     selling rate of the last business day before today, unless `exchange_rate_override` is
-    given. Nothing is stored yet.
+    given.
+
+    Each option also carries its own first-year Annual Savings, Payback Period, lifetime savings
+    and yearly cash flow, from the residential tariff (marginal Tariff Tiers). Escalation rates
+    are real, so all of these are in today's lira. Nothing is stored yet.
     """
     quote = await service.create_quote(
         body.to_domain(), exchange_rate_override=body.exchange_rate_override_to_domain()

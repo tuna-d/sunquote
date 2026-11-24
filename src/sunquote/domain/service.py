@@ -2,7 +2,11 @@
 
 from datetime import date
 
-from sunquote.domain.assumptions import EngineeringAssumptions, PricingAssumptions
+from sunquote.domain.assumptions import (
+    EngineeringAssumptions,
+    FinancialAssumptions,
+    PricingAssumptions,
+)
 from sunquote.domain.catalog import Catalog
 from sunquote.domain.model import QuoteRequest
 from sunquote.domain.money import Currency, ExchangeRate, ExchangeRateOverride
@@ -13,6 +17,7 @@ from sunquote.domain.ports import (
     SpecificYieldQuery,
 )
 from sunquote.domain.quote import Quote, build_quote
+from sunquote.domain.tariff import ResidentialTariff
 
 # The currency the Catalog and BOS unit prices are quoted in. The data files enforce it, so the
 # Quote needs exactly one rate (this against TRY).
@@ -34,6 +39,8 @@ class QuoteService:
         catalog: Catalog,
         assumptions: EngineeringAssumptions,
         pricing: PricingAssumptions,
+        tariff: ResidentialTariff,
+        financial: FinancialAssumptions,
     ) -> None:
         self._specific_yield_provider = specific_yield_provider
         self._exchange_rate_provider = exchange_rate_provider
@@ -41,6 +48,8 @@ class QuoteService:
         self._catalog = catalog
         self._assumptions = assumptions
         self._pricing = pricing
+        self._tariff = tariff
+        self._financial = financial
 
     async def create_quote(
         self,
@@ -67,6 +76,8 @@ class QuoteService:
             assumptions=self._assumptions,
             pricing=self._pricing,
             exchange_rate=exchange_rate,
+            tariff=self._tariff,
+            financial=self._financial,
             quote_date=quote_date,
         )
 

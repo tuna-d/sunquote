@@ -7,7 +7,7 @@
 #   derived  - computed from direct figures (derivation in the source text)
 #   estimate - a judgment value with no primary source; replace when real data arrives
 #
-# Tariff and financial assumptions join this file in later tickets.
+# The residential tariff is in tariff.toml; the financial assumptions are at the end of this file.
 
 [meta]
 placeholder = true
@@ -93,4 +93,31 @@ date = 2026-11-24
 value = 0.20
 kind = "estimate"
 source = "docs/research/placeholder-market-data.md section 4: general KDV rate; applicability to residential PV still to be confirmed (open point 1)"
+date = 2026-11-24
+
+# Financial assumptions. Both escalation rates are REAL (inflation-adjusted) rates, shares per
+# year (0.02 is 2%): every lifetime figure is in today's lira (docs/adr/0003).
+
+[tariff_escalation_rate_real]
+value = 0.02
+kind = "estimate"
+source = "docs/research/placeholder-market-data.md section 6 and F4: real rate; a nominal 18-24%/year would make a 25-year TRY cash flow grow 50-80x"
+date = 2026-11-24
+
+[equipment_escalation_rate_real]
+value = 0
+kind = "estimate"
+source = "docs/research/placeholder-market-data.md section 6 and F4: module and inverter prices flat to falling in real terms"
+date = 2026-11-24
+
+[lifetime_years]
+value = 25
+kind = "direct"
+source = "docs/research/placeholder-market-data.md section 6: 25-year product warranty on all three catalog panels (datasheets)"
+date = 2026-11-24
+
+[inverter_replacement_year]
+value = 12
+kind = "estimate"
+source = "docs/research/placeholder-market-data.md section 6: typical string-inverter warranty of 10 years plus margin; warranty not read from the Huawei datasheet"
 date = 2026-11-24

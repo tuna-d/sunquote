@@ -12,9 +12,11 @@ from tests.factories import (
     make_assumptions,
     make_catalog,
     make_exchange_rate,
+    make_financial_assumptions,
     make_pricing_assumptions,
     make_request,
     make_specific_yield,
+    make_tariff,
 )
 from tests.fakes import FakeExchangeRateProvider, FakeSpecificYieldProvider, FixedClock
 
@@ -32,6 +34,8 @@ def make_service(
         catalog=make_catalog(),
         assumptions=make_assumptions(system_loss_percent="12"),
         pricing=make_pricing_assumptions(),
+        tariff=make_tariff(),
+        financial=make_financial_assumptions(),
     )
 
 

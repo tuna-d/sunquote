@@ -22,10 +22,12 @@ from tests.factories import (
     make_assumptions,
     make_catalog,
     make_exchange_rate,
+    make_financial_assumptions,
     make_inverter,
     make_pricing_assumptions,
     make_request,
     make_specific_yield,
+    make_tariff,
 )
 
 
@@ -50,6 +52,8 @@ def build(
         assumptions=make_assumptions(default_contracted_power_kw=default_contracted_power_kw),
         pricing=make_pricing_assumptions(),
         exchange_rate=make_exchange_rate(),
+        tariff=make_tariff(),
+        financial=make_financial_assumptions(),
         quote_date=QUOTE_DATE,
     )
 
