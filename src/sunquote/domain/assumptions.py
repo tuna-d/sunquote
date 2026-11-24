@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from decimal import Decimal
 
-from sunquote.domain.model import RoofType
+from sunquote.domain.model import RoofType, SubscriberGroup
 from sunquote.domain.money import Currency, Money
 
 
@@ -24,11 +24,29 @@ class DcAcRatioRange:
 
 
 @dataclass(frozen=True, slots=True)
+class ContractedPower:
+    """The Contracted Power a Quote was sized against, and whether the request gave it."""
+
+    kw: Decimal
+    given: bool
+
+
+@dataclass(frozen=True, slots=True)
 class EngineeringAssumptions:
     coverage_ratio_by_roof_type: Mapping[RoofType, Decimal]
     system_loss_percent: Decimal
     flat_roof_tilt_deg: Decimal
     dc_ac_ratio_range: DcAcRatioRange
+    default_contracted_power_kw_by_subscriber_group: Mapping[SubscriberGroup, Decimal]
+
+    def default_contracted_power_kw(self, subscriber_group: SubscriberGroup) -> Decimal:
+        """The Contracted Power assumed when the request gives none."""
+        try:
+            return self.default_contracted_power_kw_by_subscriber_group[subscriber_group]
+        except KeyError:
+            raise ValueError(
+                f"no default Contracted Power configured for {subscriber_group}"
+            ) from None
 
     def coverage_ratio(self, roof_type: RoofType) -> Decimal:
         try:

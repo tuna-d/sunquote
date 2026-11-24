@@ -34,7 +34,9 @@ def build(
     assumptions=None,
 ) -> Quote:
     return build_quote(
-        request=make_request(),  # 500 kWh/month -> 4.0 kWp, 8 panels
+        request=make_request(
+            usable_area_m2="20"
+        ),  # 500 kWh/month -> 4.0 kWp, 8 panels; the roof fits 8
         specific_yield=make_specific_yield(),
         catalog=make_catalog(inverters),
         assumptions=assumptions or make_assumptions(),

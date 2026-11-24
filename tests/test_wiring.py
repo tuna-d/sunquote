@@ -47,7 +47,7 @@ def test_quote_from_shipped_data_files_and_recorded_pvgis_response(
 
     assert response.status_code == 201
     quote = response.json()
-    [option] = quote["system_options"]
+    option = quote["system_options"][0]  # Consumption-Matched
     # 6000 kWh / 1472.13 kWh/kWp = 4.076 kWp; 4.076 / 0.44 kWp = 9.26 -> 9 panels = 3.96 kWp.
     assert option["panel_count"] == 9
     assert option["capacity_kwp"] == 3.96
@@ -73,7 +73,7 @@ def test_quote_is_priced_from_the_shipped_prices_and_the_tcmb_rate(
     quote = wired_client.post("/quotes", json=valid_body()).json()
 
     # 9 Trina panels (3.96 kWp). The 3 kW Huawei is the cheapest in range (3.96 / 3 = 1.32).
-    [option] = quote["system_options"]
+    option = quote["system_options"][0]  # Consumption-Matched
     assert option["inverter"]["model"] == "SUN2000-3KTL-M1"
     # USD: 9 x 76 + 650 + 120 x 3.96 = 684 + 650 + 475.2 = 1,809.2 -> x 50.6026 = 91,550.25
     # + labour 4,000 x 3.96 = 15,840 + fixed 20,000 = 127,390.25 (Installation Cost)

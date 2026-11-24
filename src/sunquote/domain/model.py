@@ -102,3 +102,9 @@ class QuoteRequest:
     site: Site
     consumption: Consumption
     subscriber_group: SubscriberGroup
+    # The Site's grid connection power, when the Sales Rep knows it; absent means the default.
+    contracted_power_kw: Decimal | None = None
+
+    def __post_init__(self) -> None:
+        if self.contracted_power_kw is not None and self.contracted_power_kw <= 0:
+            raise ValueError("contracted_power_kw must be positive")

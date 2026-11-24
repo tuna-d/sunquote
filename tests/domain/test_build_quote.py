@@ -74,7 +74,6 @@ def test_consumption_matched_sizing(
         annual_yield=annual_yield,
     )
 
-    assert len(quote.system_options) == 1
     option = quote.system_options[0]
     assert option.strategy is SizingStrategy.CONSUMPTION_MATCHED
     assert option.panel_count == panels
