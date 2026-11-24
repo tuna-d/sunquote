@@ -16,6 +16,7 @@ from pydantic import (
     Field,
     PlainSerializer,
     StringConstraints,
+    ValidationInfo,
     field_validator,
 )
 
@@ -55,18 +56,27 @@ class SiteBody(BaseModel):
 
 
 class RoofBody(BaseModel):
-    roof_type: RoofType = Field(description="Only `pitched` is accepted for now.")
+    roof_type: RoofType
     usable_area_m2: Annotated[Decimal, Field(gt=0)]
-    azimuth_deg: Annotated[Decimal, Field(ge=0, lt=360)] = Field(
-        description="Compass bearing the roof faces: 0 = north, 90 = east, 180 = south."
+    azimuth_deg: Annotated[Decimal, Field(ge=0, lt=360)] | None = Field(
+        default=None,
+        validate_default=True,
+        description="Compass bearing (180 = south). Required for pitched roofs, ignored for flat.",
     )
-    tilt_deg: Annotated[Decimal, Field(ge=0, le=90)]
+    tilt_deg: Annotated[Decimal, Field(ge=0, le=90)] | None = Field(
+        default=None,
+        validate_default=True,
+        description="Required for pitched roofs, ignored for flat roofs.",
+    )
 
-    @field_validator("roof_type")
+    @field_validator("azimuth_deg", "tilt_deg", mode="before")
     @classmethod
-    def _only_pitched(cls, value: RoofType) -> RoofType:
-        if value is not RoofType.PITCHED:
-            raise ValueError("flat roofs are not supported yet; only 'pitched' is accepted")
+    def _orientation_for_roof_type(cls, value: object, info: ValidationInfo) -> object:
+        roof_type = info.data.get("roof_type")
+        if roof_type is RoofType.FLAT:
+            return None
+        if roof_type is RoofType.PITCHED and value is None:
+            raise ValueError("required for a pitched roof")
         return value
 
 
@@ -120,8 +130,8 @@ class SubmittedSite(BaseModel):
 class SubmittedRoof(BaseModel):
     roof_type: RoofType
     usable_area_m2: JsonNumber
-    azimuth_deg: JsonNumber
-    tilt_deg: JsonNumber
+    azimuth_deg: JsonNumber | None
+    tilt_deg: JsonNumber | None
 
 
 class SubmittedConsumption(BaseModel):
@@ -129,7 +139,7 @@ class SubmittedConsumption(BaseModel):
 
 
 class SubmittedRequest(BaseModel):
-    """The input as submitted, at full precision."""
+    """The submitted inputs at full precision. Flat Roof angles are ignored."""
 
     customer: SubmittedCustomer
     site: SubmittedSite
@@ -181,6 +191,9 @@ class SystemOptionResponse(BaseModel):
 class AssumptionsResponse(BaseModel):
     submitted_request: SubmittedRequest
     pvgis_inputs: PvgisInputs
+    roof_type: RoofType
+    effective_azimuth_deg: JsonNumber
+    effective_tilt_deg: JsonNumber
     coverage_ratio: JsonNumber
     default_panel: PanelDatasheet
 
@@ -264,6 +277,9 @@ def quote_response(quote: Quote) -> QuoteResponse:
         assumptions=AssumptionsResponse(
             submitted_request=_submitted_request(recorded.submitted_request),
             pvgis_inputs=_pvgis_inputs(recorded.pvgis_inputs),
+            roof_type=recorded.roof_type,
+            effective_azimuth_deg=recorded.effective_azimuth_deg,
+            effective_tilt_deg=recorded.effective_tilt_deg,
             coverage_ratio=recorded.coverage_ratio,
             default_panel=PanelDatasheet(
                 panel_id=panel.panel_id,

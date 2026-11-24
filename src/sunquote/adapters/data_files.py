@@ -41,6 +41,10 @@ class _Ratio(_SourcedValue):
     value: Decimal = Field(gt=0, le=1)
 
 
+class _Tilt(_SourcedValue):
+    value: Decimal = Field(ge=0, le=90)
+
+
 class _Percent(_SourcedValue):
     value: Decimal = Field(ge=0, lt=100)
 
@@ -65,10 +69,16 @@ class _CatalogFile(_Strict):
     panels: list[_PanelEntry] = Field(min_length=1)
 
 
+class _CoverageRatios(_Strict):
+    pitched: _Ratio
+    flat: _Ratio
+
+
 class _AssumptionsFile(_Strict):
     meta: _Meta
-    coverage_ratio: dict[RoofType, _Ratio]
+    coverage_ratio: _CoverageRatios
     system_loss_percent: _Percent
+    flat_roof_tilt_deg: _Tilt
 
 
 def default_data_dir() -> Path:
@@ -104,7 +114,9 @@ def load_engineering_assumptions(path: Path) -> EngineeringAssumptions:
     file = _AssumptionsFile.model_validate(_read(path))
     return EngineeringAssumptions(
         coverage_ratio_by_roof_type={
-            roof_type: ratio.value for roof_type, ratio in file.coverage_ratio.items()
+            RoofType.PITCHED: file.coverage_ratio.pitched.value,
+            RoofType.FLAT: file.coverage_ratio.flat.value,
         },
         system_loss_percent=file.system_loss_percent.value,
+        flat_roof_tilt_deg=file.flat_roof_tilt_deg.value,
     )

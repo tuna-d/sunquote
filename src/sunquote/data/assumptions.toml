@@ -19,6 +19,18 @@ kind = "estimate"
 source = "docs/research/placeholder-market-data.md section 5: allows edge and fire-access setbacks; flush panels follow the roof"
 date = 2026-11-24
 
+[coverage_ratio.flat]
+value = 0.50
+kind = "derived"
+source = "docs/research/placeholder-market-data.md section 5: row-spacing calculation with allowance for edges and walkways"
+date = 2026-11-24
+
+[flat_roof_tilt_deg]
+value = 15
+kind = "estimate"
+source = "docs/research/placeholder-market-data.md section 5: typical rack choice to limit row spacing and wind load"
+date = 2026-11-24
+
 [system_loss_percent]
 value = 14
 kind = "direct"

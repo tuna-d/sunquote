@@ -50,10 +50,15 @@ def make_catalog() -> Catalog:
 def make_assumptions(
     *,
     pitched_coverage_ratio: str = "0.80",
+    flat_roof_tilt_deg: str = "15",
     system_loss_percent: str = "14",
 ) -> EngineeringAssumptions:
     return EngineeringAssumptions(
-        coverage_ratio_by_roof_type={RoofType.PITCHED: Decimal(pitched_coverage_ratio)},
+        coverage_ratio_by_roof_type={
+            RoofType.PITCHED: Decimal(pitched_coverage_ratio),
+            RoofType.FLAT: Decimal("0.50"),
+        },
+        flat_roof_tilt_deg=Decimal(flat_roof_tilt_deg),
         system_loss_percent=Decimal(system_loss_percent),
     )
 
@@ -62,6 +67,7 @@ def make_specific_yield(
     *,
     annual: str = "1500",
     monthly: tuple[Decimal, ...] = MONTHLY_YIELD_KWH_PER_KWP,
+    tilt_deg: str = "30",
 ) -> SpecificYield:
     return SpecificYield(
         annual_kwh_per_kwp=Decimal(annual),
@@ -70,7 +76,7 @@ def make_specific_yield(
             source="test",
             latitude=Decimal("39.930"),
             longitude=Decimal("32.860"),
-            tilt_deg=Decimal("30"),
+            tilt_deg=Decimal(tilt_deg),
             aspect_deg=Decimal("0"),
             system_loss_percent=Decimal("14"),
         ),

@@ -40,7 +40,7 @@ uv run fastapi dev src/sunquote/api/app.py --port 8000
 
 ## Create a quote
 
-`POST /quotes` takes the customer, the site's coordinates, a pitched roof and the monthly
+`POST /quotes` takes the customer, the site's coordinates, a pitched or flat roof and the monthly
 consumption, and returns a quote with one consumption-matched system option (panel count,
 `capacity_kwp`, first-year annual and monthly production, and what limited its size). The
 production figure comes from [PVGIS](https://re.jrc.ec.europa.eu/pvg_tools/en/) for that
@@ -57,8 +57,13 @@ curl -X POST http://localhost:8000/quotes -H 'content-type: application/json' -d
 }'
 ```
 
-`azimuth_deg` is a compass bearing (180 = south). Errors are `application/problem+json`
-(RFC 9457) with a stable `type`, for example `urn:sunquote:problem:no-viable-system`.
+For a pitched roof, give `tilt_deg` and the compass bearing `azimuth_deg` (180 = south).
+For a flat roof, send `"roof": {"roof_type": "flat", "usable_area_m2": 40}`.
+Flat roofs use the configured tilt and a south-facing azimuth. The Quote records the effective
+angles and the Coverage Ratio for that Roof Type in its Assumptions.
+
+Errors are `application/problem+json` (RFC 9457) with a stable `type`, for example
+`urn:sunquote:problem:no-viable-system`.
 
 ## Placeholder data
 

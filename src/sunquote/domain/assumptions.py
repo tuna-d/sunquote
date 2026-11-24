@@ -11,6 +11,7 @@ from sunquote.domain.model import RoofType
 class EngineeringAssumptions:
     coverage_ratio_by_roof_type: Mapping[RoofType, Decimal]
     system_loss_percent: Decimal
+    flat_roof_tilt_deg: Decimal
 
     def coverage_ratio(self, roof_type: RoofType) -> Decimal:
         try:
