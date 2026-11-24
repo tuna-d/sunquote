@@ -138,7 +138,9 @@ Datasheet: Huawei SUN2000-3/4/5/6/8/10KTL-M1, version 01-(20190401), <https://ww
 | Model | AC power (kW) | Recommended max PV (Wp) | Max efficiency | USD price (Estimate) |
 |---|---|---|---|---|
 | SUN2000-3KTL-M1 | 3 | 6,150 | 98.2% | 650 |
+| SUN2000-4KTL-M1 | 4 | (see datasheet) | (see datasheet) | 725 (interpolated, added in ticket #7) |
 | SUN2000-5KTL-M1 | 5 | 10,250 | 98.4% | 800 |
+| SUN2000-6KTL-M1 | 6 | (see datasheet) | (see datasheet) | 900 (interpolated, added in ticket #7) |
 | SUN2000-8KTL-M1 | 8 | 14,880 | 98.6% | 1,050 |
 | SUN2000-10KTL-M1 | 10 | 14,880 | 98.6% | 1,200 |
 
@@ -243,7 +245,7 @@ this is a market quote, **not a TCMB selling rate**. The official TCMB rate was 
 | Coverage Ratio, flat | 0.50 | share | row-spacing calculation below | Derived |
 | Flat-roof tilt | 15 | degrees | low tilt limits row spacing and wind load; typical rack choice | Estimate |
 | DC/AC Ratio minimum | 1.00 | ratio | below 1 wastes inverter capacity | Estimate |
-| DC/AC Ratio maximum | 1.30 | ratio | conservative; the regulation allows up to 2.0 mechanical/electrical (F2), Huawei recommends up to ~2.0 for small units | Estimate |
+| DC/AC Ratio maximum | 1.50 | ratio | raised from 1.30 in ticket #7: with 1.30 a 9-panel 3.96 kWp system fit no inverter (1.32 on 3 kW, 0.99 on 4 kW); still conservative; the regulation allows up to 2.0 mechanical/electrical (F2), Huawei recommends up to ~2.0 for small units | Estimate |
 | System loss | 14 | % | PVGIS default loss for the PVcalc tool (the spec's 14%); PVGIS applies it | Direct (PVGIS default) |
 
 Flat-roof Coverage Ratio derivation (portrait panel 1.762 m, tilt 15 degrees, latitude 40 degrees):
