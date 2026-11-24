@@ -29,14 +29,10 @@ from sunquote.adapters.postgres.tables import metadata, quotes
 from sunquote.domain.quote import Quote, build_quote
 from tests.factories import (
     QUOTE_DATE,
-    make_assumptions,
-    make_catalog,
     make_exchange_rate,
-    make_financial_assumptions,
-    make_pricing_assumptions,
+    make_reference_data,
     make_request,
     make_specific_yield,
-    make_tariff,
 )
 
 pytestmark = pytest.mark.anyio
@@ -82,13 +78,9 @@ def make_quote(quote_number: str = "SQ-2026-000001", customer_name: str = "Şule
     return build_quote(
         request=replace(request, customer=replace(request.customer, name=customer_name)),
         specific_yield=make_specific_yield(),
-        catalog=make_catalog(),
-        assumptions=make_assumptions(),
-        pricing=make_pricing_assumptions(),
+        reference_data=make_reference_data(),
         exchange_rate=make_exchange_rate(),
         quote_date=QUOTE_DATE,
-        tariff=make_tariff(),
-        financial=make_financial_assumptions(),
         quote_number=quote_number,
     )
 

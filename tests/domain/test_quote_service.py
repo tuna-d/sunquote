@@ -10,13 +10,10 @@ from tests.factories import (
     QUOTE_DATE,
     RATE_DATE,
     make_assumptions,
-    make_catalog,
     make_exchange_rate,
-    make_financial_assumptions,
-    make_pricing_assumptions,
+    make_reference_data,
     make_request,
     make_specific_yield,
-    make_tariff,
 )
 from tests.fakes import (
     FakeExchangeRateProvider,
@@ -41,11 +38,7 @@ def make_service(
         specific_yield_provider=provider,
         exchange_rate_provider=rates or FakeExchangeRateProvider(),
         clock=clock or FixedClock(),
-        catalog=make_catalog(),
-        assumptions=make_assumptions(system_loss_percent="12"),
-        pricing=make_pricing_assumptions(),
-        tariff=make_tariff(),
-        financial=make_financial_assumptions(),
+        reference_data=make_reference_data(assumptions=make_assumptions(system_loss_percent="12")),
     )
 
 

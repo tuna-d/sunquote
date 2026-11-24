@@ -38,6 +38,7 @@ from sunquote.domain.ports import (
     QuoteRepository,
     SpecificYieldProvider,
 )
+from sunquote.domain.reference_data import ReferenceData
 from sunquote.domain.service import QuoteService
 
 
@@ -54,11 +55,13 @@ def build_dependencies(
     migration runs).
     """
     data_dir = settings.data_dir or default_data_dir()
-    catalog = load_catalog(data_dir / "catalog.toml")
-    assumptions = load_engineering_assumptions(data_dir / "assumptions.toml")
-    pricing = load_pricing_assumptions(data_dir / "assumptions.toml")
-    financial = load_financial_assumptions(data_dir / "assumptions.toml")
-    tariff = load_residential_tariff(data_dir / "tariff.toml")
+    reference_data = ReferenceData(
+        catalog=load_catalog(data_dir / "catalog.toml"),
+        engineering=load_engineering_assumptions(data_dir / "assumptions.toml"),
+        pricing=load_pricing_assumptions(data_dir / "assumptions.toml"),
+        tariff=load_residential_tariff(data_dir / "tariff.toml"),
+        financial=load_financial_assumptions(data_dir / "assumptions.toml"),
+    )
 
     http_client = httpx.AsyncClient(timeout=settings.pvgis_timeout_seconds, transport=transport)
     geocoder: Geocoder = NominatimGeocoder(
@@ -103,11 +106,7 @@ def build_dependencies(
         specific_yield_provider=specific_yield_provider,
         exchange_rate_provider=exchange_rate_provider,
         clock=SystemClock(),
-        catalog=catalog,
-        assumptions=assumptions,
-        pricing=pricing,
-        tariff=tariff,
-        financial=financial,
+        reference_data=reference_data,
     )
     return AppDependencies(
         quote_service=service,

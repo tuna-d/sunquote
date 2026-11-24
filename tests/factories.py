@@ -28,6 +28,7 @@ from sunquote.domain.model import (
 )
 from sunquote.domain.money import Currency, ExchangeRate, Money
 from sunquote.domain.production import SpecificYield, SpecificYieldInputs
+from sunquote.domain.reference_data import ReferenceData
 from sunquote.domain.tariff import ResidentialTariff
 
 QUOTE_DATE = date(2026, 11, 24)
@@ -168,6 +169,24 @@ def make_tariff(
         self_consumption_ratio=Decimal(self_consumption_ratio),
         valid_from=date(2026, 4, 4),
         source="test tariff",
+    )
+
+
+def make_reference_data(
+    *,
+    catalog: Catalog | None = None,
+    assumptions: EngineeringAssumptions | None = None,
+    pricing: PricingAssumptions | None = None,
+    tariff: ResidentialTariff | None = None,
+    financial: FinancialAssumptions | None = None,
+) -> ReferenceData:
+    """The default test reference data; pass only the parts a test is about."""
+    return ReferenceData(
+        catalog=catalog or make_catalog(),
+        engineering=assumptions or make_assumptions(),
+        pricing=pricing or make_pricing_assumptions(),
+        tariff=tariff or make_tariff(),
+        financial=financial or make_financial_assumptions(),
     )
 
 

@@ -2,12 +2,6 @@
 
 from datetime import date
 
-from sunquote.domain.assumptions import (
-    EngineeringAssumptions,
-    FinancialAssumptions,
-    PricingAssumptions,
-)
-from sunquote.domain.catalog import Catalog
 from sunquote.domain.model import QuoteRequest
 from sunquote.domain.money import Currency, ExchangeRate, ExchangeRateOverride
 from sunquote.domain.ports import (
@@ -20,7 +14,7 @@ from sunquote.domain.ports import (
     StoredQuote,
 )
 from sunquote.domain.quote import build_quote
-from sunquote.domain.tariff import ResidentialTariff
+from sunquote.domain.reference_data import ReferenceData
 
 # The currency the Catalog and BOS unit prices are quoted in. The data files enforce it, so the
 # Quote needs exactly one rate (this against TRY).
@@ -43,22 +37,14 @@ class QuoteService:
         specific_yield_provider: SpecificYieldProvider,
         exchange_rate_provider: ExchangeRateProvider,
         clock: Clock,
-        catalog: Catalog,
-        assumptions: EngineeringAssumptions,
-        pricing: PricingAssumptions,
-        tariff: ResidentialTariff,
-        financial: FinancialAssumptions,
+        reference_data: ReferenceData,
     ) -> None:
         self._quote_repository = quote_repository
         self._geocoder = geocoder
         self._specific_yield_provider = specific_yield_provider
         self._exchange_rate_provider = exchange_rate_provider
         self._clock = clock
-        self._catalog = catalog
-        self._assumptions = assumptions
-        self._pricing = pricing
-        self._tariff = tariff
-        self._financial = financial
+        self._reference_data = reference_data
 
     async def create_quote(
         self,
@@ -74,15 +60,15 @@ class QuoteService:
             geocoding_result = await self._geocoder.geocode(site.address)
             coordinates = geocoding_result.coordinates
 
-        roof = site.roof
+        engineering = self._reference_data.engineering
         quote_date = self._clock.today()
-        azimuth_deg, tilt_deg = roof.effective_orientation(self._assumptions.flat_roof_tilt_deg)
+        azimuth_deg, tilt_deg = site.roof.effective_orientation(engineering.flat_roof_tilt_deg)
         specific_yield = await self._specific_yield_provider.fetch(
             SpecificYieldQuery(
                 coordinates=coordinates,
                 tilt_deg=tilt_deg,
                 azimuth_deg=azimuth_deg,
-                system_loss_percent=self._assumptions.system_loss_percent,
+                system_loss_percent=engineering.system_loss_percent,
             )
         )
         exchange_rate = await self._exchange_rate(quote_date, exchange_rate_override)
@@ -90,12 +76,8 @@ class QuoteService:
         quote = build_quote(
             request=request,
             specific_yield=specific_yield,
-            catalog=self._catalog,
-            assumptions=self._assumptions,
-            pricing=self._pricing,
+            reference_data=self._reference_data,
             exchange_rate=exchange_rate,
-            tariff=self._tariff,
-            financial=self._financial,
             quote_date=quote_date,
             quote_number=quote_number,
             geocoding_result=geocoding_result,

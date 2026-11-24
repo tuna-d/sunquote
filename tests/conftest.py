@@ -7,13 +7,7 @@ from sunquote.api.app import create_app
 from sunquote.api.dependencies import AppDependencies
 from sunquote.config import Settings
 from sunquote.domain.service import QuoteService
-from tests.factories import (
-    make_assumptions,
-    make_catalog,
-    make_financial_assumptions,
-    make_pricing_assumptions,
-    make_tariff,
-)
+from tests.factories import make_reference_data
 from tests.fakes import (
     FakeExchangeRateProvider,
     FakeGeocoder,
@@ -65,11 +59,7 @@ def client(
         specific_yield_provider=specific_yield_provider,
         exchange_rate_provider=exchange_rate_provider,
         clock=FixedClock(),
-        catalog=make_catalog(),
-        assumptions=make_assumptions(),
-        pricing=make_pricing_assumptions(),
-        tariff=make_tariff(),
-        financial=make_financial_assumptions(),
+        reference_data=make_reference_data(),
     )
     app = create_app(
         settings=Settings(),
