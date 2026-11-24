@@ -3,7 +3,7 @@
 import asyncio
 import logging
 from dataclasses import replace
-from datetime import date
+from datetime import date, datetime
 
 from sunquote.domain.errors import NarrativeUnavailableError
 from sunquote.domain.model import QuoteRequest
@@ -33,6 +33,53 @@ from sunquote.domain.reference_data import ReferenceData
 logger = logging.getLogger(__name__)
 
 DEFAULT_NARRATIVE_BUDGET_SECONDS = 15.0
+
+
+async def generate_narrative(
+    quote: Quote,
+    *,
+    writer: NarrativeWriter | None,
+    generated_at: datetime,
+    budget_seconds: float,
+) -> NarrativeRecord:
+    """Return a Quote's validated Narrative, or a fallback when generation fails."""
+    if writer is None:
+        return replace(NO_NARRATIVE, generated_at=generated_at)
+    try:
+        async with asyncio.timeout(budget_seconds):
+            draft = await _validated_draft(writer, quote)
+    except (NarrativeUnavailableError, TimeoutError) as error:
+        logger.warning("Narrative unavailable, using the fixed text: %s", error)
+        draft = None
+    except Exception as error:
+        # An unexpected failure: log the type only, since an arbitrary message could carry
+        # a secret (a key echoed in a client error, say).
+        logger.warning(
+            "Narrative writer failed unexpectedly (%s), using the fixed text",
+            type(error).__name__,
+        )
+        draft = None
+    if draft is None:
+        return replace(NO_NARRATIVE, generated_at=generated_at)
+    return NarrativeRecord(
+        source=NarrativeSource.LLM,
+        draft=draft,
+        model=writer.model_name,
+        generated_at=generated_at,
+    )
+
+
+async def _validated_draft(writer: NarrativeWriter, quote: Quote) -> NarrativeDraft | None:
+    """A draft that passes the validator, asking once more after a rejection; else None."""
+    context = build_narrative_context(quote)
+    violations: tuple[Violation, ...] = ()
+    for _ in range(2):
+        draft = await writer.write(context, previous_violations=violations)
+        violations = validate_narrative(draft, context)
+        if not violations:
+            return draft
+        logger.info("Narrative draft rejected: %s", [v.kind.value for v in violations])
+    return None
 
 
 class QuoteService:
@@ -112,7 +159,13 @@ class QuoteService:
         # Validate with a provisional number first: a domain error must not use up a real one.
         build(format_quote_number(quote_date.year, 1))
         quote = build(await self._quote_repository.next_quote_number(quote_date.year))
-        quote = replace(quote, narrative=await self._narrative(quote))
+        narrative = await generate_narrative(
+            quote,
+            writer=self._narrative_writer,
+            generated_at=self._clock.now(),
+            budget_seconds=self._narrative_budget_seconds,
+        )
+        quote = replace(quote, narrative=narrative)
         return await self._quote_repository.save(
             quote,
             district=geocoding_result.district if geocoding_result else None,
@@ -136,45 +189,3 @@ class QuoteService:
                 overridden=True,
             )
         return await self._exchange_rate_provider.fetch(currency, quote_date)
-
-    async def _narrative(self, quote: Quote) -> NarrativeRecord:
-        """The Narrative record for `quote`: the writer's validated draft, or a fallback."""
-        writer = self._narrative_writer
-        generated_at = self._clock.now()
-        if writer is None:
-            return replace(NO_NARRATIVE, generated_at=generated_at)
-        try:
-            async with asyncio.timeout(self._narrative_budget_seconds):
-                draft = await self._validated_draft(writer, quote)
-        except (NarrativeUnavailableError, TimeoutError) as error:
-            logger.warning("Narrative unavailable, using the fixed text: %s", error)
-            draft = None
-        except Exception as error:
-            # An unexpected failure: log the type only, since an arbitrary message could carry
-            # a secret (a key echoed in a client error, say).
-            logger.warning(
-                "Narrative writer failed unexpectedly (%s), using the fixed text",
-                type(error).__name__,
-            )
-            draft = None
-        if draft is None:
-            return replace(NO_NARRATIVE, generated_at=generated_at)
-        return NarrativeRecord(
-            source=NarrativeSource.LLM,
-            draft=draft,
-            model=writer.model_name,
-            generated_at=generated_at,
-        )
-
-    @staticmethod
-    async def _validated_draft(writer: NarrativeWriter, quote: Quote) -> NarrativeDraft | None:
-        """A draft that passes the validator, asking once more after a rejection; else None."""
-        context = build_narrative_context(quote)
-        violations: tuple[Violation, ...] = ()
-        for _ in range(2):
-            draft = await writer.write(context, previous_violations=violations)
-            violations = validate_narrative(draft, context)
-            if not violations:
-                return draft
-            logger.info("Narrative draft rejected: %s", [v.kind.value for v in violations])
-        return None

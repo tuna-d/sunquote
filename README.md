@@ -160,6 +160,30 @@ placeholder, an unknown placeholder or a missing section is rejected and request
 a second rejected draft, the Quote still succeeds: it uses the fixed Turkish text and records
 `narrative.source: "fallback"`. The key never appears in logs or error messages.
 
+### Run the Narrative eval
+
+Set `SUNQUOTE_GEMINI_API_KEY` in `.env` or the shell and run from the repository root:
+
+```sh
+uv run pytest -m eval -rs
+```
+
+The eval skips when the key is unset. With a key, it builds 20 Quotes from fixed test inputs,
+uses the configured Gemini model, and prints a table of results by scenario and grader. A
+scenario passes when the final draft clears every validator rule and the Turkish number-word
+check. The number-word check is eval-only and treats `bir` as an indefinite article. A fallback
+fails the scenario. If the last attempt yields no draft, each grader shows `-` and receives no
+credit for that scenario. The run requires at least 18 of 20 Quotes to pass (90%).
+
+The eval waits 15 seconds between Gemini requests, including retries. Set
+`SUNQUOTE_EVAL_DELAY_SECONDS` in `.env` or the shell to adjust the pause. A run makes 20 to 40
+requests, depending on retries. Check your project's free-tier per-minute and daily limits in
+[Google AI Studio](https://aistudio.google.com/rate-limit).
+
+The live eval is opt-in and excluded from CI. The default offline suite checks the set's coverage
+of System Option count, Roof Type, Binding Limit, Tariff Tier, Payback Period and both forms of
+consumption input.
+
 ## Placeholder data
 
 The TOML files in [`src/sunquote/data/`](src/sunquote/data) contain placeholder inputs
