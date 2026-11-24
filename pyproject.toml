@@ -5,9 +5,12 @@ description = "Prepares customer-ready rooftop PV quotes for a Turkish solar ins
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "alembic>=1.20.1",
+    "asyncpg>=0.32.0",
     "fastapi[standard]>=0.115",
     "httpx>=0.27",
     "pydantic-settings>=2.6",
+    "sqlalchemy[asyncio]>=2.0",
 ]
 
 [dependency-groups]

@@ -61,6 +61,10 @@ class _Positive(_SourcedValue):
     value: Decimal = Field(gt=0)
 
 
+class _Days(_SourcedValue):
+    value: int = Field(gt=0)  # type: ignore[assignment]  # a whole number of days, not a Decimal
+
+
 class _NonNegative(_SourcedValue):
     value: Decimal = Field(ge=0)
 
@@ -138,6 +142,7 @@ class _AssumptionsFile(_Strict):
     fixed_project_cost_try: _NonNegative
     margin: _NonNegative
     vat_rate: _NonNegative
+    validity_period_days: _Days
     flat_roof_tilt_deg: _Tilt
     default_contracted_power_kw: _DefaultContractedPower
     tariff_escalation_rate_real: _Rate
@@ -227,6 +232,7 @@ def load_pricing_assumptions(path: Path) -> PricingAssumptions:
         fixed_project_cost=Money(file.fixed_project_cost_try.value, Currency.TRY),
         margin=file.margin.value,
         vat_rate=file.vat_rate.value,
+        validity_period_days=file.validity_period_days.value,
     )
 
 

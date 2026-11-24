@@ -19,6 +19,7 @@ from sunquote.domain.sizing import BindingLimit, SizingStrategy
 from tests.factories import (
     DEFAULT_INVERTERS,
     QUOTE_DATE,
+    QUOTE_NUMBER,
     make_assumptions,
     make_catalog,
     make_exchange_rate,
@@ -55,6 +56,7 @@ def build(
         tariff=make_tariff(),
         financial=make_financial_assumptions(),
         quote_date=QUOTE_DATE,
+        quote_number=QUOTE_NUMBER,
     )
 
 
