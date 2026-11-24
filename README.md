@@ -165,7 +165,7 @@ a second rejected draft, the Quote still succeeds: it uses the fixed Turkish tex
 Set `SUNQUOTE_GEMINI_API_KEY` in `.env` or the shell and run from the repository root:
 
 ```sh
-uv run pytest -m eval -rs
+uv run pytest -m eval -rs tests/eval/test_gemini_eval.py
 ```
 
 The eval skips when the key is unset. With a key, it builds 20 Quotes from fixed test inputs,
@@ -235,6 +235,30 @@ Quote, the answer is `200` with that request to restate the information and no Q
 
 **Privacy.** Unlike the Narrative, the Sales Rep's own messages go to Gemini and may include the
 Customer's name and Address. Google's free tier may use submitted content for training.
+
+### Run the extraction eval
+
+Set `SUNQUOTE_GEMINI_API_KEY` in `.env` or the shell, then run from the repository root:
+
+```sh
+uv run pytest -m eval -rs tests/eval/test_gemini_extraction_eval.py
+```
+
+Use `uv run pytest -m eval -rs` to run both the Narrative and extraction evals. Both are
+opt-in, excluded from CI, and skip with a message when the key is unset.
+
+The extraction eval sends [20 synthetic Turkish scenarios](tests/eval/extraction_scenarios.toml)
+through the same assistant tool loop used by the endpoint. Only Gemini is contacted. A fake
+Quote service records the attempted `create_quote` arguments and returns a canned Quote.
+The report shows results per scenario and field. At least 18 of 20 scenarios must pass.
+Quote scenarios require one successful tool call with matching fields and no extra arguments.
+Addresses are compared after trimming, collapsing whitespace and Turkish lowercasing. Numeric
+fields allow a difference of 1% or 0.5, whichever is larger. Question scenarios require exactly
+the expected `missing_fields` and no `create_quote` attempt.
+
+`SUNQUOTE_EVAL_DELAY_SECONDS` controls the pause between Gemini requests (15 seconds by default),
+including requests within a turn. The 20 scenarios contain up to 23 turns with at most three
+Gemini calls per turn. Check your project's free-tier limits before running both evals.
 
 ## Placeholder data
 

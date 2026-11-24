@@ -4,16 +4,11 @@ import asyncio
 
 import httpx
 import pytest
-from pydantic import Field
 
 from sunquote.adapters.gemini import GeminiNarrativeWriter
-from sunquote.config import Settings
 from tests.eval.grading import ScenarioGrade, evaluate_scenario, format_report
 from tests.eval.scenarios import SCENARIOS
-
-
-class EvalSettings(Settings):
-    eval_delay_seconds: float = Field(default=15.0, ge=0, allow_inf_nan=False)
+from tests.eval.settings import EvalSettings
 
 
 @pytest.mark.eval

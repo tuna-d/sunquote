@@ -1,0 +1,225 @@
+# Synthetic Sales Rep messages. Each case specifies exactly one expected outcome.
+
+[[scenario]]
+name = "north-written-bill"
+messages = [
+    "Müşteri Ada Örnek, adres Işık Mahallesi Eskişehir. Kuzeye bakan eğimli çatının kullanılabilir alanı 54 metrekare, eğimi 25 derece. Aylık faturası bin beş yüz lira.",
+]
+
+[scenario.arguments]
+subscriber_group = "residential"
+customer = { name = "Ada Örnek" }
+site = { address = "Işık Mahallesi Eskişehir" }
+roof = { roof_type = "pitched", usable_area_m2 = 54, azimuth_deg = 0, tilt_deg = 25 }
+consumption = { monthly_bill_try = 1500 }
+
+[[scenario]]
+name = "northeast-approximate-area"
+messages = [
+    "Ece Örnek için adres: Altındağ, Ankara. Eğimli çatının kuzeydoğu cephesi 40 metrekare kadar kullanılabilir, eğim 22 derece. Ayda 330 kWh tüketiyor.",
+]
+
+[scenario.arguments]
+subscriber_group = "residential"
+customer = { name = "Ece Örnek" }
+site = { address = "Altındağ, Ankara" }
+roof = { roof_type = "pitched", usable_area_m2 = 40, azimuth_deg = 45, tilt_deg = 22 }
+consumption = { monthly_consumption_kwh = 330 }
+
+[[scenario]]
+name = "east"
+messages = [
+    "Bora Örnek için teklif. Adres: Konak, İzmir. Doğuya bakan eğimli çatının kullanılabilir alanı 63 m², eğimi 18 derece. Aylık tüketimi 420 kWh.",
+]
+
+[scenario.arguments]
+subscriber_group = "residential"
+customer = { name = "Bora Örnek" }
+site = { address = "Konak, İzmir" }
+roof = { roof_type = "pitched", usable_area_m2 = 63, azimuth_deg = 90, tilt_deg = 18 }
+consumption = { monthly_consumption_kwh = 420 }
+
+[[scenario]]
+name = "southeast-kwh-over-bill"
+messages = [
+    "Müşterinin adı Deniz Örnek, adres: Nilüfer, Bursa. Güneydoğuya bakan eğimli çatıda 72 m² kullanılabilir alan ve 28 derece eğim var. Aylık tüketim 480 kWh, aylık fatura 2100 TL.",
+]
+
+[scenario.arguments]
+subscriber_group = "residential"
+customer = { name = "Deniz Örnek" }
+site = { address = "Nilüfer, Bursa" }
+roof = { roof_type = "pitched", usable_area_m2 = 72, azimuth_deg = 135, tilt_deg = 28 }
+consumption = { monthly_consumption_kwh = 480 }
+
+[[scenario]]
+name = "south"
+messages = [
+    "Selin Örnek, adres: Kepez, Antalya. Eğimli çatı güneye bakıyor, eğim 30 derece; panel için 50 metrekare boş. Ayda 390 kWh harcıyor.",
+]
+
+[scenario.arguments]
+subscriber_group = "residential"
+customer = { name = "Selin Örnek" }
+site = { address = "Kepez, Antalya" }
+roof = { roof_type = "pitched", usable_area_m2 = 50, azimuth_deg = 180, tilt_deg = 30 }
+consumption = { monthly_consumption_kwh = 390 }
+
+[[scenario]]
+name = "southwest"
+messages = [
+    "Mert Örnek için adres: Tepebaşı, Eskişehir. Güneybatıya bakan eğimli çatı 21 derece, kullanılabilir alan 45,5 m². Ortalama aylık fatura 1325 TL.",
+]
+
+[scenario.arguments]
+subscriber_group = "residential"
+customer = { name = "Mert Örnek" }
+site = { address = "Tepebaşı, Eskişehir" }
+roof = { roof_type = "pitched", usable_area_m2 = 45.5, azimuth_deg = 225, tilt_deg = 21 }
+consumption = { monthly_bill_try = 1325 }
+
+[[scenario]]
+name = "west"
+messages = [
+    "Emel Örnek için teklif hazırlayalım. Adres: Odunpazarı, Eskişehir. Batıya dönük eğimli çatıda 56 m² kullanılabilir alan var, eğim 19 derece. Ayda 350 kWh.",
+]
+
+[scenario.arguments]
+subscriber_group = "residential"
+customer = { name = "Emel Örnek" }
+site = { address = "Odunpazarı, Eskişehir" }
+roof = { roof_type = "pitched", usable_area_m2 = 56, azimuth_deg = 270, tilt_deg = 19 }
+consumption = { monthly_consumption_kwh = 350 }
+
+[[scenario]]
+name = "northwest"
+messages = [
+    "Müşteri Can Örnek, adres: Meram, Konya. Eğimli çatı kuzeybatıya bakıyor, eğim 32 derece. Panel için 81 metrekare kullanılabilir. Aylık tüketim 610 kWh.",
+]
+
+[scenario.arguments]
+subscriber_group = "residential"
+customer = { name = "Can Örnek" }
+site = { address = "Meram, Konya" }
+roof = { roof_type = "pitched", usable_area_m2 = 81, azimuth_deg = 315, tilt_deg = 32 }
+consumption = { monthly_consumption_kwh = 610 }
+
+[[scenario]]
+name = "flat-terrace"
+messages = [
+    "Ilgın Örnek, adres: Şişli, İstanbul. Çatı teras, panel kurulabilecek kısım 48 m². Aylık tüketim 300 kWh.",
+]
+
+[scenario.arguments]
+subscriber_group = "residential"
+customer = { name = "Ilgın Örnek" }
+site = { address = "Şişli, İstanbul" }
+roof = { roof_type = "flat", usable_area_m2 = 48 }
+consumption = { monthly_consumption_kwh = 300 }
+
+[[scenario]]
+name = "flat-bill"
+messages = [
+    "Duru Örnek, adres: Atakum, Samsun. Düz çatıda panel için 68 metrekare kullanılabilir. Aylık elektrik faturası 1650 lira.",
+]
+
+[scenario.arguments]
+subscriber_group = "residential"
+customer = { name = "Duru Örnek" }
+site = { address = "Atakum, Samsun" }
+roof = { roof_type = "flat", usable_area_m2 = 68 }
+consumption = { monthly_bill_try = 1650 }
+
+[[scenario]]
+name = "flat-contracted-power"
+messages = [
+    "Barış Örnek, adres: Karşıyaka, İzmir. Düz çatının kullanılabilir alanı 84 m², aylık tüketim 700 kWh. Sözleşme gücü 11 kW.",
+]
+
+[scenario.arguments]
+subscriber_group = "residential"
+contracted_power_kw = 11
+customer = { name = "Barış Örnek" }
+site = { address = "Karşıyaka, İzmir" }
+roof = { roof_type = "flat", usable_area_m2 = 84 }
+consumption = { monthly_consumption_kwh = 700 }
+
+[[scenario]]
+name = "pitched-explicit-bearing"
+messages = [
+    "Nehir Örnek için adres: Mezitli, Mersin. Eğimli çatının yön açısı 160 derece, eğimi 16 derece. Kullanılabilir alan 37 metrekare. Aylık tüketim yaklaşık 260 kWh.",
+]
+
+[scenario.arguments]
+subscriber_group = "residential"
+customer = { name = "Nehir Örnek" }
+site = { address = "Mezitli, Mersin" }
+roof = { roof_type = "pitched", usable_area_m2 = 37, azimuth_deg = 160, tilt_deg = 16 }
+consumption = { monthly_consumption_kwh = 260 }
+
+[[scenario]]
+name = "follow-up-customer"
+messages = [
+    "Adres: Çankaya, Ankara. Güneye bakan eğimli çatıda kullanılabilir alan 62 m², eğim 27 derece. Ayda 440 kWh tüketiliyor.",
+    "Müşterinin adı İpek Örnek.",
+]
+
+[scenario.arguments]
+subscriber_group = "residential"
+customer = { name = "İpek Örnek" }
+site = { address = "Çankaya, Ankara" }
+roof = { roof_type = "pitched", usable_area_m2 = 62, azimuth_deg = 180, tilt_deg = 27 }
+consumption = { monthly_consumption_kwh = 440 }
+
+[[scenario]]
+name = "follow-up-consumption"
+messages = [
+    "Sarp Örnek için adres: Üsküdar, İstanbul. Düz çatıda kullanılabilir alan 57 m².",
+    "Aylık tüketim 510 kWh, aylık fatura ise 1890 TL.",
+]
+
+[scenario.arguments]
+subscriber_group = "residential"
+customer = { name = "Sarp Örnek" }
+site = { address = "Üsküdar, İstanbul" }
+roof = { roof_type = "flat", usable_area_m2 = 57 }
+consumption = { monthly_consumption_kwh = 510 }
+
+[[scenario]]
+name = "follow-up-address-and-tilt"
+messages = [
+    "Gökçe Örnek için teklif istiyorum. Doğuya bakan eğimli çatıda kullanılabilir alan 77 m². Her ay 575 kWh harcıyor.",
+    "Adres: Osmangazi, Bursa. Çatının eğimi 24 derece.",
+]
+
+[scenario.arguments]
+subscriber_group = "residential"
+customer = { name = "Gökçe Örnek" }
+site = { address = "Osmangazi, Bursa" }
+roof = { roof_type = "pitched", usable_area_m2 = 77, azimuth_deg = 90, tilt_deg = 24 }
+consumption = { monthly_consumption_kwh = 575 }
+
+[[scenario]]
+name = "ask-for-tilt"
+messages = ["Berk Örnek, adres: Etimesgut, Ankara. Güneye bakan eğimli çatıda panel için 51 metrekare kullanılabilir. Ayda 365 kWh tüketiliyor."]
+missing_fields = ["roof.tilt_deg"]
+
+[[scenario]]
+name = "ask-for-consumption"
+messages = ["Seda Örnek, adres: Bornova, İzmir. Düz çatıda kullanılabilir alan 64 m²."]
+missing_fields = ["consumption"]
+
+[[scenario]]
+name = "ask-for-customer"
+messages = ["Adres: Pendik, İstanbul. Eğimli çatı batıya bakıyor, 20 derece eğimi var. Kullanılabilir alan 69 metrekare, aylık tüketim 515 kWh."]
+missing_fields = ["customer.name"]
+
+[[scenario]]
+name = "ask-for-address"
+messages = ["Müşterinin adı Aylin Örnek. Düz çatıda 73 metrekare kullanılabilir alan var ve aylık elektrik faturası 1750 TL."]
+missing_fields = ["site.address"]
+
+[[scenario]]
+name = "ask-for-all-missing-details"
+messages = ["Eren Örnek, adres: Seyhan, Adana. Eğimli çatıda kullanılabilir alan 59 metrekare."]
+missing_fields = ["roof.azimuth_deg", "roof.tilt_deg", "consumption"]
