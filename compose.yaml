@@ -40,6 +40,9 @@ services:
       # The API applies the database migrations itself when it starts.
       SUNQUOTE_DATABASE_URL: postgresql+asyncpg://sunquote:${POSTGRES_PASSWORD:-sunquote}@postgres:5432/sunquote
       SUNQUOTE_REDIS_URL: redis://redis:6379/0
+      # Optional free Gemini key from `.env`: empty means no LLM, and the fixed text is used.
+      SUNQUOTE_GEMINI_API_KEY: ${SUNQUOTE_GEMINI_API_KEY:-}
+      SUNQUOTE_GEMINI_MODEL: ${SUNQUOTE_GEMINI_MODEL:-gemini-3.5-flash-lite}
     healthcheck:
       # The slim image has no curl, so probe /health with the Python standard library.
       test:

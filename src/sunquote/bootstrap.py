@@ -20,6 +20,7 @@ from sunquote.adapters.data_files import (
     load_pricing_assumptions,
     load_residential_tariff,
 )
+from sunquote.adapters.gemini import GeminiNarrativeWriter
 from sunquote.adapters.nominatim import NominatimGeocoder
 from sunquote.adapters.postgres.migrate import upgrade_to_head
 from sunquote.adapters.postgres.quote_repository import PostgresQuoteRepository, create_engine
@@ -54,8 +55,9 @@ def build_dependencies(
 
     `transport` replaces the HTTP transport, so tests can serve recorded responses.
     `quote_repository` replaces the Postgres one (no database is touched then, and no
-    migration runs). `narrative_writer` writes the Quotes' Narrative; with none, every Quote
-    records `fallback` and shows the fixed text.
+    migration runs). `narrative_writer` writes the Quotes' Narrative; with none, the Gemini
+    writer is wired when `SUNQUOTE_GEMINI_API_KEY` is set, and otherwise every Quote records
+    `fallback` and shows the fixed text.
     """
     data_dir = settings.data_dir or default_data_dir()
     reference_data = ReferenceData(
@@ -82,6 +84,14 @@ def build_dependencies(
         base_url=settings.tcmb_base_url,
         timeout_seconds=settings.tcmb_timeout_seconds,
     )
+    if narrative_writer is None and settings.gemini_api_key is not None:
+        narrative_writer = GeminiNarrativeWriter(
+            client=http_client,
+            api_key=settings.gemini_api_key.get_secret_value(),
+            model=settings.gemini_model,
+            base_url=settings.gemini_base_url,
+            timeout_seconds=settings.gemini_timeout_seconds,
+        )
     startup: tuple[Callable[[], Awaitable[None]], ...] = ()
     closers: tuple[Callable[[], Awaitable[None]], ...] = (http_client.aclose,)
     if settings.redis_url:
