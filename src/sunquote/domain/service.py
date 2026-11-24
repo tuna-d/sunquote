@@ -28,11 +28,12 @@ class QuoteService:
 
     async def create_quote(self, request: QuoteRequest) -> Quote:
         roof = request.site.roof
+        azimuth_deg, tilt_deg = roof.effective_orientation(self._assumptions.flat_roof_tilt_deg)
         specific_yield = await self._specific_yield_provider.fetch(
             SpecificYieldQuery(
                 coordinates=request.site.coordinates,
-                tilt_deg=roof.tilt_deg,
-                azimuth_deg=roof.azimuth_deg,
+                tilt_deg=tilt_deg,
+                azimuth_deg=azimuth_deg,
                 system_loss_percent=self._assumptions.system_loss_percent,
             )
         )

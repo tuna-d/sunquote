@@ -58,16 +58,27 @@ class Roof:
 
     roof_type: RoofType
     usable_area_m2: Decimal
-    azimuth_deg: Decimal
-    tilt_deg: Decimal
+    azimuth_deg: Decimal | None = None
+    tilt_deg: Decimal | None = None
 
     def __post_init__(self) -> None:
         if self.usable_area_m2 <= 0:
             raise ValueError("usable_area_m2 must be positive")
-        if not Decimal(0) <= self.azimuth_deg < Decimal(360):
+        if self.roof_type is RoofType.FLAT:
+            object.__setattr__(self, "azimuth_deg", None)
+            object.__setattr__(self, "tilt_deg", None)
+            return
+        if self.azimuth_deg is None or not Decimal(0) <= self.azimuth_deg < Decimal(360):
             raise ValueError("azimuth_deg must be within [0, 360)")
-        if not Decimal(0) <= self.tilt_deg <= Decimal(90):
+        if self.tilt_deg is None or not Decimal(0) <= self.tilt_deg <= Decimal(90):
             raise ValueError("tilt_deg must be within [0, 90]")
+
+    def effective_orientation(self, flat_roof_tilt_deg: Decimal) -> tuple[Decimal, Decimal]:
+        """Return the compass azimuth and tilt of the installed panels, in degrees."""
+        if self.roof_type is RoofType.FLAT:
+            return Decimal(180), flat_roof_tilt_deg
+        assert self.azimuth_deg is not None and self.tilt_deg is not None
+        return self.azimuth_deg, self.tilt_deg
 
 
 @dataclass(frozen=True, slots=True)

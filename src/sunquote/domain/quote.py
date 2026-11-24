@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from sunquote.domain.assumptions import EngineeringAssumptions
 from sunquote.domain.catalog import Catalog, Panel
-from sunquote.domain.model import Customer, QuoteRequest
+from sunquote.domain.model import Customer, QuoteRequest, RoofType
 from sunquote.domain.production import (
     SpecificYield,
     SpecificYieldInputs,
@@ -38,6 +38,9 @@ class QuoteAssumptions:
 
     submitted_request: QuoteRequest
     pvgis_inputs: SpecificYieldInputs
+    roof_type: RoofType
+    effective_azimuth_deg: Decimal
+    effective_tilt_deg: Decimal
     coverage_ratio: Decimal
     default_panel: Panel
 
@@ -65,6 +68,7 @@ def build_quote(
     roof = request.site.roof
     panel = catalog.default_panel
     coverage_ratio = assumptions.coverage_ratio(roof.roof_type)
+    azimuth_deg, tilt_deg = roof.effective_orientation(assumptions.flat_roof_tilt_deg)
 
     sizing = size_consumption_matched(
         monthly_consumption_kwh=request.consumption.monthly_consumption_kwh,
@@ -91,6 +95,9 @@ def build_quote(
         assumptions=QuoteAssumptions(
             submitted_request=request,
             pvgis_inputs=specific_yield.inputs,
+            roof_type=roof.roof_type,
+            effective_azimuth_deg=azimuth_deg,
+            effective_tilt_deg=tilt_deg,
             coverage_ratio=coverage_ratio,
             default_panel=panel,
         ),

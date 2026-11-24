@@ -61,6 +61,23 @@ def test_quote_from_shipped_data_files_and_recorded_pvgis_response(
     assert pvgis_request.url.params["loss"] == "14"
 
 
+def test_flat_roof_sends_the_configured_tilt_and_south_facing_aspect_to_pvgis(
+    wired_client: TestClient, requests_seen: list[httpx.Request]
+) -> None:
+    body = valid_body()
+    body["roof"].update(roof_type="flat", azimuth_deg=90, tilt_deg=40)
+
+    response = wired_client.post("/quotes", json=body)
+
+    assert response.status_code == 201
+    [pvgis_request] = requests_seen
+    assert pvgis_request.url.params["angle"] == "15"
+    assert pvgis_request.url.params["aspect"] == "0"
+    pvgis_inputs = response.json()["assumptions"]["pvgis_inputs"]
+    assert pvgis_inputs["tilt_deg"] == 15
+    assert pvgis_inputs["aspect_deg"] == 0
+
+
 def test_system_clock_reports_a_date() -> None:
     today = SystemClock().today()
 
