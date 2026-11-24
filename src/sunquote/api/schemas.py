@@ -1,8 +1,11 @@
 """Request and response schemas of the quote API, and the mapping to and from the domain.
 
 Rounding for display happens here, through the domain's rounding policy, and nowhere else.
-Displayed figures are rounded JSON numbers. Monthly Bills and their derived Monthly
-Consumption are recorded as decimal strings to preserve their precision.
+Displayed figures (whole lira, rounded kWp, kWh and Payback Period) and plain measurements
+(coordinates, areas, angles, kW) are JSON numbers. Money, rates, ratios and tariff prices are
+recorded at full precision as decimal strings, which Pydantic writes for `Decimal`: a JSON
+number would round-trip through `float`. Monthly Bills and their derived Monthly Consumption
+are decimal strings too.
 """
 
 import datetime as dt
@@ -47,6 +50,8 @@ from sunquote.domain.savings import SavingsAnalysis, YearlyCashFlow
 from sunquote.domain.sizing import BindingLimit, SizingStrategy
 from sunquote.domain.tariff import ResidentialTariff
 
+# A rounded display figure or a plain measurement, as a JSON number. Anything that must keep its
+# precision is a plain `Decimal` field instead, which serialises as a decimal string.
 JsonNumber = Annotated[
     Decimal, PlainSerializer(lambda value: float(value), return_type=float, when_used="json")
 ]
@@ -268,9 +273,10 @@ class PanelSummary(BaseModel):
 
 
 class MoneyResponse(BaseModel):
-    """An amount at full precision with its currency, for unit prices and rates."""
+    """An amount with its currency, for unit prices. `amount` is a decimal string at full
+    precision."""
 
-    amount: JsonNumber
+    amount: Decimal
     currency: Currency
 
 
@@ -278,7 +284,7 @@ class PanelDatasheet(PanelSummary):
     length_mm: int
     width_mm: int
     area_m2: JsonNumber
-    degradation_rate_per_year: JsonNumber
+    degradation_rate_per_year: Decimal
     unit_price: MoneyResponse
 
 
@@ -294,11 +300,11 @@ class InverterDatasheet(InverterSummary):
 
 
 class ExchangeRateResponse(BaseModel):
-    """1 `base_currency` buys `rate` `quote_currency` on `date`."""
+    """1 `base_currency` buys `rate` `quote_currency` on `date`. `rate` is a decimal string."""
 
     base_currency: Currency
     quote_currency: Currency
-    rate: JsonNumber
+    rate: Decimal
     date: dt.date
     overridden: bool
 
@@ -316,17 +322,22 @@ class ContractedPowerResponse(BaseModel):
 
 
 class PricingResponse(BaseModel):
+    """The prices the Installation Cost was built from. `margin` and `vat_rate` are shares as
+    decimal strings (0.25 is 25%)."""
+
     bos_price_per_kwp: MoneyResponse
     labour_price_per_kwp: MoneyResponse
     fixed_project_cost: MoneyResponse
-    margin: JsonNumber
-    vat_rate: JsonNumber
+    margin: Decimal
+    vat_rate: Decimal
     validity_period_days: int
 
 
 class DcAcRatioRangeResponse(BaseModel):
-    minimum: JsonNumber
-    maximum: JsonNumber
+    """The allowed DC/AC Ratio, as decimal strings."""
+
+    minimum: Decimal
+    maximum: Decimal
 
 
 class PriceResponse(BaseModel):
@@ -399,34 +410,40 @@ class SystemOptionResponse(BaseModel):
 
 
 class TariffResponse(BaseModel):
-    """The residential Retail Tariff the savings were calculated with (ADR 0002)."""
+    """The residential Retail Tariff the savings were calculated with (ADR 0002). Every figure
+    is a decimal string at full precision."""
 
-    tier_threshold_kwh_per_year: JsonNumber
-    low_tariff_try_per_kwh: JsonNumber
-    high_tariff_try_per_kwh: JsonNumber
-    export_price_try_per_kwh: JsonNumber
-    self_consumption_ratio: JsonNumber
+    tier_threshold_kwh_per_year: Decimal
+    low_tariff_try_per_kwh: Decimal
+    high_tariff_try_per_kwh: Decimal
+    export_price_try_per_kwh: Decimal
+    self_consumption_ratio: Decimal
     valid_from: dt.date
     source: str
 
 
 class FinancialResponse(BaseModel):
-    """Both escalation rates are real (inflation-adjusted): all figures are in today's lira."""
+    """Both escalation rates are real (inflation-adjusted): all figures are in today's lira.
+    The rates are decimal strings (0.02 is 2%)."""
 
-    tariff_escalation_rate_real: JsonNumber
-    equipment_escalation_rate_real: JsonNumber
+    tariff_escalation_rate_real: Decimal
+    equipment_escalation_rate_real: Decimal
     lifetime_years: int
     inverter_replacement_year: int
 
 
 class AssumptionsResponse(BaseModel):
+    """Everything the Quote was calculated with, at full precision. Money, rates, ratios and
+    tariff prices are decimal strings; measurements (coordinates, areas, angles, kW, kWh) are
+    JSON numbers."""
+
     submitted_request: SubmittedRequest
     geocoding_result: GeocodingResultResponse | None
     pvgis_inputs: PvgisInputs
     roof_type: RoofType
     effective_azimuth_deg: JsonNumber
     effective_tilt_deg: JsonNumber
-    coverage_ratio: JsonNumber
+    coverage_ratio: Decimal
     default_panel: PanelDatasheet
     inverters: list[InverterDatasheet]
     dc_ac_ratio_range: DcAcRatioRangeResponse

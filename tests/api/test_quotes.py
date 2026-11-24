@@ -171,7 +171,7 @@ def test_an_absent_contracted_power_uses_the_default_and_is_recorded_as_defaulte
 
     assert quote["assumptions"]["contracted_power"] == {"kw": 10, "source": "defaulted"}
     assert quote["assumptions"]["submitted_request"]["contracted_power_kw"] is None
-    assert quote["assumptions"]["dc_ac_ratio_range"]["maximum"] == 1.3
+    assert quote["assumptions"]["dc_ac_ratio_range"]["maximum"] == "1.30"
 
 
 def test_a_null_contracted_power_counts_as_absent(client: TestClient) -> None:
@@ -234,7 +234,7 @@ def test_assumptions_record_the_submitted_input_pvgis_inputs_ratio_and_panel(
     assert assumptions["roof_type"] == "pitched"
     assert assumptions["effective_azimuth_deg"] == 180
     assert assumptions["effective_tilt_deg"] == 30
-    assert assumptions["coverage_ratio"] == 0.8
+    assert assumptions["coverage_ratio"] == "0.80"
     assert assumptions["default_panel"] == {
         "panel_id": "test-panel-500w",
         "manufacturer": "Test",
@@ -243,8 +243,8 @@ def test_assumptions_record_the_submitted_input_pvgis_inputs_ratio_and_panel(
         "length_mm": 2000,
         "width_mm": 1000,
         "area_m2": 2.0,
-        "degradation_rate_per_year": 0.005,
-        "unit_price": {"amount": 100, "currency": "USD"},
+        "degradation_rate_per_year": "0.005",
+        "unit_price": {"amount": "100", "currency": "USD"},
     }
 
 
@@ -279,8 +279,8 @@ def test_prices_are_rounded_half_up_but_the_assumptions_keep_full_precision(
         "vat_try": 27071,
         "total_try": 162426,
     }
-    assert quote["assumptions"]["exchange_rate"]["rate"] == 41.2345
-    assert quote["assumptions"]["pricing"]["margin"] == 0.25
+    assert quote["assumptions"]["exchange_rate"]["rate"] == "41.2345"
+    assert quote["assumptions"]["pricing"]["margin"] == "0.25"
 
 
 def test_assumptions_record_the_exchange_rate_and_every_unit_price(client: TestClient) -> None:
@@ -289,23 +289,84 @@ def test_assumptions_record_the_exchange_rate_and_every_unit_price(client: TestC
     assert assumptions["exchange_rate"] == {
         "base_currency": "USD",
         "quote_currency": "TRY",
-        "rate": 40,
+        "rate": "40",
         "date": "2026-11-23",
         "overridden": False,
     }
     assert assumptions["pricing"] == {
-        "bos_price_per_kwp": {"amount": 100, "currency": "USD"},
-        "labour_price_per_kwp": {"amount": 3000, "currency": "TRY"},
-        "fixed_project_cost": {"amount": 20000, "currency": "TRY"},
-        "margin": 0.25,
-        "vat_rate": 0.2,
+        "bos_price_per_kwp": {"amount": "100", "currency": "USD"},
+        "labour_price_per_kwp": {"amount": "3000", "currency": "TRY"},
+        "fixed_project_cost": {"amount": "20000", "currency": "TRY"},
+        "margin": "0.25",
+        "vat_rate": "0.20",
         "validity_period_days": 15,
     }
-    assert assumptions["dc_ac_ratio_range"] == {"minimum": 1.0, "maximum": 1.3}
+    assert assumptions["dc_ac_ratio_range"] == {"minimum": "1.00", "maximum": "1.30"}
     inverters = {i["inverter_id"]: i for i in assumptions["inverters"]}
     assert set(inverters) == {"i05", "i25", "i3", "i35", "i4", "i6", "i8"}
-    assert inverters["i35"]["unit_price"] == {"amount": 650, "currency": "USD"}
+    assert inverters["i35"]["unit_price"] == {"amount": "650", "currency": "USD"}
     assert inverters["i35"]["ac_power_kw"] == 3.5
+
+
+def test_money_rates_ratios_and_tariff_prices_are_decimal_strings_without_a_float_round_trip(
+    client: TestClient,
+) -> None:
+    # 41.234567890123456789 has more digits than a float keeps; a string keeps them all.
+    body = {
+        **valid_body(),
+        "exchange_rate_override": {"rate": "41.234567890123456789", "date": "2026-11-01"},
+    }
+
+    assumptions = client.post("/quotes", json=body).json()["assumptions"]
+
+    assert assumptions["exchange_rate"]["rate"] == "41.234567890123456789"
+    assert assumptions["tariff"] == {
+        "tier_threshold_kwh_per_year": "3000",
+        "low_tariff_try_per_kwh": "3",
+        "high_tariff_try_per_kwh": "5",
+        "export_price_try_per_kwh": "2",
+        "self_consumption_ratio": "0.8",
+        "valid_from": "2026-04-04",
+        "source": "test tariff",
+    }
+    assert assumptions["financial"]["tariff_escalation_rate_real"] == "0.02"
+    assert assumptions["financial"]["equipment_escalation_rate_real"] == "0"
+    assert assumptions["coverage_ratio"] == "0.80"
+    assert assumptions["default_panel"]["degradation_rate_per_year"] == "0.005"
+    assert assumptions["default_panel"]["unit_price"] == {"amount": "100", "currency": "USD"}
+
+
+def test_displayed_figures_stay_rounded_numbers_next_to_the_string_assumptions(
+    client: TestClient,
+) -> None:
+    quote = client.post("/quotes", json=valid_body()).json()
+    option = quote["system_options"][0]
+
+    assert option["capacity_kwp"] == 4.0
+    assert isinstance(option["price"]["total_try"], int)
+    assert isinstance(option["annual_production_kwh"], int)
+    assert isinstance(option["savings"]["payback_period_years"], float)
+
+
+def test_the_openapi_schema_declares_the_precision_sensitive_fields_as_strings(
+    client: TestClient,
+) -> None:
+    schemas = client.get("/openapi.json").json()["components"]["schemas"]
+
+    def field_type(schema: str, field: str) -> Any:
+        return schemas[schema]["properties"][field]["type"]
+
+    assert field_type("MoneyResponse", "amount") == "string"
+    assert field_type("ExchangeRateResponse", "rate") == "string"
+    assert field_type("PricingResponse", "margin") == "string"
+    assert field_type("PricingResponse", "vat_rate") == "string"
+    assert field_type("TariffResponse", "low_tariff_try_per_kwh") == "string"
+    assert field_type("TariffResponse", "export_price_try_per_kwh") == "string"
+    assert field_type("FinancialResponse", "tariff_escalation_rate_real") == "string"
+    assert field_type("DcAcRatioRangeResponse", "maximum") == "string"
+    assert field_type("SystemOptionResponse", "capacity_kwp") == "number"
+    assert "decimal string" in schemas["MoneyResponse"]["description"]
+    assert "decimal string" in schemas["AssumptionsResponse"]["description"]
 
 
 def test_tcmb_is_asked_for_the_usd_rate_of_the_quote_date(
@@ -327,7 +388,7 @@ def test_an_exchange_rate_override_is_used_and_tcmb_is_not_called(
     assert quote["assumptions"]["exchange_rate"] == {
         "base_currency": "USD",
         "quote_currency": "TRY",
-        "rate": 45,
+        "rate": "45",
         "date": "2026-11-01",
         "overridden": True,
     }
@@ -482,7 +543,7 @@ def test_flat_roof_uses_installer_orientation_and_records_the_submitted_angles(
     assert assumptions["roof_type"] == "flat"
     assert assumptions["effective_azimuth_deg"] == 180
     assert assumptions["effective_tilt_deg"] == 15
-    assert assumptions["coverage_ratio"] == 0.50
+    assert assumptions["coverage_ratio"] == "0.50"
     assert assumptions["submitted_request"]["roof"] == {
         "roof_type": "flat",
         "usable_area_m2": 20,
@@ -731,18 +792,18 @@ def test_assumptions_record_consumption_split_tariff_and_financial_inputs(
     assert assumptions["low_tier_consumption_kwh"] == 3000
     assert assumptions["high_tier_consumption_kwh"] == 3000
     assert assumptions["tariff"] == {
-        "tier_threshold_kwh_per_year": 3000,
-        "low_tariff_try_per_kwh": 3,
-        "high_tariff_try_per_kwh": 5,
-        "export_price_try_per_kwh": 2,
-        "self_consumption_ratio": 0.8,
+        "tier_threshold_kwh_per_year": "3000",
+        "low_tariff_try_per_kwh": "3",
+        "high_tariff_try_per_kwh": "5",
+        "export_price_try_per_kwh": "2",
+        "self_consumption_ratio": "0.8",
         "valid_from": "2026-04-04",
         "source": "test tariff",
     }
     assert assumptions["financial"] == {
-        "tariff_escalation_rate_real": 0.02,
-        "equipment_escalation_rate_real": 0,
+        "tariff_escalation_rate_real": "0.02",
+        "equipment_escalation_rate_real": "0",
         "lifetime_years": 25,
         "inverter_replacement_year": 12,
     }
-    assert assumptions["default_panel"]["degradation_rate_per_year"] == 0.005
+    assert assumptions["default_panel"]["degradation_rate_per_year"] == "0.005"
