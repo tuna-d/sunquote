@@ -8,8 +8,8 @@ class DomainError(Exception):
 class NoViableSystemError(DomainError):
     """The Roof fits no panel, so there is nothing to quote."""
 
-    def __init__(self) -> None:
-        super().__init__("no viable system: the usable roof area fits no panel")
+    def __init__(self, reason: str = "the usable roof area fits no panel") -> None:
+        super().__init__(f"no viable system: {reason}")
 
 
 class UnsupportedSubscriberGroupError(DomainError):
@@ -54,7 +54,7 @@ class NoCompatibleInverterError(DomainError):
         self.capacity_kwp = capacity_kwp
         super().__init__(
             f"no compatible inverter: none of the catalog inverters fits a {capacity_kwp} kWp "
-            "system within the allowed DC/AC Ratio"
+            "system within the allowed DC/AC Ratio and the Contracted Power"
         )
 
 

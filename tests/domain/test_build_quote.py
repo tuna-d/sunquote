@@ -79,7 +79,6 @@ def test_consumption_matched_sizing(
         annual_yield=annual_yield,
     )
 
-    assert len(quote.system_options) == 1
     option = quote.system_options[0]
     assert option.strategy is SizingStrategy.CONSUMPTION_MATCHED
     assert option.panel_count == panels
@@ -201,3 +200,15 @@ def test_quote_records_the_consumption_tier_split_and_the_tariff_and_financial_a
     assert recorded.high_tier_consumption_kwh == Decimal("3000")
     assert recorded.tariff == make_tariff()
     assert recorded.financial == make_financial_assumptions()
+
+
+def test_the_roof_max_option_gets_its_own_savings_from_its_own_price_and_production() -> None:
+    matched, roof_max = build().system_options  # 4.0 kWp and 8.0 kWp
+
+    # 12,000 kWh produced: the whole 6,000 kWh bill is saved (24,000), 6,000 kWh export at 2.
+    assert roof_max.savings.first_year_annual_savings == Money(Decimal("36000"), Currency.TRY)
+    assert matched.savings.first_year_annual_savings == Money(Decimal("22800"), Currency.TRY)
+    # The replacement is the 8 kW inverter (USD 1,100 x 40 x 1.2 VAT), not the 3.5 kW one.
+    assert roof_max.savings.cash_flow[11].inverter_replacement == Money(
+        Decimal("52800"), Currency.TRY
+    )

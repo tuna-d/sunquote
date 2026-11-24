@@ -22,7 +22,7 @@ from sunquote.domain.assumptions import (
     PricingAssumptions,
 )
 from sunquote.domain.catalog import Catalog, Inverter, Panel
-from sunquote.domain.model import RoofType
+from sunquote.domain.model import RoofType, SubscriberGroup
 from sunquote.domain.money import Currency, Money
 from sunquote.domain.tariff import ResidentialTariff
 
@@ -123,6 +123,10 @@ class _CoverageRatios(_Strict):
     flat: _Ratio
 
 
+class _DefaultContractedPower(_Strict):
+    residential: _Positive
+
+
 class _AssumptionsFile(_Strict):
     meta: _Meta
     coverage_ratio: _CoverageRatios
@@ -135,6 +139,7 @@ class _AssumptionsFile(_Strict):
     margin: _NonNegative
     vat_rate: _NonNegative
     flat_roof_tilt_deg: _Tilt
+    default_contracted_power_kw: _DefaultContractedPower
     tariff_escalation_rate_real: _Rate
     equipment_escalation_rate_real: _Rate
     lifetime_years: _PositiveYears
@@ -208,6 +213,9 @@ def load_engineering_assumptions(path: Path) -> EngineeringAssumptions:
             minimum=file.dc_ac_ratio_min.value, maximum=file.dc_ac_ratio_max.value
         ),
         flat_roof_tilt_deg=file.flat_roof_tilt_deg.value,
+        default_contracted_power_kw_by_subscriber_group={
+            SubscriberGroup.RESIDENTIAL: file.default_contracted_power_kw.residential.value
+        },
     )
 
 

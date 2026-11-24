@@ -57,7 +57,9 @@ def with_change(path: str, value: Any) -> dict[str, Any]:
     return body
 
 
-def test_creates_a_quote_with_one_consumption_matched_option(client: TestClient) -> None:
+def test_creates_a_quote_with_a_consumption_matched_and_a_roof_max_option(
+    client: TestClient,
+) -> None:
     response = client.post("/quotes", json=valid_body())
 
     assert response.status_code == 201
@@ -68,7 +70,15 @@ def test_creates_a_quote_with_one_consumption_matched_option(client: TestClient)
         "email": "sule@example.com",
     }
     assert quote["quote_date"] == "2026-11-24"
-    [option] = quote["system_options"]
+    consumption_matched, roof_max = quote["system_options"]
+    assert roof_max["strategy"] == "roof_max"
+    assert roof_max["panel_count"] == 16
+    assert roof_max["capacity_kwp"] == 8.0
+    assert roof_max["binding_limit"] == "roof"
+    assert roof_max["inverter"]["inverter_id"] == "i8"
+    assert roof_max["annual_production_kwh"] == 12000
+    assert roof_max["price"]["total_try"] == 276000
+    option = consumption_matched
     assert option["strategy"] == "consumption_matched"
     assert option["panel_count"] == 8
     assert option["capacity_kwp"] == 4.0
@@ -84,6 +94,64 @@ def test_creates_a_quote_with_one_consumption_matched_option(client: TestClient)
     assert [m["production_kwh"] for m in option["monthly_production_kwh"]] == [
         280, 360, 480, 560, 640, 700, 740, 680, 560, 440, 320, 240,
     ]  # fmt: skip
+
+
+def test_a_given_contracted_power_caps_both_options_and_is_recorded_as_given(
+    client: TestClient,
+) -> None:
+    body = {**valid_body(), "contracted_power_kw": 6}
+
+    response = client.post("/quotes", json=body)
+
+    assert response.status_code == 201
+    quote = response.json()
+    # Cap floor(6 x 1.30 / 0.5) = 15 panels: the target of 8 stays, the roof's 16 is cut to 15.
+    consumption_matched, roof_max = quote["system_options"]
+    assert (consumption_matched["panel_count"], consumption_matched["binding_limit"]) == (
+        8,
+        "consumption_target",
+    )
+    assert (roof_max["panel_count"], roof_max["binding_limit"]) == (15, "contracted_power")
+    assert roof_max["inverter"]["ac_power_kw"] <= 6
+    assert quote["assumptions"]["contracted_power"] == {"kw": 6, "source": "given"}
+    assert quote["assumptions"]["submitted_request"]["contracted_power_kw"] == 6
+
+
+def test_an_absent_contracted_power_uses_the_default_and_is_recorded_as_defaulted(
+    client: TestClient,
+) -> None:
+    quote = client.post("/quotes", json=valid_body()).json()
+
+    assert quote["assumptions"]["contracted_power"] == {"kw": 10, "source": "defaulted"}
+    assert quote["assumptions"]["submitted_request"]["contracted_power_kw"] is None
+    assert quote["assumptions"]["dc_ac_ratio_range"]["maximum"] == 1.3
+
+
+def test_a_null_contracted_power_counts_as_absent(client: TestClient) -> None:
+    quote = client.post("/quotes", json={**valid_body(), "contracted_power_kw": None}).json()
+
+    assert quote["assumptions"]["contracted_power"]["source"] == "defaulted"
+
+
+def test_the_quote_collapses_to_one_option_when_the_cap_equalises_both(
+    client: TestClient,
+) -> None:
+    body = {**valid_body(), "contracted_power_kw": 3}
+    body["consumption"] = {"monthly_consumption_kwh": 2000}
+
+    [option] = client.post("/quotes", json=body).json()["system_options"]
+
+    assert option["strategy"] == "consumption_matched"
+    assert (option["panel_count"], option["binding_limit"]) == (7, "contracted_power")
+
+
+def test_a_contracted_power_too_small_for_a_panel_is_a_no_viable_system_problem(
+    client: TestClient,
+) -> None:
+    response = client.post("/quotes", json={**valid_body(), "contracted_power_kw": 0.3})
+
+    assert response.status_code == 422
+    assert response.json()["type"] == "urn:sunquote:problem:no-viable-system"
 
 
 def test_displayed_figures_are_rounded_by_the_policy(
@@ -107,7 +175,7 @@ def test_assumptions_record_the_submitted_input_pvgis_inputs_ratio_and_panel(
     quote = client.post("/quotes", json=valid_body()).json()
 
     assumptions = quote["assumptions"]
-    assert assumptions["submitted_request"] == valid_body()
+    assert assumptions["submitted_request"] == {**valid_body(), "contracted_power_kw": None}
     assert assumptions["pvgis_inputs"] == {
         "source": "test",
         "latitude": 39.93,
@@ -309,6 +377,9 @@ def test_pvgis_is_asked_for_the_roof_orientation_at_the_site(
         ("consumption.monthly_consumption_kwh", -3),
         ("consumption.monthly_consumption_kwh", ...),
         ("subscriber_group", ...),
+        ("contracted_power_kw", 0),
+        ("contracted_power_kw", -3),
+        ("contracted_power_kw", "lots"),
     ],
 )
 def test_invalid_input_is_a_422_problem_naming_the_field(
@@ -463,25 +534,33 @@ def test_openapi_documents_the_endpoint(client: TestClient) -> None:
 
 # --- Savings, payback and the tariff assumptions -------------------------------------------
 #
-# The default 4.0 kWp system (500 kWh/month, 6,000 kWh a year, total price 159,000 TRY) with the
-# test tariff and financial assumptions of tests/factories.py. Year-by-year figures were worked
-# out by hand (see tests/domain/test_build_quote.py).
+# The default Consumption-Matched 4.0 kWp system (500 kWh/month, 6,000 kWh a year, total price
+# 159,000 TRY) and the Roof-Max 8.0 kWp one (12,000 kWh, 8 kW inverter, total 276,000 TRY), with
+# the test tariff and financial assumptions of tests/factories.py. Year-by-year figures were
+# worked out by hand (see tests/domain/test_build_quote.py).
 
 
 def test_each_option_carries_first_year_savings_payback_and_lifetime_savings(
     client: TestClient,
 ) -> None:
-    [option] = client.post("/quotes", json=valid_body()).json()["system_options"]
+    matched, roof_max = client.post("/quotes", json=valid_body()).json()["system_options"]
 
-    savings = option["savings"]
+    savings = matched["savings"]
     assert savings["first_year_annual_savings_try"] == 22800
     assert savings["payback_period_years"] == 6.7  # 6.6578, shown with one decimal
     assert savings["payback_beyond_lifetime"] is False
     assert savings["lifetime_savings_try"] == 665406  # 665,405.54, net of the replacement
+    # The Roof-Max option has its own savings: 12,000 kWh produced, the whole 6,000 kWh bill
+    # saved (24,000) plus 6,000 kWh exported at 2 (12,000), and a 52,800 TRY inverter replacement.
+    roof_max_savings = roof_max["savings"]
+    assert roof_max_savings["first_year_annual_savings_try"] == 36000
+    assert roof_max_savings["payback_period_years"] == 7.3  # 7.2745
+    assert roof_max_savings["lifetime_savings_try"] == 1052169  # 1,052,168.94
+    assert roof_max_savings["cash_flow"][11]["inverter_replacement_try"] == 52800
 
 
 def test_the_yearly_cash_flow_is_returned_in_whole_lira_and_kwh(client: TestClient) -> None:
-    [option] = client.post("/quotes", json=valid_body()).json()["system_options"]
+    option = client.post("/quotes", json=valid_body()).json()["system_options"][0]
 
     cash_flow = option["savings"]["cash_flow"]
     assert [row["year"] for row in cash_flow] == list(range(1, 26))
@@ -508,7 +587,7 @@ def test_a_payback_beyond_the_lifetime_has_no_period_and_says_so(client: TestCli
     body = valid_body()
     body["consumption"]["monthly_consumption_kwh"] = 10  # one panel; the fixed costs dominate
 
-    [option] = client.post("/quotes", json=body).json()["system_options"]
+    option = client.post("/quotes", json=body).json()["system_options"][0]
 
     savings = option["savings"]
     assert savings["payback_beyond_lifetime"] is True

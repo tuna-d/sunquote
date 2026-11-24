@@ -13,7 +13,7 @@ from sunquote.domain.model import (
     SubscriberGroup,
 )
 from sunquote.domain.production import SpecificYield
-from tests.factories import make_panel, make_specific_yield
+from tests.factories import make_panel, make_request, make_specific_yield
 
 
 def roof(**overrides: str) -> Roof:
@@ -67,3 +67,9 @@ def test_residential_is_the_only_supported_subscriber_group() -> None:
     assert SubscriberGroup.parse("residential") is SubscriberGroup.RESIDENTIAL
     with pytest.raises(UnsupportedSubscriberGroupError):
         SubscriberGroup.parse("commercial")
+
+
+@pytest.mark.parametrize("contracted_power_kw", ["0", "-1"])
+def test_a_request_rejects_a_non_positive_contracted_power(contracted_power_kw: str) -> None:
+    with pytest.raises(ValueError, match="contracted_power_kw"):
+        make_request(contracted_power_kw=contracted_power_kw)

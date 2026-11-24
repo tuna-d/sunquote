@@ -7,6 +7,7 @@ inputs recorded in the assumptions are short decimals that survive the trip exac
 
 import datetime as dt
 from decimal import Decimal
+from enum import StrEnum
 from typing import Annotated
 
 from pydantic import (
@@ -100,6 +101,14 @@ class QuoteRequestBody(BaseModel):
     roof: RoofBody
     consumption: ConsumptionBody
     subscriber_group: str = Field(description="Only `residential` is supported.")
+    contracted_power_kw: Annotated[Decimal, Field(gt=0)] | None = Field(
+        default=None,
+        description=(
+            "The Site's Contracted Power in kW. It caps every System Option's panel count and "
+            "inverter AC power. When absent, the Subscriber Group's default is used and the "
+            "Quote records that it was defaulted."
+        ),
+    )
     exchange_rate_override: ExchangeRateOverrideBody | None = Field(
         default=None,
         description=(
@@ -134,6 +143,7 @@ class QuoteRequestBody(BaseModel):
                 monthly_consumption_kwh=self.consumption.monthly_consumption_kwh
             ),
             subscriber_group=SubscriberGroup.parse(self.subscriber_group),
+            contracted_power_kw=self.contracted_power_kw,
         )
 
 
@@ -170,6 +180,7 @@ class SubmittedRequest(BaseModel):
     roof: SubmittedRoof
     consumption: SubmittedConsumption
     subscriber_group: SubscriberGroup
+    contracted_power_kw: JsonNumber | None
 
 
 class PanelSummary(BaseModel):
@@ -213,6 +224,18 @@ class ExchangeRateResponse(BaseModel):
     rate: JsonNumber
     date: dt.date
     overridden: bool
+
+
+class ContractedPowerSource(StrEnum):
+    GIVEN = "given"
+    DEFAULTED = "defaulted"
+
+
+class ContractedPowerResponse(BaseModel):
+    """The Contracted Power every System Option was sized against, and where it came from."""
+
+    kw: JsonNumber
+    source: ContractedPowerSource
 
 
 class PricingResponse(BaseModel):
@@ -328,6 +351,7 @@ class AssumptionsResponse(BaseModel):
     default_panel: PanelDatasheet
     inverters: list[InverterDatasheet]
     dc_ac_ratio_range: DcAcRatioRangeResponse
+    contracted_power: ContractedPowerResponse
     pricing: PricingResponse
     exchange_rate: ExchangeRateResponse
     annual_consumption_kwh: JsonNumber
@@ -462,6 +486,7 @@ def _submitted_request(request: QuoteRequest) -> SubmittedRequest:
             monthly_consumption_kwh=request.consumption.monthly_consumption_kwh
         ),
         subscriber_group=request.subscriber_group,
+        contracted_power_kw=request.contracted_power_kw,
     )
 
 
@@ -535,6 +560,14 @@ def quote_response(quote: Quote) -> QuoteResponse:
                 for inverter in recorded.inverters
             ],
             dc_ac_ratio_range=_dc_ac_range_response(recorded.dc_ac_ratio_range),
+            contracted_power=ContractedPowerResponse(
+                kw=recorded.contracted_power.kw,
+                source=(
+                    ContractedPowerSource.GIVEN
+                    if recorded.contracted_power.given
+                    else ContractedPowerSource.DEFAULTED
+                ),
+            ),
             pricing=_pricing_response(recorded.pricing),
             exchange_rate=_exchange_rate_response(recorded.exchange_rate),
             annual_consumption_kwh=recorded.annual_consumption_kwh,
