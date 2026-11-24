@@ -30,6 +30,8 @@ def requests_seen() -> list[httpx.Request]:
 def wired_client(requests_seen: list[httpx.Request]) -> Iterator[TestClient]:
     def upstream(request: httpx.Request) -> httpx.Response:
         requests_seen.append(request)
+        if request.url.host == "nominatim.openstreetmap.org":
+            return httpx.Response(200, content=(RECORDINGS / "nominatim_ankara.json").read_bytes())
         if request.url.host == "www.tcmb.gov.tr":
             # Whatever the quote date, serve the Monday 2026-11-23 file (USD selling 50.6026).
             return httpx.Response(200, content=TCMB_MONDAY.read_bytes())
@@ -117,6 +119,21 @@ def test_system_clock_reports_a_date() -> None:
     today = SystemClock().today()
 
     assert abs(today - datetime.now(UTC).date()) <= timedelta(days=1)
+
+
+def test_address_quotes_use_the_wired_geocoder_and_send_its_coordinates_to_pvgis(
+    wired_client: TestClient,
+) -> None:
+    body = {**valid_body(), "site": {"address": "An\u0131tkabir, Ankara"}}
+
+    response = wired_client.post("/quotes", json=body)
+
+    assert response.status_code == 201
+    assumptions = response.json()["assumptions"]
+    assert assumptions["geocoding_result"]["latitude"] == 39.9267385
+    assert assumptions["geocoding_result"]["longitude"] == 32.8365635
+    pvgis = assumptions["pvgis_inputs"]
+    assert (pvgis["latitude"], pvgis["longitude"]) == (39.927, 32.837)
 
 
 def test_the_real_wiring_migrates_the_database_on_startup_without_connecting() -> None:

@@ -40,8 +40,8 @@ uv run fastapi dev src/sunquote/api/app.py --port 8000
 
 ## Create a quote
 
-`POST /quotes` takes the customer, the site's coordinates, a pitched or flat roof and the monthly
-consumption, and returns a quote with one consumption-matched system option (panel count,
+`POST /quotes` takes the customer, the site's address or coordinates, a pitched or flat roof and
+the monthly consumption, and returns a quote with one consumption-matched system option (panel count,
 `capacity_kwp`, first-year annual and monthly production, what limited its size, the chosen
 inverter, and its price: Installation Cost, Sale Price, VAT and total in whole lira). The
 production figure comes from [PVGIS](https://re.jrc.ec.europa.eu/pvg_tools/en/) for that
@@ -59,6 +59,18 @@ curl -X POST http://localhost:8000/quotes -H 'content-type: application/json' -d
   "subscriber_group": "residential"
 }'
 ```
+
+For an address lookup within Turkey, send `"site": {"address": "Anıtkabir, Ankara"}`.
+If you give both latitude and longitude, the service uses those coordinates and keeps the
+address as entered. The lookup records its match in `assumptions.geocoding_result` and supplies
+the district and province for the quote list when available.
+
+Address lookup uses [Nominatim](https://nominatim.openstreetmap.org/) with
+[© OpenStreetMap contributors](https://www.openstreetmap.org/copyright) data and a
+one-request-per-second process limit. For the public endpoint, follow the
+[Nominatim usage policy](https://operations.osmfoundation.org/policies/nominatim/),
+including its application-wide rate limit and privacy rules. Set `SUNQUOTE_NOMINATIM_BASE_URL`
+to use another Nominatim instance.
 
 For a pitched roof, give `tilt_deg` and the compass bearing `azimuth_deg` (180 = south).
 For a flat roof, send `"roof": {"roof_type": "flat", "usable_area_m2": 40}`.
@@ -117,7 +129,8 @@ schema.
 
 The `integration` and `eval` markers are excluded from the default `uv run pytest` run.
 CI (GitHub Actions) runs lint, format check, type check and the default tests on every
-push and pull request, with a Postgres service container for the repository tests. The integration tests (real PVGIS and TCMB calls) run from a separate
+push and pull request, with a Postgres service container for the repository tests. The integration
+tests (real Nominatim, PVGIS and TCMB calls) run from a separate
 workflow that is started by hand from the Actions tab.
 
 ## Layout

@@ -13,6 +13,7 @@ from sunquote.domain.money import Currency, ExchangeRate, ExchangeRateOverride
 from sunquote.domain.ports import (
     Clock,
     ExchangeRateProvider,
+    Geocoder,
     QuoteRepository,
     SpecificYieldProvider,
     SpecificYieldQuery,
@@ -29,19 +30,16 @@ EQUIPMENT_PRICE_CURRENCY = Currency.USD
 class QuoteService:
     """Orchestrates the ports around `build_quote`. It holds no rules of its own.
 
-    Steps: fetch the Specific Yield, get the Exchange Rate, take the next Quote Number, build,
-    save. Every failure that can be foreseen (upstream outage, no viable system, no inverter)
-    happens before the Quote is saved, so a failed creation stores nothing. The number is taken
-    just before the build, so an outage never uses one up; a build that still fails
-    (no viable system, no compatible inverter) leaves a gap in the sequence.
-
-    Later tickets add the geocoder step.
+    Resolve the Coordinates, fetch the Specific Yield and Exchange Rate, take the next Quote
+    Number, build and save. An upstream outage leaves the sequence untouched. A build that
+    fails after the number is issued leaves a gap in the sequence.
     """
 
     def __init__(
         self,
         *,
         quote_repository: QuoteRepository,
+        geocoder: Geocoder,
         specific_yield_provider: SpecificYieldProvider,
         exchange_rate_provider: ExchangeRateProvider,
         clock: Clock,
@@ -52,6 +50,7 @@ class QuoteService:
         financial: FinancialAssumptions,
     ) -> None:
         self._quote_repository = quote_repository
+        self._geocoder = geocoder
         self._specific_yield_provider = specific_yield_provider
         self._exchange_rate_provider = exchange_rate_provider
         self._clock = clock
@@ -67,12 +66,20 @@ class QuoteService:
         *,
         exchange_rate_override: ExchangeRateOverride | None = None,
     ) -> StoredQuote:
-        roof = request.site.roof
+        site = request.site
+        coordinates = site.coordinates
+        geocoding_result = None
+        if coordinates is None:
+            assert site.address is not None
+            geocoding_result = await self._geocoder.geocode(site.address)
+            coordinates = geocoding_result.coordinates
+
+        roof = site.roof
         quote_date = self._clock.today()
         azimuth_deg, tilt_deg = roof.effective_orientation(self._assumptions.flat_roof_tilt_deg)
         specific_yield = await self._specific_yield_provider.fetch(
             SpecificYieldQuery(
-                coordinates=request.site.coordinates,
+                coordinates=coordinates,
                 tilt_deg=tilt_deg,
                 azimuth_deg=azimuth_deg,
                 system_loss_percent=self._assumptions.system_loss_percent,
@@ -91,8 +98,13 @@ class QuoteService:
             financial=self._financial,
             quote_date=quote_date,
             quote_number=quote_number,
+            geocoding_result=geocoding_result,
         )
-        return await self._quote_repository.save(quote)
+        return await self._quote_repository.save(
+            quote,
+            district=geocoding_result.district if geocoding_result else None,
+            province=geocoding_result.province if geocoding_result else None,
+        )
 
     async def _exchange_rate(
         self, quote_date: date, override: ExchangeRateOverride | None

@@ -124,13 +124,11 @@ class AssumptionView:
 
 def _site_label(stored: StoredQuote) -> str:
     """The resolved Address when the Site has one, else its Coordinates."""
-    site = stored.quote.assumptions.submitted_request.site
-    address = getattr(site, "address", None)
-    if address:
-        text = str(address)
-        extras = [part for part in (stored.district, stored.province) if part and part not in text]
-        return ", ".join([text, *extras])
-    coordinates = site.coordinates
+    recorded = stored.quote.assumptions
+    if recorded.geocoding_result is not None:
+        return recorded.geocoding_result.display_name
+    coordinates = recorded.submitted_request.site.coordinates
+    assert coordinates is not None
     north_south = "K" if coordinates.latitude >= 0 else "G"
     east_west = "D" if coordinates.longitude >= 0 else "B"
     return (

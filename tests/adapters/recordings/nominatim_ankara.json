@@ -1,0 +1,37 @@
+[
+  {
+    "place_id": 209038542,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 15087280,
+    "lat": "39.9267385",
+    "lon": "32.8365635",
+    "category": "leisure",
+    "type": "park",
+    "place_rank": 30,
+    "importance": 0.45426479078291876,
+    "addresstype": "leisure",
+    "name": "Anıtkabir",
+    "display_name": "Anıtkabir, 31, Akdeniz Caddesi, Mebusevleri Mahallesi, Ankara, Çankaya, Ankara, İç Anadolu Bölgesi, 06570, Türkiye",
+    "address": {
+      "leisure": "Anıtkabir",
+      "house_number": "31",
+      "road": "Akdeniz Caddesi",
+      "suburb": "Mebusevleri Mahallesi",
+      "city": "Ankara",
+      "town": "Çankaya",
+      "province": "Ankara",
+      "ISO3166-2-lvl4": "TR-06",
+      "region": "İç Anadolu Bölgesi",
+      "postcode": "06570",
+      "country": "Türkiye",
+      "country_code": "tr"
+    },
+    "boundingbox": [
+      "39.9216970",
+      "39.9318015",
+      "32.8308266",
+      "32.8416251"
+    ]
+  }
+]

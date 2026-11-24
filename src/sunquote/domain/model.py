@@ -53,6 +53,14 @@ class Coordinates:
 
 
 @dataclass(frozen=True, slots=True)
+class GeocodingResult:
+    display_name: str
+    coordinates: Coordinates
+    district: str | None = None
+    province: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class Roof:
     """A single roof surface. `azimuth_deg` is a compass bearing: 180 is south."""
 
@@ -83,8 +91,13 @@ class Roof:
 
 @dataclass(frozen=True, slots=True)
 class Site:
-    coordinates: Coordinates
+    coordinates: Coordinates | None
     roof: Roof
+    address: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.coordinates is None and (self.address is None or not self.address.strip()):
+            raise ValueError("a site requires an address or coordinates")
 
 
 @dataclass(frozen=True, slots=True)

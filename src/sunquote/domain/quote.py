@@ -12,7 +12,7 @@ from sunquote.domain.assumptions import (
     PricingAssumptions,
 )
 from sunquote.domain.catalog import Catalog, Inverter, Panel
-from sunquote.domain.model import Customer, QuoteRequest, RoofType
+from sunquote.domain.model import Customer, GeocodingResult, QuoteRequest, RoofType
 from sunquote.domain.money import Currency, ExchangeRate, Money
 from sunquote.domain.pricing import (
     SystemPrice,
@@ -93,6 +93,7 @@ class QuoteAssumptions:
     tariff: ResidentialTariff
     financial: FinancialAssumptions
     derived_monthly_consumption_kwh: Decimal | None = None
+    geocoding_result: GeocodingResult | None = None
 
     @property
     def consumption_derived_from_bill(self) -> bool:
@@ -183,6 +184,7 @@ def build_quote(
     financial: FinancialAssumptions,
     quote_date: date,
     quote_number: str,
+    geocoding_result: GeocodingResult | None = None,
 ) -> Quote:
     """Build the Quote. No clock, file system or network: everything arrives as an argument.
 
@@ -270,6 +272,7 @@ def build_quote(
             tariff=tariff,
             financial=financial,
             derived_monthly_consumption_kwh=derived_monthly_consumption_kwh,
+            geocoding_result=geocoding_result,
         ),
     )
 

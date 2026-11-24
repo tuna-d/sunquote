@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from sunquote.domain.errors import (
+    AddressNotFoundError,
     DomainError,
     LocationNotSupportedError,
     NoCompatibleInverterError,
@@ -43,6 +44,7 @@ UNSUPPORTED_SUBSCRIBER_GROUP = ProblemType(
 NO_VIABLE_SYSTEM = ProblemType("no-viable-system", "No viable system", 422)
 NO_COMPATIBLE_INVERTER = ProblemType("no-compatible-inverter", "No compatible inverter", 422)
 LOCATION_NOT_SUPPORTED = ProblemType("location-not-supported", "Location not supported", 422)
+ADDRESS_NOT_FOUND = ProblemType("address-not-found", "Address not found", 422)
 QUOTE_NOT_FOUND = ProblemType("quote-not-found", "Quote not found", 404)
 UPSTREAM_UNAVAILABLE = ProblemType("upstream-unavailable", "Upstream service unavailable", 503)
 
@@ -51,6 +53,7 @@ PROBLEMS_BY_EXCEPTION: dict[type[DomainError], ProblemType] = {
     NoViableSystemError: NO_VIABLE_SYSTEM,
     NoCompatibleInverterError: NO_COMPATIBLE_INVERTER,
     LocationNotSupportedError: LOCATION_NOT_SUPPORTED,
+    AddressNotFoundError: ADDRESS_NOT_FOUND,
     UpstreamUnavailableError: UPSTREAM_UNAVAILABLE,
     QuoteNotFoundError: QUOTE_NOT_FOUND,
 }

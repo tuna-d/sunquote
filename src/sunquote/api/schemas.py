@@ -8,7 +8,7 @@ Consumption are recorded as decimal strings to preserve their precision.
 import datetime as dt
 from decimal import Decimal
 from enum import StrEnum
-from typing import Annotated
+from typing import Annotated, Self
 from uuid import UUID
 
 from pydantic import (
@@ -18,9 +18,12 @@ from pydantic import (
     Field,
     PlainSerializer,
     StringConstraints,
+    ValidationError,
     ValidationInfo,
     field_validator,
+    model_validator,
 )
+from pydantic_core import InitErrorDetails, PydanticCustomError
 
 from sunquote.domain import rounding
 from sunquote.domain.assumptions import DcAcRatioRange, FinancialAssumptions, PricingAssumptions
@@ -59,8 +62,38 @@ class CustomerBody(BaseModel):
 
 
 class SiteBody(BaseModel):
-    latitude: Annotated[Decimal, Field(ge=-90, le=90)]
-    longitude: Annotated[Decimal, Field(ge=-180, le=180)]
+    latitude: Annotated[Decimal, Field(ge=-90, le=90)] | None = None
+    longitude: Annotated[Decimal, Field(ge=-180, le=180)] | None = None
+    address: str | None = Field(
+        default=None,
+        description="Required without coordinates. A complete coordinate pair takes precedence.",
+    )
+
+    @model_validator(mode="after")
+    def _require_address_or_coordinates(self) -> Self:
+        if self.latitude is None and self.longitude is not None:
+            field, message = "latitude", "required when longitude is given"
+        elif self.longitude is None and self.latitude is not None:
+            field, message = "longitude", "required when latitude is given"
+        elif self.latitude is None and (self.address is None or not self.address.strip()):
+            field, message = "address", "required when coordinates are absent"
+        else:
+            return self
+        raise ValidationError.from_exception_data(
+            type(self).__name__,
+            [
+                InitErrorDetails(
+                    type=PydanticCustomError("site_input", message),
+                    loc=(field,),
+                    input=getattr(self, field),
+                )
+            ],
+        )
+
+    def coordinates(self) -> Coordinates | None:
+        if self.latitude is None or self.longitude is None:
+            return None
+        return Coordinates(latitude=self.latitude, longitude=self.longitude)
 
 
 class RoofBody(BaseModel):
@@ -154,13 +187,14 @@ class QuoteRequestBody(BaseModel):
                 name=self.customer.name, phone=self.customer.phone, email=self.customer.email
             ),
             site=Site(
-                coordinates=Coordinates(latitude=self.site.latitude, longitude=self.site.longitude),
+                coordinates=self.site.coordinates(),
                 roof=Roof(
                     roof_type=self.roof.roof_type,
                     usable_area_m2=self.roof.usable_area_m2,
                     azimuth_deg=self.roof.azimuth_deg,
                     tilt_deg=self.roof.tilt_deg,
                 ),
+                address=self.site.address,
             ),
             consumption=Consumption(
                 monthly_consumption_kwh=self.consumption.monthly_consumption_kwh,
@@ -181,6 +215,13 @@ class SubmittedCustomer(BaseModel):
 
 
 class SubmittedSite(BaseModel):
+    latitude: JsonNumber | None
+    longitude: JsonNumber | None
+    address: str | None = Field(default=None, exclude_if=lambda address: address is None)
+
+
+class GeocodingResultResponse(BaseModel):
+    display_name: str
     latitude: JsonNumber
     longitude: JsonNumber
 
@@ -369,6 +410,7 @@ class FinancialResponse(BaseModel):
 
 class AssumptionsResponse(BaseModel):
     submitted_request: SubmittedRequest
+    geocoding_result: GeocodingResultResponse | None
     pvgis_inputs: PvgisInputs
     roof_type: RoofType
     effective_azimuth_deg: JsonNumber
@@ -500,13 +542,15 @@ def _option_response(option: SystemOption) -> SystemOptionResponse:
 
 def _submitted_request(request: QuoteRequest) -> SubmittedRequest:
     roof = request.site.roof
+    coordinates = request.site.coordinates
     return SubmittedRequest(
         customer=SubmittedCustomer(
             name=request.customer.name, phone=request.customer.phone, email=request.customer.email
         ),
         site=SubmittedSite(
-            latitude=request.site.coordinates.latitude,
-            longitude=request.site.coordinates.longitude,
+            latitude=coordinates.latitude if coordinates else None,
+            longitude=coordinates.longitude if coordinates else None,
+            address=request.site.address,
         ),
         roof=SubmittedRoof(
             roof_type=roof.roof_type,
@@ -563,6 +607,7 @@ def quote_response(stored: StoredQuote) -> QuoteResponse:
     quote = stored.quote
     recorded = quote.assumptions
     panel = recorded.default_panel
+    match = recorded.geocoding_result
     return QuoteResponse(
         id=stored.id,
         quote_number=quote.quote_number,
@@ -575,6 +620,15 @@ def quote_response(stored: StoredQuote) -> QuoteResponse:
         system_options=[_option_response(option) for option in quote.system_options],
         assumptions=AssumptionsResponse(
             submitted_request=_submitted_request(recorded.submitted_request),
+            geocoding_result=(
+                GeocodingResultResponse(
+                    display_name=match.display_name,
+                    latitude=match.coordinates.latitude,
+                    longitude=match.coordinates.longitude,
+                )
+                if match
+                else None
+            ),
             pvgis_inputs=_pvgis_inputs(recorded.pvgis_inputs),
             roof_type=recorded.roof_type,
             effective_azimuth_deg=recorded.effective_azimuth_deg,

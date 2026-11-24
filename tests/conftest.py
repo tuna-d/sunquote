@@ -16,6 +16,7 @@ from tests.factories import (
 )
 from tests.fakes import (
     FakeExchangeRateProvider,
+    FakeGeocoder,
     FakeQuoteRepository,
     FakeSpecificYieldProvider,
     FixedClock,
@@ -25,6 +26,11 @@ from tests.fakes import (
 @pytest.fixture
 def anyio_backend() -> str:
     return "asyncio"
+
+
+@pytest.fixture
+def geocoder() -> FakeGeocoder:
+    return FakeGeocoder()
 
 
 @pytest.fixture
@@ -47,6 +53,7 @@ def quote_repository() -> FakeQuoteRepository:
 
 @pytest.fixture
 def client(
+    geocoder: FakeGeocoder,
     specific_yield_provider: FakeSpecificYieldProvider,
     exchange_rate_provider: FakeExchangeRateProvider,
     quote_repository: FakeQuoteRepository,
@@ -54,6 +61,7 @@ def client(
     """An app built by the factory with explicit settings and fake collaborators."""
     service = QuoteService(
         quote_repository=quote_repository,
+        geocoder=geocoder,
         specific_yield_provider=specific_yield_provider,
         exchange_rate_provider=exchange_rate_provider,
         clock=FixedClock(),

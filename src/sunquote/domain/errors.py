@@ -5,6 +5,13 @@ class DomainError(Exception):
     """Base class for every typed error that is part of the domain's contract."""
 
 
+class AddressNotFoundError(DomainError):
+    """The Geocoder found no match for the Address in Turkey."""
+
+    def __init__(self) -> None:
+        super().__init__("No match for the address in Turkey.")
+
+
 class NoViableSystemError(DomainError):
     """The Roof fits no panel, so there is nothing to quote."""
 

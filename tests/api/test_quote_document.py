@@ -84,6 +84,24 @@ def test_the_header_shows_number_dates_customer_and_coordinates(client: TestClie
     assert "32,8597" in page  # no resolved Address yet
 
 
+def test_the_header_shows_the_resolved_address_for_an_address_quote(client: TestClient) -> None:
+    body = {**valid_body(), "site": {"address": "Ankara landmark"}}
+    quote = create(client, body)
+
+    page = document(client, quote)
+
+    assert "An\u0131tkabir, Çankaya, Ankara, Türkiye" in page
+
+
+def test_the_header_shows_coordinates_when_they_take_precedence(client: TestClient) -> None:
+    quote = create(client, with_change("site.address", "Ankara landmark"))
+
+    page = document(client, quote)
+
+    assert "39,9334" in page
+    assert "32,8597" in page
+
+
 def test_user_supplied_text_is_escaped(client: TestClient) -> None:
     quote = create(client, with_change("customer.name", "<i>Ali</i>"))
 
