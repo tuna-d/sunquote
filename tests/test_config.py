@@ -11,16 +11,20 @@ def isolated_environment(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Non
     """No SUNQUOTE_* variables and no .env file in the working directory."""
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("SUNQUOTE_LOG_LEVEL", raising=False)
+    monkeypatch.delenv("SUNQUOTE_REDIS_URL", raising=False)
 
 
 def test_defaults_let_the_service_start_without_any_configuration() -> None:
     assert Settings().log_level == "INFO"
+    assert Settings().redis_url is None
 
 
 def test_reads_environment_variables(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SUNQUOTE_LOG_LEVEL", "DEBUG")
+    monkeypatch.setenv("SUNQUOTE_REDIS_URL", "redis://localhost:6379/0")
 
     assert Settings().log_level == "DEBUG"
+    assert Settings().redis_url == "redis://localhost:6379/0"
 
 
 def test_reads_dotenv_file_in_working_directory(tmp_path: Path) -> None:
