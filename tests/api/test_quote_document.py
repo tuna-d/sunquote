@@ -13,7 +13,8 @@ from uuid import uuid4
 from fastapi.testclient import TestClient
 
 from sunquote.api import turkish
-from sunquote.api.document import fill_narrative, render_quote_document
+from sunquote.api.document import render_quote_document
+from sunquote.api.narrative_text import fill_narrative
 from sunquote.domain.narrative import NarrativeDraft
 from sunquote.domain.ports import StoredQuote
 from sunquote.domain.quote import build_quote

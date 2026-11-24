@@ -13,7 +13,9 @@ from collections.abc import Mapping, Sequence
 # Matches a whole `{...}` group, whatever is inside, so malformed names are seen too.
 PLACEHOLDER_PATTERN = re.compile(r"\{([^{}]*)\}")
 
-QUOTE_PLACEHOLDERS = ("customer_name", "quote_number", "valid_until", "validity_period_days")
+CUSTOMER_NAME = "customer_name"
+VALID_UNTIL = "valid_until"
+QUOTE_PLACEHOLDERS = (CUSTOMER_NAME, "quote_number", VALID_UNTIL, "validity_period_days")
 
 PAYBACK_YEARS = "payback_years"
 OPTION_PLACEHOLDERS = (
@@ -29,6 +31,11 @@ OPTION_PLACEHOLDERS = (
     PAYBACK_YEARS,
     "lifetime_savings_try",
 )
+
+# Option placeholders ending in this suffix are money: the figure already includes the currency.
+MONEY_SUFFIX = "_try"
+# The other option placeholders that are bare numbers: the text writes the unit after them.
+BARE_NUMBER_UNITS = {"capacity_kwp": "kWp", "annual_production_kwh": "kWh", PAYBACK_YEARS: "yıl"}
 
 # A Quote holds one or two System Options.
 MAX_OPTIONS = 2

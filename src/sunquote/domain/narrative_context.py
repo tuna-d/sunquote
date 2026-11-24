@@ -9,6 +9,7 @@ from sunquote.domain.narrative import (
     OptionComparison,
     OptionContext,
     Orientation,
+    has_comparison,
 )
 from sunquote.domain.placeholders import available_placeholders
 from sunquote.domain.quote import Quote, SystemOption
@@ -48,7 +49,7 @@ def build_narrative_context(quote: Quote) -> NarrativeContext:
     options = quote.system_options
     recorded = quote.assumptions
     comparison = None
-    if len(options) == 2:
+    if has_comparison(len(options)):
         first, second = options
         comparison = OptionComparison(
             second_option_produces_more=second.annual_production_kwh > first.annual_production_kwh,

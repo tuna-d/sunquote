@@ -14,7 +14,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from sunquote.api import turkish
-from sunquote.api.document import fixed_draft
+from sunquote.api.narrative_text import fixed_draft, placeholder_figures
+from sunquote.api.option_views import option_views
 from sunquote.domain.errors import NarrativeUnavailableError
 from sunquote.domain.narrative import (
     NarrativeContext,
@@ -22,6 +23,7 @@ from sunquote.domain.narrative import (
     ViolationKind,
     validate_narrative,
 )
+from sunquote.domain.narrative_context import build_narrative_context
 from tests.api.test_quotes import valid_body, with_change
 from tests.conftest import ClientFactory
 from tests.fakes import FakeQuoteRepository, ScriptedNarrativeWriter
@@ -458,3 +460,26 @@ def test_the_fixed_text_names_only_placeholders_the_quote_offers() -> None:
         draft_text = fixed_draft(count)
         assert (draft_text.options_comparison is not None) is (count == 2)
         assert "option_2_" not in (draft_text.summary + draft_text.next_steps)
+
+
+def beyond_lifetime_body() -> dict[str, Any]:
+    body = valid_body()
+    body["exchange_rate_override"] = {"rate": 100000, "date": "2026-11-23"}
+    return body
+
+
+@pytest.mark.parametrize(
+    "body",
+    [valid_body(), one_option_body(), beyond_lifetime_body()],
+    ids=["two options", "one option", "payback beyond the lifetime"],
+)
+def test_the_figures_fill_exactly_the_placeholders_the_quote_offers(
+    client: TestClient, quote_repository: FakeQuoteRepository, body: dict[str, Any]
+) -> None:
+    create(client, body)
+    stored = quote_repository.stored[0]
+
+    figures = placeholder_figures(stored, option_views(stored))
+
+    context = build_narrative_context(stored.quote)
+    assert set(figures) == set(context.available_placeholders)

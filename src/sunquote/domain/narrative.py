@@ -9,7 +9,7 @@ from datetime import datetime
 from enum import StrEnum
 
 from sunquote.domain.model import RoofType
-from sunquote.domain.placeholders import PLACEHOLDER_PATTERN, known_placeholders
+from sunquote.domain.placeholders import MAX_OPTIONS, PLACEHOLDER_PATTERN, known_placeholders
 from sunquote.domain.sizing import BindingLimit, SizingStrategy
 
 REQUIRED_FIELDS = ("greeting", "summary", "next_steps")
@@ -20,7 +20,12 @@ LENGTH_LIMITS = {
     COMPARISON_FIELD: 1200,
     "next_steps": 800,
 }
-COMPARISON_OPTION_COUNT = 2
+
+
+def has_comparison(option_count: int) -> bool:
+    """Whether a Quote with `option_count` System Options gets an options comparison: it
+    compares two options, so a Quote with one has none."""
+    return option_count == MAX_OPTIONS
 
 
 class Orientation(StrEnum):
@@ -144,10 +149,6 @@ def _fields(draft: NarrativeDraft) -> tuple[tuple[str, str | None], ...]:
     )
 
 
-def _is_blank(text: str | None) -> bool:
-    return text is None or not text.strip()
-
-
 def _text_violations(field: str, text: str, context: NarrativeContext) -> list[Violation]:
     violations: list[Violation] = []
     available = set(context.available_placeholders)
@@ -194,9 +195,9 @@ def validate_narrative(draft: NarrativeDraft, context: NarrativeContext) -> tupl
     A blank `options_comparison` counts as absent.
     """
     violations: list[Violation] = []
-    needs_comparison = context.option_count == COMPARISON_OPTION_COUNT
+    needs_comparison = has_comparison(context.option_count)
     for field, text in _fields(draft):
-        if _is_blank(text):
+        if text is None or not text.strip():
             if field != COMPARISON_FIELD or needs_comparison:
                 violations.append(Violation(ViolationKind.MISSING_FIELD, field, "required"))
         elif field == COMPARISON_FIELD and not needs_comparison:
@@ -208,6 +209,5 @@ def validate_narrative(draft: NarrativeDraft, context: NarrativeContext) -> tupl
                 )
             )
         else:
-            assert text is not None
             violations.extend(_text_violations(field, text, context))
     return tuple(violations)

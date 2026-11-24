@@ -28,7 +28,8 @@ from pydantic import (
 )
 from pydantic_core import InitErrorDetails, PydanticCustomError
 
-from sunquote.api.document import stored_narrative
+from sunquote.api.narrative_text import stored_narrative
+from sunquote.api.option_views import option_views
 from sunquote.domain import rounding
 from sunquote.domain.assumptions import DcAcRatioRange, FinancialAssumptions, PricingAssumptions
 from sunquote.domain.catalog import Inverter, Panel
@@ -660,7 +661,7 @@ def _dc_ac_range_response(ratio_range: DcAcRatioRange) -> DcAcRatioRangeResponse
 
 
 def _narrative_response(stored: StoredQuote) -> NarrativeResponse:
-    filled = stored_narrative(stored)
+    filled = stored_narrative(stored, option_views(stored))
     record = stored.quote.narrative
     return NarrativeResponse(
         greeting=filled.greeting,
