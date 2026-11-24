@@ -25,13 +25,24 @@ from sunquote.api.schemas import (
     quote_response,
 )
 from sunquote.domain.errors import QuoteNotFoundError
-from sunquote.domain.ports import QuoteRepository
+from sunquote.domain.ports import QuoteRepository, StoredQuote
 from sunquote.domain.service import QuoteService
 
 router = APIRouter(tags=["quotes"])
 
 DEFAULT_PAGE_SIZE = 20
 MAX_PAGE_SIZE = 100
+
+
+async def get_stored_quote(
+    quote_id: UUID,
+    repository: Annotated[QuoteRepository, Depends(get_quote_repository)],
+) -> StoredQuote:
+    """The stored Quote of the `quote_id` path parameter. Raises `QuoteNotFoundError` (404)."""
+    stored = await repository.get(quote_id)
+    if stored is None:
+        raise QuoteNotFoundError(quote_id)
+    return stored
 
 
 @router.post(
@@ -84,14 +95,8 @@ async def create_quote(
     summary="Get a stored Quote",
     responses=problem_responses(QUOTE_NOT_FOUND, VALIDATION_ERROR),
 )
-async def get_quote(
-    quote_id: UUID,
-    repository: Annotated[QuoteRepository, Depends(get_quote_repository)],
-) -> QuoteResponse:
+async def get_quote(stored: Annotated[StoredQuote, Depends(get_stored_quote)]) -> QuoteResponse:
     """The Quote exactly as it was created."""
-    stored = await repository.get(quote_id)
-    if stored is None:
-        raise QuoteNotFoundError(quote_id)
     return quote_response(stored)
 
 
@@ -102,16 +107,12 @@ async def get_quote(
     responses=problem_responses(QUOTE_NOT_FOUND, VALIDATION_ERROR),
 )
 async def get_quote_document(
-    quote_id: UUID,
-    repository: Annotated[QuoteRepository, Depends(get_quote_repository)],
+    stored: Annotated[StoredQuote, Depends(get_stored_quote)],
 ) -> HTMLResponse:
     """A stored Quote as an A4-printable Turkish HTML page, to send or print to PDF.
 
     Every figure is the Quote's own displayed value; the text around them is fixed Turkish.
     """
-    stored = await repository.get(quote_id)
-    if stored is None:
-        raise QuoteNotFoundError(quote_id)
     return HTMLResponse(render_quote_document(stored))
 
 
