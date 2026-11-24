@@ -1,14 +1,14 @@
 """The residential Retail Tariff: two marginal Tariff Tiers, the Export Price and the
 Self-Consumption Ratio (ADR 0002).
 
-`annual_cost` is the one tier cost function. Savings value self-consumed energy through it, and
-a later ticket inverts it to turn a Monthly Bill into kWh.
+Savings value self-consumed energy through `annual_cost`. Its inverse turns a bill into kWh.
 """
 
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 
+from sunquote.domain.errors import CurrencyMismatchError
 from sunquote.domain.money import Currency, Money
 
 
@@ -51,3 +51,15 @@ class ResidentialTariff:
         low_kwh, high_kwh = self.split_by_tier(annual_consumption_kwh)
         cost = low_kwh * self.low_tariff_try_per_kwh + high_kwh * self.high_tariff_try_per_kwh
         return Money(cost, Currency.TRY)
+
+    def annual_consumption_from_cost(self, annual_cost: Money) -> Decimal:
+        """Invert the annual grid cost across the two marginal Tariff Tiers."""
+        if annual_cost.currency is not Currency.TRY:
+            raise CurrencyMismatchError(Currency.TRY, annual_cost.currency)
+        if annual_cost.amount < 0:
+            raise ValueError("annual grid cost must not be negative")
+        threshold_kwh = self.tier_threshold_kwh_per_year
+        threshold_cost = self.annual_cost(threshold_kwh).amount
+        if annual_cost.amount <= threshold_cost:
+            return annual_cost.amount / self.low_tariff_try_per_kwh
+        return threshold_kwh + (annual_cost.amount - threshold_cost) / self.high_tariff_try_per_kwh
