@@ -30,6 +30,19 @@ def test_money_does_not_mix_currencies() -> None:
         Money(Decimal(1), Currency.USD) + Money(Decimal(1), Currency.TRY)
 
 
+def test_money_of_the_same_currency_subtracts_and_can_go_negative() -> None:
+    ten = Money(Decimal("10.50"), Currency.TRY)
+    four = Money(Decimal("4.25"), Currency.TRY)
+
+    assert ten - four == Money(Decimal("6.25"), Currency.TRY)
+    assert four - ten == Money(Decimal("-6.25"), Currency.TRY)
+
+
+def test_money_does_not_subtract_across_currencies() -> None:
+    with pytest.raises(CurrencyMismatchError, match=r"USD.*TRY"):
+        Money(Decimal(1), Currency.USD) - Money(Decimal(1), Currency.TRY)
+
+
 def test_money_sums_with_the_zero_of_its_currency() -> None:
     parts = [Money(Decimal(2), Currency.TRY), Money(Decimal(3), Currency.TRY)]
 

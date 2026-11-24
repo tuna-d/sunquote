@@ -29,6 +29,10 @@ class Money:
         self._require_same_currency(other)
         return Money(self.amount + other.amount, self.currency)
 
+    def __sub__(self, other: "Money") -> "Money":
+        self._require_same_currency(other)
+        return Money(self.amount - other.amount, self.currency)
+
     def __mul__(self, factor: Decimal | int) -> "Money":
         return Money(self.amount * factor, self.currency)
 
