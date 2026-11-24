@@ -35,6 +35,7 @@ from sunquote.config import Settings
 from sunquote.domain.ports import (
     ExchangeRateProvider,
     Geocoder,
+    NarrativeWriter,
     QuoteRepository,
     SpecificYieldProvider,
 )
@@ -47,12 +48,14 @@ def build_dependencies(
     *,
     transport: httpx.AsyncBaseTransport | None = None,
     quote_repository: QuoteRepository | None = None,
+    narrative_writer: NarrativeWriter | None = None,
 ) -> AppDependencies:
     """Load the data files and wire the adapters. Makes no network call itself.
 
     `transport` replaces the HTTP transport, so tests can serve recorded responses.
     `quote_repository` replaces the Postgres one (no database is touched then, and no
-    migration runs).
+    migration runs). `narrative_writer` writes the Quotes' Narrative; with none, every Quote
+    records `fallback` and shows the fixed text.
     """
     data_dir = settings.data_dir or default_data_dir()
     reference_data = ReferenceData(
@@ -107,6 +110,8 @@ def build_dependencies(
         exchange_rate_provider=exchange_rate_provider,
         clock=SystemClock(),
         reference_data=reference_data,
+        narrative_writer=narrative_writer,
+        narrative_budget_seconds=settings.narrative_timeout_seconds,
     )
     return AppDependencies(
         quote_service=service,

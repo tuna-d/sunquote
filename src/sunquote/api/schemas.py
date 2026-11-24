@@ -28,6 +28,7 @@ from pydantic import (
 )
 from pydantic_core import InitErrorDetails, PydanticCustomError
 
+from sunquote.api.document import stored_narrative
 from sunquote.domain import rounding
 from sunquote.domain.assumptions import DcAcRatioRange, FinancialAssumptions, PricingAssumptions
 from sunquote.domain.catalog import Inverter, Panel
@@ -42,6 +43,7 @@ from sunquote.domain.model import (
     SubscriberGroup,
 )
 from sunquote.domain.money import Currency, ExchangeRate, ExchangeRateOverride, Money
+from sunquote.domain.narrative import NarrativeSource
 from sunquote.domain.ports import QuotePage, StoredQuote
 from sunquote.domain.pricing import SystemPrice
 from sunquote.domain.production import SpecificYieldInputs
@@ -459,6 +461,26 @@ class AssumptionsResponse(BaseModel):
     financial: FinancialResponse
 
 
+class NarrativeResponse(BaseModel):
+    """The prose of the Quote document, with every placeholder filled from the Quote."""
+
+    model_config = ConfigDict(title="Narrative")
+
+    greeting: str
+    summary: str
+    options_comparison: str | None = Field(
+        description="Only for a Quote with two System Options; otherwise null."
+    )
+    next_steps: str
+    source: NarrativeSource = Field(
+        description="`llm` when a writer's validated text is shown, `fallback` for the fixed text."
+    )
+    model: str | None = Field(description="The model that wrote the text; null for `fallback`.")
+    generated_at: dt.datetime | None = Field(
+        description="When the Narrative step ran; null for Quotes stored before it existed."
+    )
+
+
 class QuoteResponse(BaseModel):
     model_config = ConfigDict(title="Quote")
 
@@ -469,6 +491,7 @@ class QuoteResponse(BaseModel):
     quote_date: dt.date
     valid_until: dt.date = Field(description="The last day the quoted price holds.")
     system_options: list[SystemOptionResponse]
+    narrative: NarrativeResponse
     assumptions: AssumptionsResponse
 
 
@@ -636,6 +659,20 @@ def _dc_ac_range_response(ratio_range: DcAcRatioRange) -> DcAcRatioRangeResponse
     return DcAcRatioRangeResponse(minimum=ratio_range.minimum, maximum=ratio_range.maximum)
 
 
+def _narrative_response(stored: StoredQuote) -> NarrativeResponse:
+    filled = stored_narrative(stored)
+    record = stored.quote.narrative
+    return NarrativeResponse(
+        greeting=filled.greeting,
+        summary=filled.summary,
+        options_comparison=filled.options_comparison,
+        next_steps=filled.next_steps,
+        source=record.source,
+        model=record.model,
+        generated_at=record.generated_at,
+    )
+
+
 def quote_response(stored: StoredQuote) -> QuoteResponse:
     quote = stored.quote
     recorded = quote.assumptions
@@ -651,6 +688,7 @@ def quote_response(stored: StoredQuote) -> QuoteResponse:
         quote_date=quote.quote_date,
         valid_until=quote.valid_until,
         system_options=[_option_response(option) for option in quote.system_options],
+        narrative=_narrative_response(stored),
         assumptions=AssumptionsResponse(
             submitted_request=_submitted_request(recorded.submitted_request),
             geocoding_result=(

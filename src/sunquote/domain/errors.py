@@ -39,6 +39,19 @@ class UnsupportedSubscriberGroupError(DomainError):
         )
 
 
+class NarrativeUnavailableError(DomainError):
+    """A `NarrativeWriter` could not give a draft: it timed out, was rate limited, could not be
+    reached or answered with something unusable.
+
+    Quote creation catches it and falls back to the template's fixed text, so no request ever
+    fails with it and it has no problem mapping.
+    """
+
+    def __init__(self, reason: str) -> None:
+        self.reason = reason
+        super().__init__(f"the Narrative writer is unavailable: {reason}")
+
+
 class UpstreamUnavailableError(DomainError):
     """An external service (PVGIS, ...) could not be reached or gave no usable answer.
 

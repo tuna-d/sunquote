@@ -1,13 +1,27 @@
 """Quote creation: fetch what the pure entry point needs, then call it."""
 
+import asyncio
+import logging
+from dataclasses import replace
 from datetime import date
 
+from sunquote.domain.errors import NarrativeUnavailableError
 from sunquote.domain.model import QuoteRequest
 from sunquote.domain.money import Currency, ExchangeRate, ExchangeRateOverride
+from sunquote.domain.narrative import (
+    NO_NARRATIVE,
+    NarrativeDraft,
+    NarrativeRecord,
+    NarrativeSource,
+    Violation,
+    validate_narrative,
+)
+from sunquote.domain.narrative_context import build_narrative_context
 from sunquote.domain.ports import (
     Clock,
     ExchangeRateProvider,
     Geocoder,
+    NarrativeWriter,
     QuoteRepository,
     SpecificYieldProvider,
     SpecificYieldQuery,
@@ -15,6 +29,10 @@ from sunquote.domain.ports import (
 )
 from sunquote.domain.quote import Quote, build_quote, format_quote_number
 from sunquote.domain.reference_data import ReferenceData
+
+logger = logging.getLogger(__name__)
+
+DEFAULT_NARRATIVE_BUDGET_SECONDS = 15.0
 
 
 class QuoteService:
@@ -24,6 +42,11 @@ class QuoteService:
     be built, take the next Quote Number, build the final Quote and save. An upstream outage or
     a build that fails with a domain error leaves the sequence untouched: the number is taken
     only once the Quote is known to build. (A failure of the save itself can still leave a gap.)
+
+    The Narrative step runs after the Quote is built and before it is saved: the writer drafts,
+    the validator checks, one retry gets the violations, and both attempts share
+    `narrative_budget_seconds`. Anything else (no writer, a second rejection, an error, a
+    timeout) records a `fallback` Narrative. The step never makes Quote creation fail.
     """
 
     def __init__(
@@ -35,6 +58,8 @@ class QuoteService:
         exchange_rate_provider: ExchangeRateProvider,
         clock: Clock,
         reference_data: ReferenceData,
+        narrative_writer: NarrativeWriter | None = None,
+        narrative_budget_seconds: float = DEFAULT_NARRATIVE_BUDGET_SECONDS,
     ) -> None:
         self._quote_repository = quote_repository
         self._geocoder = geocoder
@@ -42,6 +67,8 @@ class QuoteService:
         self._exchange_rate_provider = exchange_rate_provider
         self._clock = clock
         self._reference_data = reference_data
+        self._narrative_writer = narrative_writer
+        self._narrative_budget_seconds = narrative_budget_seconds
 
     async def create_quote(
         self,
@@ -84,6 +111,7 @@ class QuoteService:
         # Validate with a provisional number first: a domain error must not use up a real one.
         build(format_quote_number(quote_date.year, 1))
         quote = build(await self._quote_repository.next_quote_number(quote_date.year))
+        quote = replace(quote, narrative=await self._narrative(quote))
         return await self._quote_repository.save(
             quote,
             district=geocoding_result.district if geocoding_result else None,
@@ -107,3 +135,37 @@ class QuoteService:
                 overridden=True,
             )
         return await self._exchange_rate_provider.fetch(currency, quote_date)
+
+    async def _narrative(self, quote: Quote) -> NarrativeRecord:
+        """The Narrative record for `quote`: the writer's validated draft, or a fallback."""
+        writer = self._narrative_writer
+        generated_at = self._clock.now()
+        if writer is None:
+            return replace(NO_NARRATIVE, generated_at=generated_at)
+        try:
+            async with asyncio.timeout(self._narrative_budget_seconds):
+                draft = await self._validated_draft(writer, quote)
+        except (NarrativeUnavailableError, TimeoutError) as error:
+            logger.warning("Narrative unavailable, using the fixed text: %s", error)
+            draft = None
+        if draft is None:
+            return replace(NO_NARRATIVE, generated_at=generated_at)
+        return NarrativeRecord(
+            source=NarrativeSource.LLM,
+            draft=draft,
+            model=writer.model_name,
+            generated_at=generated_at,
+        )
+
+    @staticmethod
+    async def _validated_draft(writer: NarrativeWriter, quote: Quote) -> NarrativeDraft | None:
+        """A draft that passes the validator, asking once more after a rejection; else None."""
+        context = build_narrative_context(quote)
+        violations: tuple[Violation, ...] = ()
+        for _ in range(2):
+            draft = await writer.write(context, previous_violations=violations)
+            violations = validate_narrative(draft, context)
+            if not violations:
+                return draft
+            logger.info("Narrative draft rejected: %s", [v.kind.value for v in violations])
+        return None

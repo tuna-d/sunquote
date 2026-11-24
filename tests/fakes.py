@@ -1,24 +1,68 @@
 """In-memory stand-ins shared by tests of the domain and API."""
 
+import asyncio
+from collections.abc import Sequence
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from uuid import UUID, uuid4
 
-from sunquote.domain.errors import DomainError, UpstreamUnavailableError
+from sunquote.domain.errors import DomainError, NarrativeUnavailableError, UpstreamUnavailableError
 from sunquote.domain.model import Coordinates, GeocodingResult
 from sunquote.domain.money import Currency, ExchangeRate
+from sunquote.domain.narrative import NarrativeContext, NarrativeDraft, Violation
 from sunquote.domain.ports import QuotePage, SpecificYieldQuery, StoredQuote
 from sunquote.domain.production import SpecificYield
 from sunquote.domain.quote import Quote, format_quote_number
 from tests.factories import QUOTE_DATE, make_exchange_rate, make_specific_yield
 
+NARRATIVE_TIME = datetime(2026, 11, 24, 9, 30, tzinfo=UTC)
+
 
 class FixedClock:
-    def __init__(self, today: date = QUOTE_DATE) -> None:
+    def __init__(self, today: date = QUOTE_DATE, now: datetime = NARRATIVE_TIME) -> None:
         self._today = today
+        self._now = now
 
     def today(self) -> date:
         return self._today
+
+    def now(self) -> datetime:
+        return self._now
+
+
+class ScriptedNarrativeWriter:
+    """A NarrativeWriter that answers each call with the next scripted item: a draft is
+    returned, an exception is raised, a number of seconds sleeps first (to hit a timeout).
+
+    Records every context it receives and the violations passed with each call.
+    """
+
+    def __init__(
+        self,
+        *script: NarrativeDraft | Exception | float,
+        model_name: str = "fake-model-1",
+    ) -> None:
+        self.model_name = model_name
+        self._script = list(script)
+        self.contexts: list[NarrativeContext] = []
+        self.violations: list[tuple[Violation, ...]] = []
+
+    @property
+    def calls(self) -> int:
+        return len(self.contexts)
+
+    async def write(
+        self, context: NarrativeContext, *, previous_violations: Sequence[Violation] = ()
+    ) -> NarrativeDraft:
+        self.contexts.append(context)
+        self.violations.append(tuple(previous_violations))
+        item = self._script.pop(0)
+        if isinstance(item, int | float):
+            await asyncio.sleep(item)
+            raise NarrativeUnavailableError("scripted sleep ended")
+        if isinstance(item, Exception):
+            raise item
+        return item
 
 
 class FakeGeocoder:

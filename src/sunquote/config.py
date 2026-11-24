@@ -45,3 +45,7 @@ class Settings(BaseSettings):
     # TCMB publishes the daily exchange rate files at <base>/<YYYYMM>/<DDMMYYYY>.xml. No key.
     tcmb_base_url: str = "https://www.tcmb.gov.tr/kurlar"
     tcmb_timeout_seconds: float = Field(default=10.0, gt=0)
+
+    # Total time the Narrative writer gets for both of its attempts when a Quote is created.
+    # Past it the Quote records the fixed text and is still created.
+    narrative_timeout_seconds: float = Field(default=15.0, gt=0)

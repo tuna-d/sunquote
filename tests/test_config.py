@@ -50,3 +50,16 @@ def test_env_example_documents_every_setting() -> None:
 
     expected = {f"SUNQUOTE_{name.upper()}" for name in Settings.model_fields}
     assert expected <= documented
+
+
+def test_the_narrative_time_budget_defaults_to_fifteen_seconds_and_must_be_positive(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert Settings().narrative_timeout_seconds == 15
+
+    monkeypatch.setenv("SUNQUOTE_NARRATIVE_TIMEOUT_SECONDS", "4.5")
+    assert Settings().narrative_timeout_seconds == 4.5
+
+    monkeypatch.setenv("SUNQUOTE_NARRATIVE_TIMEOUT_SECONDS", "0")
+    with pytest.raises(ValidationError):
+        Settings()

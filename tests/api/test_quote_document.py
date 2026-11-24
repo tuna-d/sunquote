@@ -13,7 +13,8 @@ from uuid import uuid4
 from fastapi.testclient import TestClient
 
 from sunquote.api import turkish
-from sunquote.api.document import Narrative, fill_narrative, render_quote_document
+from sunquote.api.document import fill_narrative, render_quote_document
+from sunquote.domain.narrative import NarrativeDraft
 from sunquote.domain.ports import StoredQuote
 from sunquote.domain.quote import build_quote
 from tests.api.test_quotes import PROBLEM_JSON, valid_body, with_change
@@ -277,7 +278,7 @@ def test_a_malformed_id_is_a_validation_problem(client: TestClient) -> None:
 
 
 def test_the_narrative_text_is_filled_from_placeholders_only() -> None:
-    narrative = Narrative(
+    narrative = NarrativeDraft(
         greeting="Merhaba {customer_name}",
         summary="Sistem {option_1_capacity_kwp} kWp.",
         options_comparison="{option_1_total_try} ve {option_2_total_try}.",

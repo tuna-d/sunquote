@@ -7,7 +7,10 @@ _TURKEY = timezone(timedelta(hours=3), name="TRT")
 
 
 class SystemClock:
-    """Supplies the quote date: today's date in Turkey."""
+    """Supplies the quote date (today's date in Turkey) and the current UTC time."""
 
     def today(self) -> date:
         return datetime.now(UTC).astimezone(_TURKEY).date()
+
+    def now(self) -> datetime:
+        return datetime.now(UTC)

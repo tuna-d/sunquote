@@ -14,6 +14,7 @@ from sunquote.domain.assumptions import (
 from sunquote.domain.catalog import Inverter, Panel
 from sunquote.domain.model import Customer, GeocodingResult, QuoteRequest, RoofType
 from sunquote.domain.money import Currency, ExchangeRate, Money
+from sunquote.domain.narrative import NO_NARRATIVE, NarrativeRecord
 from sunquote.domain.pricing import (
     SystemPrice,
     dc_ac_ratio,
@@ -106,7 +107,8 @@ class Quote:
     """A priced offer. It is never changed after creation: re-quoting makes a new Quote.
 
     `quote_number` is the readable identifier the repository issued (`SQ-2026-000123`);
-    `valid_until` is the quote date plus the Validity Period.
+    `valid_until` is the quote date plus the Validity Period. `narrative` is the stored
+    Narrative record; `build_quote` leaves it `fallback` and Quote creation sets it once.
     """
 
     quote_number: str
@@ -115,6 +117,7 @@ class Quote:
     valid_until: date
     system_options: tuple[SystemOption, ...]
     assumptions: QuoteAssumptions
+    narrative: NarrativeRecord = NO_NARRATIVE
 
 
 def _build_option(

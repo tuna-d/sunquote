@@ -1,5 +1,6 @@
 """Interfaces to everything outside the domain. Adapters implement them; tests use fakes."""
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
@@ -8,6 +9,7 @@ from uuid import UUID
 
 from sunquote.domain.model import Coordinates, GeocodingResult
 from sunquote.domain.money import Currency, ExchangeRate
+from sunquote.domain.narrative import NarrativeContext, NarrativeDraft, Violation
 from sunquote.domain.production import SpecificYield
 from sunquote.domain.quote import Quote
 
@@ -48,6 +50,29 @@ class ExchangeRateProvider(Protocol):
 class Clock(Protocol):
     def today(self) -> date:
         """The date a Quote is issued on."""
+        ...
+
+    def now(self) -> datetime:
+        """The current moment, timezone-aware UTC."""
+        ...
+
+
+class NarrativeWriter(Protocol):
+    """Writes the prose of a Quote (ADR 0001): text with placeholders, never a figure."""
+
+    @property
+    def model_name(self) -> str:
+        """The name of the model that writes, recorded with the Quote."""
+        ...
+
+    async def write(
+        self, context: NarrativeContext, *, previous_violations: Sequence[Violation] = ()
+    ) -> NarrativeDraft:
+        """A draft for the Quote `context` describes.
+
+        On a retry, `previous_violations` are what was wrong with the previous attempt. Any
+        failure is raised as `NarrativeUnavailableError`.
+        """
         ...
 
 

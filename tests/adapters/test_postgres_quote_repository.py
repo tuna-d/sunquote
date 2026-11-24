@@ -14,7 +14,7 @@ import asyncio
 import os
 from collections.abc import AsyncIterator
 from dataclasses import replace
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from uuid import uuid4
 
@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sunquote.adapters.postgres.migrate import upgrade_to_head
 from sunquote.adapters.postgres.quote_repository import PostgresQuoteRepository
 from sunquote.adapters.postgres.tables import metadata, quotes
+from sunquote.domain.narrative import NarrativeDraft, NarrativeRecord, NarrativeSource
 from sunquote.domain.quote import Quote, build_quote
 from tests.factories import (
     QUOTE_DATE,
@@ -240,3 +241,47 @@ async def test_running_the_migrations_again_changes_nothing(
     await upgrade_to_head(engine)
 
     assert await repository.get(saved.id) == saved
+
+
+def narrative_record() -> NarrativeRecord:
+    return NarrativeRecord(
+        source=NarrativeSource.LLM,
+        draft=NarrativeDraft(
+            greeting="Sayın {customer_name},",
+            summary="Sistem {option_1_capacity_kwp} kWp gücündedir.",
+            next_steps="Teklif {valid_until} tarihine kadar geçerlidir.",
+            options_comparison="{option_1_total_try} ile {option_2_total_try}.",
+        ),
+        model="gemini-test",
+        generated_at=datetime(2026, 11, 24, 9, 30, tzinfo=UTC),
+    )
+
+
+async def test_the_narrative_record_round_trips_with_the_quote(
+    repository: PostgresQuoteRepository,
+) -> None:
+    quote = replace(make_quote(), narrative=narrative_record())
+
+    saved = await repository.save(quote)
+    fetched = await repository.get(saved.id)
+
+    assert fetched is not None
+    assert fetched.quote.narrative == narrative_record()
+    assert fetched.quote == quote
+
+
+async def test_a_quote_stored_without_a_narrative_reads_back_as_fallback(
+    repository: PostgresQuoteRepository, engine: AsyncEngine
+) -> None:
+    saved = await repository.save(make_quote())
+    async with engine.begin() as connection:
+        await connection.execute(
+            text("UPDATE quotes SET quote = quote - 'narrative' WHERE id = :id"), {"id": saved.id}
+        )
+
+    fetched = await repository.get(saved.id)
+
+    assert fetched is not None
+    assert fetched.quote.narrative.source is NarrativeSource.FALLBACK
+    assert fetched.quote.narrative.draft is None
+    assert fetched.quote.narrative.generated_at is None

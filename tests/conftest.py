@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from sunquote.api.app import create_app
 from sunquote.api.dependencies import AppDependencies
 from sunquote.config import Settings
+from sunquote.domain.ports import NarrativeWriter
 from sunquote.domain.reference_data import ReferenceData
 from sunquote.domain.service import QuoteService
 from tests.factories import make_reference_data
@@ -58,11 +59,16 @@ def client_factory(
     quote_repository: FakeQuoteRepository,
 ) -> Iterator[ClientFactory]:
     """Builds clients on the fake collaborators; a test overrides only the clock or the
-    reference data it is about."""
+    reference data it is about. A Narrative writer is optional: without one every Quote
+    records `fallback`."""
     with ExitStack() as stack:
 
         def make(
-            *, clock: FixedClock | None = None, reference_data: ReferenceData | None = None
+            *,
+            clock: FixedClock | None = None,
+            reference_data: ReferenceData | None = None,
+            narrative_writer: NarrativeWriter | None = None,
+            narrative_budget_seconds: float = 15.0,
         ) -> TestClient:
             service = QuoteService(
                 quote_repository=quote_repository,
@@ -71,6 +77,8 @@ def client_factory(
                 exchange_rate_provider=exchange_rate_provider,
                 clock=clock or FixedClock(),
                 reference_data=reference_data or make_reference_data(),
+                narrative_writer=narrative_writer,
+                narrative_budget_seconds=narrative_budget_seconds,
             )
             app = create_app(
                 settings=Settings(),

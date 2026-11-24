@@ -2,9 +2,11 @@
 
 import json
 from dataclasses import fields, is_dataclass, replace
+from datetime import UTC, datetime
 from typing import Any
 
 from sunquote.adapters.postgres.quote_repository import quote_from_json, quote_to_json
+from sunquote.domain.narrative import NarrativeDraft, NarrativeRecord, NarrativeSource
 from sunquote.domain.quote import Quote, build_quote
 from tests.factories import (
     QUOTE_DATE,
@@ -98,3 +100,54 @@ def test_the_submitted_address_and_resolved_match_survive_storage() -> None:
     )
 
     assert quote_from_json(quote_to_json(quote)) == quote
+
+
+def with_llm_narrative(quote: Quote) -> Quote:
+    record = NarrativeRecord(
+        source=NarrativeSource.LLM,
+        draft=NarrativeDraft(
+            greeting="Sayın {customer_name},",
+            summary="Sistem {option_1_capacity_kwp} kWp gücündedir.",
+            next_steps="Teklif {valid_until} tarihine kadar geçerlidir.",
+            options_comparison="{option_1_total_try} ile {option_2_total_try}.",
+        ),
+        model="gemini-test",
+        generated_at=datetime(2026, 11, 24, 9, 30, tzinfo=UTC),
+    )
+    return replace(quote, narrative=record)
+
+
+def test_the_narrative_record_survives_the_trip_through_json_text() -> None:
+    quote = with_llm_narrative(build("500"))
+
+    restored = quote_from_json(json.loads(json.dumps(quote_to_json(quote))))
+
+    assert restored == quote
+    assert restored.narrative.draft is not None
+    assert restored.narrative.generated_at == datetime(2026, 11, 24, 9, 30, tzinfo=UTC)
+
+
+def test_a_fallback_narrative_survives_the_trip_through_json_text() -> None:
+    fallback = NarrativeRecord(
+        source=NarrativeSource.FALLBACK,
+        draft=None,
+        model=None,
+        generated_at=datetime(2026, 11, 24, 9, 30, tzinfo=UTC),
+    )
+    quote = replace(build("500"), narrative=fallback)
+
+    assert quote_from_json(json.loads(json.dumps(quote_to_json(quote)))) == quote
+
+
+def test_quotes_stored_before_the_narrative_step_read_back_as_fallback() -> None:
+    quote = with_llm_narrative(build("500"))
+    document = quote_to_json(quote)
+    del document["narrative"]
+
+    restored = quote_from_json(document)
+
+    assert restored.narrative.source is NarrativeSource.FALLBACK
+    assert restored.narrative.draft is None
+    assert restored.narrative.model is None
+    assert restored.narrative.generated_at is None
+    assert restored == replace(quote, narrative=restored.narrative)

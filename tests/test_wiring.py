@@ -211,3 +211,14 @@ def test_savings_come_from_the_shipped_tariff_and_financial_assumptions(
     assert assumptions["low_tier_consumption_kwh"] == 2920
     assert assumptions["high_tier_consumption_kwh"] == 3080
     assert assumptions["financial"]["lifetime_years"] == 25
+
+
+def test_the_wired_app_has_no_narrative_writer_yet_so_quotes_record_a_fallback(
+    wired_client: TestClient,
+) -> None:
+    quote = wired_client.post("/quotes", json=valid_body()).json()
+
+    narrative = quote["narrative"]
+    assert (narrative["source"], narrative["model"]) == ("fallback", None)
+    assert narrative["greeting"] == "Sayın Şule Öztürk,"
+    assert datetime.fromisoformat(narrative["generated_at"]).utcoffset() == timedelta(0)
