@@ -1,0 +1,19 @@
+services:
+  api:
+    build: .
+    ports:
+      # Host port is configurable: `API_HOST_PORT=8080 docker compose up`.
+      - "${API_HOST_PORT:-8000}:8000"
+    environment:
+      SUNQUOTE_LOG_LEVEL: ${SUNQUOTE_LOG_LEVEL:-INFO}
+    healthcheck:
+      # The slim image has no curl, so probe /health with the Python standard library.
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
