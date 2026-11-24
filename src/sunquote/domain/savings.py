@@ -36,7 +36,9 @@ class SavingsAnalysis:
     """What a System Option saves the Customer.
 
     `payback_years` is None, with `payback_beyond_lifetime` set, when the total price is not
-    recovered within the lifetime.
+    recovered within the lifetime. `inverter_replaced_within_lifetime` says whether the cash
+    flow contains an inverter replacement, which it does only when the replacement year is
+    within the lifetime.
     """
 
     cash_flow: tuple[YearlyCashFlow, ...]
@@ -44,6 +46,7 @@ class SavingsAnalysis:
     lifetime_savings: Money
     payback_years: Decimal | None
     payback_beyond_lifetime: bool
+    inverter_replaced_within_lifetime: bool
 
 
 def analyze_savings(
@@ -123,6 +126,9 @@ def analyze_savings(
         lifetime_savings=cumulative,
         payback_years=payback_years,
         payback_beyond_lifetime=payback_years is None,
+        inverter_replaced_within_lifetime=(
+            financial.inverter_replacement_year <= financial.lifetime_years
+        ),
     )
 
 

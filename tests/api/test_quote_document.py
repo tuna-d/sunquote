@@ -4,6 +4,7 @@ Fixed inputs as in tests/api/test_quotes.py: the default 4.0 kWp Consumption-Mat
 costs 132,500 TRY before VAT and 159,000 TRY with it; Roof-Max gets a second option.
 """
 
+from datetime import UTC, datetime
 from decimal import Decimal
 from html import escape
 from typing import Any
@@ -12,8 +13,19 @@ from uuid import uuid4
 from fastapi.testclient import TestClient
 
 from sunquote.api import turkish
-from sunquote.api.document import Narrative, fill_narrative
+from sunquote.api.document import Narrative, fill_narrative, render_quote_document
+from sunquote.domain.ports import StoredQuote
+from sunquote.domain.quote import build_quote
 from tests.api.test_quotes import PROBLEM_JSON, valid_body, with_change
+from tests.factories import (
+    QUOTE_DATE,
+    QUOTE_NUMBER,
+    make_exchange_rate,
+    make_financial_assumptions,
+    make_reference_data,
+    make_request,
+    make_specific_yield,
+)
 
 
 def create(client: TestClient, body: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -191,6 +203,32 @@ def test_the_document_says_lifetime_figures_are_in_todays_lira(client: TestClien
 
     assert "bugünkü lira" in page
     assert "reel" in page
+
+
+def test_the_document_says_when_the_inverter_is_replaced_or_that_it_is_not_needed() -> None:
+    def page_for(*, lifetime_years: int, replacement_year: int) -> str:
+        quote = build_quote(
+            request=make_request(),
+            specific_yield=make_specific_yield(),
+            reference_data=make_reference_data(
+                financial=make_financial_assumptions(
+                    lifetime_years=lifetime_years, replacement_year=replacement_year
+                )
+            ),
+            exchange_rate=make_exchange_rate(),
+            quote_date=QUOTE_DATE,
+            quote_number=QUOTE_NUMBER,
+        )
+        stored = StoredQuote(id=uuid4(), created_at=datetime(2026, 11, 24, tzinfo=UTC), quote=quote)
+        return render_quote_document(stored)
+
+    replaced = page_for(lifetime_years=25, replacement_year=12)
+    not_needed = page_for(lifetime_years=10, replacement_year=12)
+
+    assert "İnverterin 12. yılda yenilenmesi hesaba katıldı." in replaced
+    assert "inverter yenilemesi gerekmediği" not in replaced
+    assert "Analiz süresi içinde inverter yenilemesi gerekmediği varsayıldı." in not_needed
+    assert "yılda yenilenmesi" not in not_needed
 
 
 def test_a_payback_beyond_the_lifetime_gets_its_own_sentence(client: TestClient) -> None:

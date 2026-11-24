@@ -197,7 +197,7 @@ def _assumption_views(stored: StoredQuote) -> tuple[AssumptionView, ...]:
     )
     replacement = (
         f"İnverterin {financial.inverter_replacement_year}. yılda yenilenmesi hesaba katıldı."
-        if financial.inverter_replacement_year <= financial.lifetime_years
+        if quote.system_options[0].savings.inverter_replaced_within_lifetime
         else "Analiz süresi içinde inverter yenilemesi gerekmediği varsayıldı."
     )
     threshold = turkish.format_int(rounding.round_kwh(tariff.tier_threshold_kwh_per_year))
