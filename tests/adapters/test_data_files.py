@@ -107,6 +107,7 @@ def test_shipped_pricing_assumptions_match_the_research_note() -> None:
     assert pricing.fixed_project_cost == Money(Decimal(20000), Currency.TRY)
     assert pricing.margin == Decimal("0.25")
     assert pricing.vat_rate == Decimal("0.20")
+    assert pricing.validity_period_days == 15  # research note section 6
 
 
 def test_shipped_files_are_marked_placeholder() -> None:
@@ -130,6 +131,7 @@ def test_every_assumption_value_names_its_source_kind_and_date() -> None:
         data["fixed_project_cost_try"],
         data["margin"],
         data["vat_rate"],
+        data["validity_period_days"],
     ]
     for entry in values:
         assert entry["source"].strip()

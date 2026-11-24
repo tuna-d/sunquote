@@ -27,6 +27,12 @@ class Settings(BaseSettings):
     # placeholder files that ship inside the package.
     data_dir: Path | None = None
 
+    # Where Quotes are stored. The default matches the Postgres service in `compose.yaml` when
+    # its port is published on localhost. Compose passes the in-network address instead.
+    database_url: str = "postgresql+asyncpg://sunquote:sunquote@localhost:5432/sunquote"
+    # Apply the Alembic migrations when the app starts.
+    migrate_on_startup: bool = True
+
     pvgis_base_url: str = "https://re.jrc.ec.europa.eu/api/v5_3"
     pvgis_timeout_seconds: float = Field(default=10.0, gt=0)
 

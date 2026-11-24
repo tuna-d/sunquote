@@ -284,6 +284,7 @@ def test_assumptions_record_the_exchange_rate_and_every_unit_price(client: TestC
         "fixed_project_cost": {"amount": 20000, "currency": "TRY"},
         "margin": 0.25,
         "vat_rate": 0.2,
+        "validity_period_days": 15,
     }
     assert assumptions["dc_ac_ratio_range"] == {"minimum": 1.0, "maximum": 1.3}
     inverters = {i["inverter_id"]: i for i in assumptions["inverters"]}
@@ -358,6 +359,9 @@ def test_the_same_request_gives_the_same_quote(client: TestClient) -> None:
     first = client.post("/quotes", json=valid_body()).json()
     second = client.post("/quotes", json=valid_body()).json()
 
+    # Only the identity differs: a new id, the next Quote Number and a later creation time.
+    for identity in ("id", "quote_number", "created_at"):
+        assert first.pop(identity) != second.pop(identity)
     assert first == second
 
 

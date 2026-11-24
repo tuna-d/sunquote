@@ -1,7 +1,7 @@
 """The domain entry point: a pure function that builds a Quote from fully resolved inputs."""
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from sunquote.domain.assumptions import (
@@ -38,6 +38,15 @@ from sunquote.domain.sizing import (
     size_roof_max,
 )
 from sunquote.domain.tariff import ResidentialTariff
+
+QUOTE_NUMBER_SEQUENCE_DIGITS = 6
+
+
+def format_quote_number(year: int, sequence: int) -> str:
+    """`SQ-<year>-<6-digit sequence>`, for example `SQ-2026-000123`."""
+    if sequence < 1 or sequence >= 10**QUOTE_NUMBER_SEQUENCE_DIGITS:
+        raise ValueError(f"quote sequence out of range: {sequence}")
+    return f"SQ-{year}-{sequence:0{QUOTE_NUMBER_SEQUENCE_DIGITS}d}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,8 +101,16 @@ class QuoteAssumptions:
 
 @dataclass(frozen=True, slots=True)
 class Quote:
+    """A priced offer. It is never changed after creation: re-quoting makes a new Quote.
+
+    `quote_number` is the readable identifier the repository issued (`SQ-2026-000123`);
+    `valid_until` is the quote date plus the Validity Period.
+    """
+
+    quote_number: str
     customer: Customer
     quote_date: date
+    valid_until: date
     system_options: tuple[SystemOption, ...]
     assumptions: QuoteAssumptions
 
@@ -165,6 +182,7 @@ def build_quote(
     tariff: ResidentialTariff,
     financial: FinancialAssumptions,
     quote_date: date,
+    quote_number: str,
 ) -> Quote:
     """Build the Quote. No clock, file system or network: everything arrives as an argument.
 
@@ -228,8 +246,10 @@ def build_quote(
         for strategy, sizing in sizings
     )
     return Quote(
+        quote_number=quote_number,
         customer=request.customer,
         quote_date=quote_date,
+        valid_until=quote_date + timedelta(days=pricing.validity_period_days),
         system_options=options,
         assumptions=QuoteAssumptions(
             submitted_request=request,

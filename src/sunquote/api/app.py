@@ -28,6 +28,8 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        for start in dependencies.startup:
+            await start()
         yield
         for close in dependencies.closers:
             await close()

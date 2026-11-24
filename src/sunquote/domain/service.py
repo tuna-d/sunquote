@@ -13,10 +13,12 @@ from sunquote.domain.money import Currency, ExchangeRate, ExchangeRateOverride
 from sunquote.domain.ports import (
     Clock,
     ExchangeRateProvider,
+    QuoteRepository,
     SpecificYieldProvider,
     SpecificYieldQuery,
+    StoredQuote,
 )
-from sunquote.domain.quote import Quote, build_quote
+from sunquote.domain.quote import build_quote
 from sunquote.domain.tariff import ResidentialTariff
 
 # The currency the Catalog and BOS unit prices are quoted in. The data files enforce it, so the
@@ -27,12 +29,19 @@ EQUIPMENT_PRICE_CURRENCY = Currency.USD
 class QuoteService:
     """Orchestrates the ports around `build_quote`. It holds no rules of its own.
 
-    Later tickets add the geocoder and repository steps.
+    Steps: fetch the Specific Yield, get the Exchange Rate, take the next Quote Number, build,
+    save. Every failure that can be foreseen (upstream outage, no viable system, no inverter)
+    happens before the Quote is saved, so a failed creation stores nothing. The number is taken
+    just before the build, so an outage never uses one up; a build that still fails
+    (no viable system, no compatible inverter) leaves a gap in the sequence.
+
+    Later tickets add the geocoder step.
     """
 
     def __init__(
         self,
         *,
+        quote_repository: QuoteRepository,
         specific_yield_provider: SpecificYieldProvider,
         exchange_rate_provider: ExchangeRateProvider,
         clock: Clock,
@@ -42,6 +51,7 @@ class QuoteService:
         tariff: ResidentialTariff,
         financial: FinancialAssumptions,
     ) -> None:
+        self._quote_repository = quote_repository
         self._specific_yield_provider = specific_yield_provider
         self._exchange_rate_provider = exchange_rate_provider
         self._clock = clock
@@ -56,7 +66,7 @@ class QuoteService:
         request: QuoteRequest,
         *,
         exchange_rate_override: ExchangeRateOverride | None = None,
-    ) -> Quote:
+    ) -> StoredQuote:
         roof = request.site.roof
         quote_date = self._clock.today()
         azimuth_deg, tilt_deg = roof.effective_orientation(self._assumptions.flat_roof_tilt_deg)
@@ -69,7 +79,8 @@ class QuoteService:
             )
         )
         exchange_rate = await self._exchange_rate(quote_date, exchange_rate_override)
-        return build_quote(
+        quote_number = await self._quote_repository.next_quote_number(quote_date.year)
+        quote = build_quote(
             request=request,
             specific_yield=specific_yield,
             catalog=self._catalog,
@@ -79,7 +90,9 @@ class QuoteService:
             tariff=self._tariff,
             financial=self._financial,
             quote_date=quote_date,
+            quote_number=quote_number,
         )
+        return await self._quote_repository.save(quote)
 
     async def _exchange_rate(
         self, quote_date: date, override: ExchangeRateOverride | None
