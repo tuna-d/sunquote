@@ -1,7 +1,9 @@
 """Runtime configuration, read from environment variables (and an optional local `.env`)."""
 
+from pathlib import Path
 from typing import Literal
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,3 +22,10 @@ class Settings(BaseSettings):
     )
 
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
+
+    # Directory holding `catalog.toml` and `assumptions.toml`. None means the placeholder
+    # files that ship inside the package.
+    data_dir: Path | None = None
+
+    pvgis_base_url: str = "https://re.jrc.ec.europa.eu/api/v5_3"
+    pvgis_timeout_seconds: float = Field(default=10.0, gt=0)

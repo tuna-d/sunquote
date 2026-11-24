@@ -1,0 +1,110 @@
+"""Loaders for the placeholder data files (catalog, engineering assumptions).
+
+The files are TOML so they can carry comments. Floats are parsed straight into `Decimal`
+(never through `float`). Pydantic validates each file, including that every value names its
+kind, source and date; the loaders then hand the domain plain dataclasses.
+"""
+
+import tomllib
+from datetime import date
+from decimal import Decimal
+from importlib import resources
+from pathlib import Path
+from typing import Any, Literal
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from sunquote.domain.assumptions import EngineeringAssumptions
+from sunquote.domain.catalog import Catalog, Panel
+from sunquote.domain.model import RoofType
+
+Kind = Literal["direct", "derived", "estimate"]
+
+
+class _Strict(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+
+class _Meta(_Strict):
+    placeholder: Literal[True]
+    description: str
+
+
+class _SourcedValue(_Strict):
+    value: Decimal
+    kind: Kind
+    source: str = Field(min_length=1)
+    date: date
+
+
+class _Ratio(_SourcedValue):
+    value: Decimal = Field(gt=0, le=1)
+
+
+class _Percent(_SourcedValue):
+    value: Decimal = Field(ge=0, lt=100)
+
+
+class _PanelEntry(_Strict):
+    panel_id: str = Field(min_length=1)
+    manufacturer: str
+    model: str
+    power_w: int = Field(gt=0)
+    length_mm: int = Field(gt=0)
+    width_mm: int = Field(gt=0)
+    degradation_rate_per_year: Decimal = Field(ge=0, lt=1)
+    source: str = Field(min_length=1)
+    source_date: date
+    kind: Kind
+    notes: str = ""
+
+
+class _CatalogFile(_Strict):
+    meta: _Meta
+    default_panel: str
+    panels: list[_PanelEntry] = Field(min_length=1)
+
+
+class _AssumptionsFile(_Strict):
+    meta: _Meta
+    coverage_ratio: dict[RoofType, _Ratio]
+    system_loss_percent: _Percent
+
+
+def default_data_dir() -> Path:
+    """The data files that ship inside the package."""
+    return Path(str(resources.files("sunquote") / "data"))
+
+
+def _read(path: Path) -> dict[str, Any]:
+    with path.open("rb") as file:
+        return tomllib.load(file, parse_float=Decimal)
+
+
+def load_catalog(path: Path) -> Catalog:
+    file = _CatalogFile.model_validate(_read(path))
+    return Catalog(
+        panels=tuple(
+            Panel(
+                panel_id=entry.panel_id,
+                manufacturer=entry.manufacturer,
+                model=entry.model,
+                power_w=entry.power_w,
+                length_mm=entry.length_mm,
+                width_mm=entry.width_mm,
+                degradation_rate_per_year=entry.degradation_rate_per_year,
+            )
+            for entry in file.panels
+        ),
+        default_panel_id=file.default_panel,
+    )
+
+
+def load_engineering_assumptions(path: Path) -> EngineeringAssumptions:
+    file = _AssumptionsFile.model_validate(_read(path))
+    return EngineeringAssumptions(
+        coverage_ratio_by_roof_type={
+            roof_type: ratio.value for roof_type, ratio in file.coverage_ratio.items()
+        },
+        system_loss_percent=file.system_loss_percent.value,
+    )

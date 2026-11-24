@@ -1,0 +1,45 @@
+# PLACEHOLDER DATA. Not any installer's real catalog.
+#
+# Datasheet values for panels, taken from the research note
+# docs/research/placeholder-market-data.md (section 2.1, research date 2026-11-24).
+# Each panel names the datasheet it comes from and that datasheet's date.
+# Replace this file with the installer's real catalog when it arrives.
+#
+# Unit prices and inverters are not here yet: they join this file in the pricing tickets.
+
+# The panel used for every System Option.
+default_panel = "trina-vertex-s-plus-neg9rh25-440"
+
+[meta]
+placeholder = true
+description = "Placeholder panel catalog compiled from public manufacturer datasheets."
+
+[[panels]]
+panel_id = "trina-vertex-s-plus-neg9rh25-440"
+manufacturer = "Trina Solar"
+model = "Vertex S+ TSM-NEG9RH.25 (440 W)"
+power_w = 440
+length_mm = 1762
+width_mm = 1134
+# Constant annual rate (share of year-1 output lost per year). Derived: the datasheet guarantees
+# 1% in year 1 then 0.40%/yr, which is 89.4% at year 25; the constant rate that reaches 89.4%
+# in 24 steps is 1 - 0.894^(1/24) = 0.47%. A guarantee (worst case), not a typical field value.
+degradation_rate_per_year = 0.0047
+source = "https://www-cdn.trinasolar.com/wwwstorage/sites/17/DT-M-0130-NA-EN-A-Datasheet_Vertex-S_NEG9RH.25_2026_A.pdf"
+source_date = 2026-05-27
+kind = "direct"
+notes = "Full black, dual glass, 30-year power guarantee. Degradation rate is derived (see above). Source date is when the PDF was saved."
+
+[[panels]]
+panel_id = "trina-vertex-s-plus-ne09rh05-440"
+manufacturer = "Trina Solar"
+model = "Vertex S+ TSM-NE09RH.05 (440 W)"
+power_w = 440
+length_mm = 1762
+width_mm = 1134
+# Derived the same way as above (datasheet: 1% first year, 0.4% per year after).
+degradation_rate_per_year = 0.0047
+source = "https://www-cdn.trinasolar.com/wwwstorage/sites/17/VertexS_TSM-NE09RH.05_420-445W_2025_A.pdf"
+source_date = 2025-04-30
+kind = "direct"
+notes = "25-year power guarantee. Degradation rate is derived (see above). Source date is when the PDF was saved."
