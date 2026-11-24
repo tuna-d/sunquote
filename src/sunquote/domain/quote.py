@@ -5,6 +5,7 @@ from datetime import date
 from decimal import Decimal
 
 from sunquote.domain.assumptions import (
+    ContractedPower,
     DcAcRatioRange,
     EngineeringAssumptions,
     PricingAssumptions,
@@ -19,7 +20,15 @@ from sunquote.domain.production import (
     annual_production_kwh,
     monthly_production_kwh,
 )
-from sunquote.domain.sizing import BindingLimit, SizingStrategy, size_consumption_matched
+from sunquote.domain.sizing import (
+    BindingLimit,
+    Sizing,
+    SizingStrategy,
+    contracted_power_cap_panels,
+    roof_capacity_panels,
+    size_consumption_matched,
+    size_roof_max,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,6 +64,7 @@ class QuoteAssumptions:
     default_panel: Panel
     inverters: tuple[Inverter, ...]
     dc_ac_ratio_range: DcAcRatioRange
+    contracted_power: ContractedPower
     pricing: PricingAssumptions
     exchange_rate: ExchangeRate
 
@@ -67,43 +77,28 @@ class Quote:
     assumptions: QuoteAssumptions
 
 
-def build_quote(
+def _build_option(
     *,
-    request: QuoteRequest,
+    strategy: SizingStrategy,
+    sizing: Sizing,
+    panel: Panel,
     specific_yield: SpecificYield,
     catalog: Catalog,
     assumptions: EngineeringAssumptions,
     pricing: PricingAssumptions,
     exchange_rate: ExchangeRate,
-    quote_date: date,
-) -> Quote:
-    """Build the Quote. No clock, file system or network: everything arrives as an argument.
-
-    Raises `NoViableSystemError` when the Roof fits no panel and `NoCompatibleInverterError`
-    when no inverter keeps the DC/AC Ratio within the configured range.
-    """
-    roof = request.site.roof
-    panel = catalog.default_panel
-    coverage_ratio = assumptions.coverage_ratio(roof.roof_type)
-    azimuth_deg, tilt_deg = roof.effective_orientation(assumptions.flat_roof_tilt_deg)
-
-    sizing = size_consumption_matched(
-        monthly_consumption_kwh=request.consumption.monthly_consumption_kwh,
-        annual_kwh_per_kwp=specific_yield.annual_kwh_per_kwp,
-        usable_area_m2=roof.usable_area_m2,
-        coverage_ratio=coverage_ratio,
-        panel=panel,
-    )
+    contracted_power: ContractedPower,
+) -> SystemOption:
     capacity_kwp = sizing.panel_count * panel.capacity_kwp
     inverter = select_inverter(
         inverters=catalog.inverters,
         capacity_kwp=capacity_kwp,
         ratio_range=assumptions.dc_ac_ratio_range,
+        max_ac_power_kw=contracted_power.kw,
         rate=exchange_rate,
     )
-
-    option = SystemOption(
-        strategy=SizingStrategy.CONSUMPTION_MATCHED,
+    return SystemOption(
+        strategy=strategy,
         panel=panel,
         panel_count=sizing.panel_count,
         capacity_kwp=capacity_kwp,
@@ -121,10 +116,67 @@ def build_quote(
             rate=exchange_rate,
         ),
     )
+
+
+def build_quote(
+    *,
+    request: QuoteRequest,
+    specific_yield: SpecificYield,
+    catalog: Catalog,
+    assumptions: EngineeringAssumptions,
+    pricing: PricingAssumptions,
+    exchange_rate: ExchangeRate,
+    quote_date: date,
+) -> Quote:
+    """Build the Quote. No clock, file system or network: everything arrives as an argument.
+
+    The Quote holds the Consumption-Matched System Option, followed by the Roof-Max one when
+    its panel count differs. Both respect the Roof and the Contracted Power.
+
+    Raises `NoViableSystemError` when the Roof or the Contracted Power allows no panel and
+    `NoCompatibleInverterError` when no inverter keeps the DC/AC Ratio within the configured
+    range with an AC power of at most the Contracted Power.
+    """
+    roof = request.site.roof
+    panel = catalog.default_panel
+    coverage_ratio = assumptions.coverage_ratio(roof.roof_type)
+    azimuth_deg, tilt_deg = roof.effective_orientation(assumptions.flat_roof_tilt_deg)
+    contracted_power = _contracted_power(request, assumptions)
+
+    roof_panels = roof_capacity_panels(roof.usable_area_m2, coverage_ratio, panel)
+    cap_panels = contracted_power_cap_panels(
+        contracted_power.kw, assumptions.dc_ac_ratio_range.maximum, panel
+    )
+    consumption_matched = size_consumption_matched(
+        monthly_consumption_kwh=request.consumption.monthly_consumption_kwh,
+        annual_kwh_per_kwp=specific_yield.annual_kwh_per_kwp,
+        roof_panels=roof_panels,
+        contracted_power_cap_panels=cap_panels,
+        panel=panel,
+    )
+    sizings = [(SizingStrategy.CONSUMPTION_MATCHED, consumption_matched)]
+    roof_max = size_roof_max(roof_panels=roof_panels, contracted_power_cap_panels=cap_panels)
+    if roof_max.panel_count != consumption_matched.panel_count:
+        sizings.append((SizingStrategy.ROOF_MAX, roof_max))
+
+    options = tuple(
+        _build_option(
+            strategy=strategy,
+            sizing=sizing,
+            panel=panel,
+            specific_yield=specific_yield,
+            catalog=catalog,
+            assumptions=assumptions,
+            pricing=pricing,
+            exchange_rate=exchange_rate,
+            contracted_power=contracted_power,
+        )
+        for strategy, sizing in sizings
+    )
     return Quote(
         customer=request.customer,
         quote_date=quote_date,
-        system_options=(option,),
+        system_options=options,
         assumptions=QuoteAssumptions(
             submitted_request=request,
             pvgis_inputs=specific_yield.inputs,
@@ -135,7 +187,19 @@ def build_quote(
             default_panel=panel,
             inverters=catalog.inverters,
             dc_ac_ratio_range=assumptions.dc_ac_ratio_range,
+            contracted_power=contracted_power,
             pricing=pricing,
             exchange_rate=exchange_rate,
         ),
+    )
+
+
+def _contracted_power(
+    request: QuoteRequest, assumptions: EngineeringAssumptions
+) -> ContractedPower:
+    """The request's Contracted Power, or the Subscriber Group's default when it gives none."""
+    if request.contracted_power_kw is not None:
+        return ContractedPower(kw=request.contracted_power_kw, given=True)
+    return ContractedPower(
+        kw=assumptions.default_contracted_power_kw(request.subscriber_group), given=False
     )

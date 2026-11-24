@@ -114,6 +114,7 @@ def make_assumptions(
     system_loss_percent: str = "14",
     dc_ac_ratio_min: str = "1.00",
     dc_ac_ratio_max: str = "1.30",
+    default_contracted_power_kw: str = "10",
 ) -> EngineeringAssumptions:
     return EngineeringAssumptions(
         coverage_ratio_by_roof_type={
@@ -121,6 +122,9 @@ def make_assumptions(
             RoofType.FLAT: Decimal("0.50"),
         },
         flat_roof_tilt_deg=Decimal(flat_roof_tilt_deg),
+        default_contracted_power_kw_by_subscriber_group={
+            SubscriberGroup.RESIDENTIAL: Decimal(default_contracted_power_kw)
+        },
         system_loss_percent=Decimal(system_loss_percent),
         dc_ac_ratio_range=DcAcRatioRange(
             minimum=Decimal(dc_ac_ratio_min), maximum=Decimal(dc_ac_ratio_max)
@@ -155,6 +159,7 @@ def make_request(
     azimuth_deg: str = "180",
     tilt_deg: str = "30",
     roof_type: RoofType = RoofType.PITCHED,
+    contracted_power_kw: str | None = None,
 ) -> QuoteRequest:
     return QuoteRequest(
         customer=Customer(name="Şule Öztürk", phone="+90 555 000 00 00", email="sule@example.com"),
@@ -169,4 +174,5 @@ def make_request(
         ),
         consumption=Consumption(monthly_consumption_kwh=Decimal(monthly_consumption_kwh)),
         subscriber_group=SubscriberGroup.RESIDENTIAL,
+        contracted_power_kw=None if contracted_power_kw is None else Decimal(contracted_power_kw),
     )

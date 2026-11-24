@@ -25,9 +25,11 @@ def select_inverter(
     inverters: tuple[Inverter, ...],
     capacity_kwp: Decimal,
     ratio_range: DcAcRatioRange,
+    max_ac_power_kw: Decimal,
     rate: ExchangeRate,
 ) -> Inverter:
-    """The cheapest inverter in TRY whose DC/AC Ratio is within the range.
+    """The cheapest inverter in TRY whose DC/AC Ratio is within the range and whose AC power
+    is at most `max_ac_power_kw` (the Site's Contracted Power).
 
     Equal prices go to the smaller AC power, then to the id, so the choice is deterministic.
     Raises `NoCompatibleInverterError` when none qualifies.
@@ -35,7 +37,8 @@ def select_inverter(
     compatible = [
         inverter
         for inverter in inverters
-        if ratio_range.contains(dc_ac_ratio(capacity_kwp, inverter))
+        if inverter.ac_power_kw <= max_ac_power_kw
+        and ratio_range.contains(dc_ac_ratio(capacity_kwp, inverter))
     ]
     if not compatible:
         raise NoCompatibleInverterError(str(capacity_kwp))

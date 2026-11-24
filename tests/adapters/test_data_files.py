@@ -18,7 +18,7 @@ from sunquote.adapters.data_files import (
     load_engineering_assumptions,
     load_pricing_assumptions,
 )
-from sunquote.domain.model import RoofType
+from sunquote.domain.model import RoofType, SubscriberGroup
 from sunquote.domain.money import Currency, Money
 
 CATALOG_FILE = default_data_dir() / "catalog.toml"
@@ -89,6 +89,12 @@ def test_shipped_assumptions_hold_the_dc_ac_range() -> None:
     assert (ratio_range.minimum, ratio_range.maximum) == (Decimal("1.00"), Decimal("1.50"))
 
 
+def test_shipped_assumptions_default_the_residential_contracted_power_to_10_kw() -> None:
+    assumptions = load_engineering_assumptions(ASSUMPTIONS_FILE)
+
+    assert assumptions.default_contracted_power_kw(SubscriberGroup.RESIDENTIAL) == Decimal(10)
+
+
 def test_shipped_pricing_assumptions_match_the_research_note() -> None:
     pricing = load_pricing_assumptions(ASSUMPTIONS_FILE)
 
@@ -114,6 +120,7 @@ def test_every_assumption_value_names_its_source_kind_and_date() -> None:
         *data["coverage_ratio"].values(),
         data["dc_ac_ratio_min"],
         data["dc_ac_ratio_max"],
+        data["default_contracted_power_kw"]["residential"],
         data["bos_usd_per_kwp"],
         data["labour_try_per_kwp"],
         data["fixed_project_cost_try"],
