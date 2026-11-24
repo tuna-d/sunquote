@@ -19,12 +19,12 @@ Project reference material (product notes, sample quotes, price lists, datasheet
 - Determinizm: aynı girdi + aynı katalog, kur ve tarife → aynı teklif. Domain tarih, kur veya tarife çekmez; bunlar dışarıdan verilir. Teklif hesapta kullanılan tüm varsayımları (kur, tarife, kayıp oranları, birim fiyatlar, marj, KDV) yanında taşır, böylece sonradan yeniden üretilebilir.
 - Katalog ve fiyat verisi (panel, inverter, montaj, işçilik, marj, vergiler) kodda sabit yazılmaz; veri dosyalarından veya konfigürasyondan gelir. Gerçek veri gelene kadar açıkça işaretli placeholder kullanılır.
 - Tipler: `mypy --strict`. Public fonksiyon ve sınıflar tam tiplidir.
-- Müşteriye giden teklif metni Türkçedir. Rakamlar ve sabit metin şablondan gelir. Anlatı (Narrative: selamlama, özet, öneri) bir LLM adapter'ı tarafından structured output olarak yazılır; LLM rakam yazmaz, rakamlara yalnızca placeholder ile değinir, şablon bunları domain'in hesapladığı değerlerle doldurur. Domain metin üretmez, sayı ve yapı üretir.
+- Müşteriye giden teklif metni Türkçedir. Rakamlar ve sabit metin şablondan gelir. Anlatı (Narrative: selamlama, özet, seçenek karşılaştırması (yalnızca iki seçenekte), sonraki adımlar) bir LLM adapter'ı tarafından structured output olarak yazılır; LLM rakam yazmaz, rakamlara yalnızca placeholder ile değinir, şablon bunları domain'in hesapladığı değerlerle doldurur. Domain metin üretmez, sayı ve yapı üretir.
 - API anahtarları ve gizli değerler ortam değişkenlerinden (`.env`, commit edilmez) gelir.
 
 ## Çalışma
 - Git akışı: geliştirme `development` dalında; `main` kararlı sürüm. `development`'ı `main`'e birleştirmek her zaman repo sahibinin açık talimatını ister.
-- Paket yöneticisi `uv`. Komutlar: `uv sync`, `uv run pytest` (birim), `uv run pytest -m integration` (gerçek servisler), `uv run ruff check .`, `uv run ruff format --check .`, `uv run mypy src`, `uv run fastapi dev src/sunquote/api/app.py --port <port>`. İlk kurulum ticket'ı bunları oluşturur.
+- Paket yöneticisi `uv`. Komutlar: `uv sync`, `uv run pytest` (birim), `uv run pytest -m integration` (gerçek servisler), `uv run pytest -m eval` (gerçek Gemini, `SUNQUOTE_GEMINI_API_KEY` ister), `uv run ruff check .`, `uv run ruff format --check .`, `uv run mypy src`, `uv run fastapi dev src/sunquote/api/app.py --port <port>`. İlk kurulum ticket'ı bunları oluşturur.
 - API'yi elle denemek için dev server'ın `/docs` (Swagger UI) sayfası kullanılır.
 - Aynı anda birden fazla worktree'de dev server çalışabilir: her worktree kendi portunu kullanır; 8000 repo sahibine ayrılmıştır.
 

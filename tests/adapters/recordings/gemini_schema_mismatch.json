@@ -1,0 +1,22 @@
+{
+  "candidates": [
+    {
+      "content": {
+        "role": "model",
+        "parts": [
+          {
+            "text": "{\"greeting\": \"Merhaba\", \"summary\": 7, \"next_steps\": \"x\"}"
+          }
+        ]
+      },
+      "finishReason": "STOP",
+      "index": 0
+    }
+  ],
+  "usageMetadata": {
+    "promptTokenCount": 812,
+    "candidatesTokenCount": 176,
+    "totalTokenCount": 988
+  },
+  "modelVersion": "gemini-3.5-flash-lite"
+}

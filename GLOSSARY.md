@@ -159,5 +159,17 @@ _Avoid_: expiry, deadline
 Every external input a Quote was calculated with (exchange rate, tariffs, ratios, unit prices, margin, VAT), recorded so the Quote can be reproduced.
 
 **Narrative**:
-The prose parts of a Quote's text (greeting, summary, recommendation), written by an LLM that refers to figures only through placeholders.
+The prose parts of a Quote's text (greeting, summary, options comparison for two System Options only, next steps), written by an LLM that refers to figures only through Placeholders.
 _Avoid_: AI text, cover letter
+
+**Placeholder**:
+A `{name}` in the Narrative's prose that stands for a figure or the Customer's name, taken from a closed vocabulary (options are addressed by position, such as `{option_1_total_try}`) and filled from the Quote's displayed values. The LLM writes no digit outside a Placeholder.
+
+**Narrative Context**:
+The anonymised description of a Quote that the LLM receives: structure, flags and the available Placeholders, with no figure and no personal data.
+
+**Narrative Draft**:
+The prose slots as the LLM wrote them, text with Placeholders still unfilled. It is stored with the Quote only after it passes validation.
+
+**Narrative source**:
+Where a Quote's Narrative came from: `llm` (a validated Narrative Draft) or `fallback` (the template's fixed Turkish text, used when there is no key, the LLM fails, times out or is rejected twice).

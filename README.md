@@ -127,6 +127,63 @@ SUNQUOTE_REDIS_URL=redis://127.0.0.1:6379/0 uv run fastapi dev src/sunquote/api/
 The API defaults to the Postgres URL published on localhost by Compose. Redis caching is
 optional outside Compose. Use [`.env.example`](.env.example) to configure either service.
 
+## Optional: LLM-written Narrative
+
+Every Quote document opens with a greeting, a summary, a comparison of the System Options
+(when there are two) and next steps. Without a key these are fixed Turkish paragraphs. With a
+free Gemini API key, Gemini writes them for each new Quote:
+
+1. Create a key at [Google AI Studio](https://aistudio.google.com/apikey). The free tier needs
+   no billing.
+2. Copy [`.env.example`](.env.example) to `.env` and set `SUNQUOTE_GEMINI_API_KEY=<your key>`.
+   `.env` is not committed. Then run `docker compose up --build` (Compose passes the key
+   through) or the local command above.
+3. Create a Quote. Its JSON shows `narrative.source: "llm"` and the model that wrote it.
+
+The default model, `gemini-3.5-flash-lite`, is on the Gemini API free tier. Checked on
+Google's [pricing page](https://ai.google.dev/gemini-api/docs/pricing) on 2026-11-24; free-tier
+availability changes between models and dates, so re-check before relying on it.
+`SUNQUOTE_GEMINI_MODEL` selects another model. The project never assumes a paid tier.
+
+**Privacy.** Google's free tier may use submitted content to improve its products. Only an
+anonymised description of the Quote is sent: option count, sizing strategy and binding limit,
+roof type and orientation as a word, booleans such as which option costs more, and the list of
+placeholders. No Customer name, Address, Coordinates, phone, email or figure leaves the service.
+
+**Figures.** The model never writes a figure. It refers to figures and to the Customer through
+placeholders such as `{option_1_capacity_kwp}`, and the template fills them from the calculated
+values ([ADR 0001](docs/adr/0001-llm-never-writes-figures.md)). Output with a digit outside a
+placeholder, an unknown placeholder or a missing section is rejected and requested once more.
+
+**Fallback.** With no key, a rate limit (HTTP 429), a timeout (the two attempts share
+`SUNQUOTE_NARRATIVE_TIMEOUT_SECONDS`, 15 s), a network error, a blocked or malformed answer, or
+a second rejected draft, the Quote still succeeds: it uses the fixed Turkish text and records
+`narrative.source: "fallback"`. The key never appears in logs or error messages.
+
+### Run the Narrative eval
+
+Set `SUNQUOTE_GEMINI_API_KEY` in `.env` or the shell and run from the repository root:
+
+```sh
+uv run pytest -m eval -rs
+```
+
+The eval skips when the key is unset. With a key, it builds 20 Quotes from fixed test inputs,
+uses the configured Gemini model, and prints a table of results by scenario and grader. A
+scenario passes when the final draft clears every validator rule and the Turkish number-word
+check. The number-word check is eval-only and treats `bir` as an indefinite article. A fallback
+fails the scenario. If the last attempt yields no draft, each grader shows `-` and receives no
+credit for that scenario. The run requires at least 18 of 20 Quotes to pass (90%).
+
+The eval waits 15 seconds between Gemini requests, including retries. Set
+`SUNQUOTE_EVAL_DELAY_SECONDS` in `.env` or the shell to adjust the pause. A run makes 20 to 40
+requests, depending on retries. Check your project's free-tier per-minute and daily limits in
+[Google AI Studio](https://aistudio.google.com/rate-limit).
+
+The live eval is opt-in and excluded from CI. The default offline suite checks the set's coverage
+of System Option count, Roof Type, Binding Limit, Tariff Tier, Payback Period and both forms of
+consumption input.
+
 ## Placeholder data
 
 The TOML files in [`src/sunquote/data/`](src/sunquote/data) contain placeholder inputs
@@ -174,7 +231,9 @@ database from the API cache.
 [CI](.github/workflows/ci.yml) runs dependency sync, lint, format check, type check and the
 default pytest suite with Postgres and Redis service containers on every push and pull
 request. The [manual integration workflow](.github/workflows/integration.yml) runs the same
-`pytest -m integration` command against live Nominatim, PVGIS and TCMB without keys.
+`pytest -m integration` command against live Nominatim, PVGIS and TCMB without keys; the
+real Gemini test inside it skips there, since the workflow sets no key. Run it locally with
+`SUNQUOTE_GEMINI_API_KEY` set to include it.
 
 ## What comes next
 

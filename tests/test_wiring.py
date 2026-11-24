@@ -9,13 +9,15 @@ from pathlib import Path
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
 
 from sunquote.adapters.clock import SystemClock
+from sunquote.adapters.gemini import GeminiNarrativeWriter
 from sunquote.api.app import create_app
 from sunquote.bootstrap import build_dependencies
 from sunquote.config import Settings
 from tests.api.test_quotes import valid_body
-from tests.fakes import FakeQuoteRepository
+from tests.fakes import FakeQuoteRepository, ScriptedNarrativeWriter
 
 RECORDINGS = Path(__file__).parent / "adapters" / "recordings"
 RECORDING = RECORDINGS / "pvgis_pvcalc_ankara.json"
@@ -211,3 +213,71 @@ def test_savings_come_from_the_shipped_tariff_and_financial_assumptions(
     assert assumptions["low_tier_consumption_kwh"] == 2920
     assert assumptions["high_tier_consumption_kwh"] == 3080
     assert assumptions["financial"]["lifetime_years"] == 25
+
+
+def test_the_wired_app_has_no_narrative_writer_yet_so_quotes_record_a_fallback(
+    wired_client: TestClient,
+) -> None:
+    quote = wired_client.post("/quotes", json=valid_body()).json()
+
+    narrative = quote["narrative"]
+    assert (narrative["source"], narrative["model"]) == ("fallback", None)
+    assert narrative["greeting"] == "Sayın Şule Öztürk,"
+    assert datetime.fromisoformat(narrative["generated_at"]).utcoffset() == timedelta(0)
+
+
+def test_without_a_gemini_key_no_narrative_writer_is_wired() -> None:
+    dependencies = build_dependencies(
+        Settings(gemini_api_key=None), quote_repository=FakeQuoteRepository()
+    )
+
+    assert dependencies.quote_service._narrative_writer is None
+
+
+def test_with_a_gemini_key_the_gemini_writer_is_wired_with_the_configured_model() -> None:
+    settings = Settings(gemini_api_key=SecretStr("key-123"), gemini_model="gemini-test-model")
+
+    dependencies = build_dependencies(settings, quote_repository=FakeQuoteRepository())
+
+    writer = dependencies.quote_service._narrative_writer
+    assert isinstance(writer, GeminiNarrativeWriter)
+    assert writer.model_name == "gemini-test-model"
+
+
+def test_an_injected_narrative_writer_wins_over_the_gemini_key() -> None:
+    injected = ScriptedNarrativeWriter()
+    settings = Settings(gemini_api_key=SecretStr("key-123"))
+
+    dependencies = build_dependencies(
+        settings, quote_repository=FakeQuoteRepository(), narrative_writer=injected
+    )
+
+    assert dependencies.quote_service._narrative_writer is injected
+
+
+def test_a_quote_gets_a_gemini_narrative_through_the_wired_app(
+    recorded_transport: httpx.MockTransport,
+    requests_seen: list[httpx.Request],
+) -> None:
+    gemini_text = (RECORDINGS / "gemini_generate_content_success.json").read_bytes()
+
+    def upstream(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "generativelanguage.googleapis.com":
+            requests_seen.append(request)
+            return httpx.Response(200, content=gemini_text)
+        return recorded_transport.handler(request)  # type: ignore[attr-defined,no-any-return]
+
+    settings = Settings(redis_url=None, gemini_api_key=SecretStr("key-123"))
+    dependencies = build_dependencies(
+        settings, transport=httpx.MockTransport(upstream), quote_repository=FakeQuoteRepository()
+    )
+    with TestClient(create_app(settings, dependencies)) as client:
+        quote = client.post("/quotes", json=valid_body()).json()
+
+    assert quote["narrative"]["source"] == "llm"
+    assert quote["narrative"]["model"] == "gemini-3.5-flash-lite"
+    assert quote["narrative"]["greeting"] == "Merhaba Şule Öztürk, teklifiniz hazır."
+    gemini_request = next(
+        r for r in requests_seen if r.url.host == "generativelanguage.googleapis.com"
+    )
+    assert gemini_request.headers["x-goog-api-key"] == "key-123"

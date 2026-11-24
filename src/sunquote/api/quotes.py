@@ -81,6 +81,12 @@ async def create_quote(
     and yearly cash flow, from the residential tariff (marginal Tariff Tiers). Escalation rates
     are real, so all of these are in today's lira.
 
+    The Quote also carries a `narrative`: the prose of its document (greeting, summary, a
+    comparison of the two options, next steps) with every figure filled from the Quote. When a
+    Narrative writer is configured it writes the text and the source is `llm`; with none, or
+    when it fails, times out or breaks the rules, the fixed Turkish text is used and the
+    source is `fallback`. The Narrative never makes the request fail.
+
     The Quote is stored with a Quote Number and a valid-until date and never changes afterwards.
     A failed request stores nothing.
     """
@@ -111,7 +117,8 @@ async def get_quote_document(
 ) -> HTMLResponse:
     """A stored Quote as an A4-printable Turkish HTML page, to send or print to PDF.
 
-    Every figure is the Quote's own displayed value; the text around them is fixed Turkish.
+    Every figure is the Quote's own displayed value. The prose is the Quote's stored Narrative
+    (or the fixed Turkish text) and reads the same every time.
     """
     return HTMLResponse(render_quote_document(stored))
 

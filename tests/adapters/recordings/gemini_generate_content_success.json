@@ -1,0 +1,22 @@
+{
+  "candidates": [
+    {
+      "content": {
+        "role": "model",
+        "parts": [
+          {
+            "text": "{\"greeting\": \"Merhaba {customer_name}, teklifiniz hazır.\", \"summary\": \"Önerilen {option_1_capacity_kwp} kWp güçteki sistem yılda {option_1_annual_production_kwh} kWh üretir. Çatınızın alanı sistemin boyutunu belirledi.\", \"options_comparison\": \"Daha büyük ikinci seçenek {option_2_total_try} tutarındadır ve geri ödemesi {option_2_payback_years} yıldır.\", \"next_steps\": \"Önce bir keşif ziyareti planlanır. Teklif {valid_until} tarihine kadar geçerlidir.\"}"
+          }
+        ]
+      },
+      "finishReason": "STOP",
+      "index": 0
+    }
+  ],
+  "usageMetadata": {
+    "promptTokenCount": 812,
+    "candidatesTokenCount": 176,
+    "totalTokenCount": 988
+  },
+  "modelVersion": "gemini-3.5-flash-lite"
+}
