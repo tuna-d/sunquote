@@ -159,7 +159,10 @@ def ask_for_missing_fields_declaration() -> ToolDeclaration:
                     "description": (
                         f"Every {CREATE_QUOTE} field that is required, still unknown and not "
                         "stated anywhere in the conversation. `consumption` means the monthly "
-                        "kWh or the monthly bill."
+                        "kWh or the monthly bill. Never list roof.tilt_deg or roof.azimuth_deg "
+                        "for a flat roof, roof.roof_type when the roof's shape was given, or "
+                        "subscriber_group for a home or when no group was named (it is "
+                        "residential)."
                     ),
                 },
                 "question": {
