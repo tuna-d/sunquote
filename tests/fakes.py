@@ -1,10 +1,11 @@
-"""In-memory stand-ins for the domain's ports. Later specs add the geocoder, exchange rate
-provider and repository fakes here, so every test layer shares them."""
+"""In-memory stand-ins shared by tests of the domain and API."""
 
 from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal
 from uuid import UUID, uuid4
 
 from sunquote.domain.errors import DomainError, UpstreamUnavailableError
+from sunquote.domain.model import Coordinates, GeocodingResult
 from sunquote.domain.money import Currency, ExchangeRate
 from sunquote.domain.ports import QuotePage, SpecificYieldQuery, StoredQuote
 from sunquote.domain.production import SpecificYield
@@ -18,6 +19,26 @@ class FixedClock:
 
     def today(self) -> date:
         return self._today
+
+
+class FakeGeocoder:
+    def __init__(self) -> None:
+        self.result = GeocodingResult(
+            display_name="An\u0131tkabir, Çankaya, Ankara, Türkiye",
+            coordinates=Coordinates(
+                latitude=Decimal("39.9267385"), longitude=Decimal("32.8365635")
+            ),
+            district="Çankaya",
+            province="Ankara",
+        )
+        self.error: DomainError | None = None
+        self.addresses: list[str] = []
+
+    async def geocode(self, address: str) -> GeocodingResult:
+        self.addresses.append(address)
+        if self.error is not None:
+            raise self.error
+        return self.result
 
 
 class FakeSpecificYieldProvider:

@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, Query
 
 from sunquote.api.dependencies import get_quote_repository, get_quote_service
 from sunquote.api.errors import (
+    ADDRESS_NOT_FOUND,
     LOCATION_NOT_SUPPORTED,
     NO_COMPATIBLE_INVERTER,
     NO_VIABLE_SYSTEM,
@@ -41,6 +42,7 @@ MAX_PAGE_SIZE = 100
         NO_VIABLE_SYSTEM,
         NO_COMPATIBLE_INVERTER,
         LOCATION_NOT_SUPPORTED,
+        ADDRESS_NOT_FOUND,
         UPSTREAM_UNAVAILABLE,
     ),
 )
@@ -49,6 +51,9 @@ async def create_quote(
     service: Annotated[QuoteService, Depends(get_quote_service)],
 ) -> QuoteResponse:
     """Size a system for the Customer's Site and return the Quote.
+
+    Give the Site Address or both Coordinates. Coordinates take precedence when both are
+    given. An Address lookup records the resolved match in the Quote's Assumptions.
 
     The Quote holds a Consumption-Matched System Option and, when its panel count differs, a
     Roof-Max one after it. Neither is marked as recommended. Both are capped by the Contracted

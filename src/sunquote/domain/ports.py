@@ -6,10 +6,16 @@ from decimal import Decimal
 from typing import Protocol
 from uuid import UUID
 
-from sunquote.domain.model import Coordinates
+from sunquote.domain.model import Coordinates, GeocodingResult
 from sunquote.domain.money import Currency, ExchangeRate
 from sunquote.domain.production import SpecificYield
 from sunquote.domain.quote import Quote
+
+
+class Geocoder(Protocol):
+    async def geocode(self, address: str) -> GeocodingResult:
+        """Resolve an Address, raising `AddressNotFoundError` or `UpstreamUnavailableError`."""
+        ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,7 +55,7 @@ class Clock(Protocol):
 class StoredQuote:
     """A Quote as the repository holds it: the immutable Quote plus its identity.
 
-    `district` and `province` are listing columns, empty until address geocoding fills them.
+    `district` and `province` are optional listing columns supplied by geocoding.
     """
 
     id: UUID

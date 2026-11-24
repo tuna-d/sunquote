@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     # Apply the Alembic migrations when the app starts.
     migrate_on_startup: bool = True
 
+    nominatim_base_url: str = "https://nominatim.openstreetmap.org"
+    nominatim_timeout_seconds: float = Field(default=10.0, gt=0)
+
     pvgis_base_url: str = "https://re.jrc.ec.europa.eu/api/v5_3"
     pvgis_timeout_seconds: float = Field(default=10.0, gt=0)
 

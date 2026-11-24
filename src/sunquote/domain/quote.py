@@ -12,7 +12,7 @@ from sunquote.domain.assumptions import (
     PricingAssumptions,
 )
 from sunquote.domain.catalog import Catalog, Inverter, Panel
-from sunquote.domain.model import Customer, QuoteRequest, RoofType
+from sunquote.domain.model import Customer, GeocodingResult, QuoteRequest, RoofType
 from sunquote.domain.money import ExchangeRate
 from sunquote.domain.pricing import (
     SystemPrice,
@@ -92,6 +92,7 @@ class QuoteAssumptions:
     high_tier_consumption_kwh: Decimal
     tariff: ResidentialTariff
     financial: FinancialAssumptions
+    geocoding_result: GeocodingResult | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -178,6 +179,7 @@ def build_quote(
     financial: FinancialAssumptions,
     quote_date: date,
     quote_number: str,
+    geocoding_result: GeocodingResult | None = None,
 ) -> Quote:
     """Build the Quote. No clock, file system or network: everything arrives as an argument.
 
@@ -253,6 +255,7 @@ def build_quote(
             high_tier_consumption_kwh=high_tier_kwh,
             tariff=tariff,
             financial=financial,
+            geocoding_result=geocoding_result,
         ),
     )
 

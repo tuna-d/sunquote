@@ -20,6 +20,7 @@ from tests.factories import (
 )
 from tests.fakes import (
     FakeExchangeRateProvider,
+    FakeGeocoder,
     FakeQuoteRepository,
     FakeSpecificYieldProvider,
     FixedClock,
@@ -36,6 +37,7 @@ def make_service(
 ) -> QuoteService:
     return QuoteService(
         quote_repository=repository or FakeQuoteRepository(),
+        geocoder=FakeGeocoder(),
         specific_yield_provider=provider,
         exchange_rate_provider=rates or FakeExchangeRateProvider(),
         clock=clock or FixedClock(),

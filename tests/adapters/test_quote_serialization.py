@@ -1,7 +1,7 @@
 """The JSON form a Quote is stored in, checked without a database."""
 
 import json
-from dataclasses import fields, is_dataclass
+from dataclasses import fields, is_dataclass, replace
 from typing import Any
 
 from sunquote.adapters.postgres.quote_repository import quote_from_json, quote_to_json
@@ -18,6 +18,7 @@ from tests.factories import (
     make_specific_yield,
     make_tariff,
 )
+from tests.fakes import FakeGeocoder
 
 
 def build(monthly_consumption_kwh: str) -> Quote:
@@ -80,3 +81,28 @@ def test_decimals_are_stored_as_strings_so_no_figure_becomes_a_float() -> None:
 
     assert document["assumptions"]["exchange_rate"]["rate"] == "40"
     assert document["valid_until"] == "2026-12-09"
+
+
+def test_quotes_stored_before_geocoding_can_still_be_read() -> None:
+    quote = build("500")
+    document = quote_to_json(quote)
+    del document["assumptions"]["geocoding_result"]
+    del document["assumptions"]["submitted_request"]["site"]["address"]
+
+    assert quote_from_json(document) == quote
+
+
+def test_the_submitted_address_and_resolved_match_survive_storage() -> None:
+    base = build("500")
+    request = base.assumptions.submitted_request
+    site = replace(request.site, address="An\u0131tkabir, Ankara", coordinates=None)
+    quote = replace(
+        base,
+        assumptions=replace(
+            base.assumptions,
+            submitted_request=replace(request, site=site),
+            geocoding_result=FakeGeocoder().result,
+        ),
+    )
+
+    assert quote_from_json(quote_to_json(quote)) == quote

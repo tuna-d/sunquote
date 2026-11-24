@@ -17,6 +17,7 @@ from sunquote.adapters.data_files import (
     load_pricing_assumptions,
     load_residential_tariff,
 )
+from sunquote.adapters.nominatim import NominatimGeocoder
 from sunquote.adapters.postgres.migrate import upgrade_to_head
 from sunquote.adapters.postgres.quote_repository import PostgresQuoteRepository, create_engine
 from sunquote.adapters.pvgis import PvgisSpecificYieldProvider
@@ -47,6 +48,11 @@ def build_dependencies(
     tariff = load_residential_tariff(data_dir / "tariff.toml")
 
     http_client = httpx.AsyncClient(timeout=settings.pvgis_timeout_seconds, transport=transport)
+    geocoder = NominatimGeocoder(
+        client=http_client,
+        base_url=settings.nominatim_base_url,
+        timeout_seconds=settings.nominatim_timeout_seconds,
+    )
     provider = PvgisSpecificYieldProvider(
         client=http_client,
         base_url=settings.pvgis_base_url,
@@ -68,6 +74,7 @@ def build_dependencies(
 
     service = QuoteService(
         quote_repository=quote_repository,
+        geocoder=geocoder,
         specific_yield_provider=provider,
         exchange_rate_provider=exchange_rate_provider,
         clock=SystemClock(),
