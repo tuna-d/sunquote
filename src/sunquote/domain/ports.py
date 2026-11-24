@@ -7,6 +7,13 @@ from decimal import Decimal
 from typing import Protocol
 from uuid import UUID
 
+from sunquote.domain.conversation import (
+    ChatMessage,
+    ModelReply,
+    ReplyRejection,
+    ToolDeclaration,
+    ToolExchange,
+)
 from sunquote.domain.model import Coordinates, GeocodingResult
 from sunquote.domain.money import Currency, ExchangeRate
 from sunquote.domain.narrative import NarrativeContext, NarrativeDraft, Violation
@@ -72,6 +79,33 @@ class NarrativeWriter(Protocol):
 
         On a retry, `previous_violations` are what was wrong with the previous attempt. Any
         failure is raised as `NarrativeUnavailableError`.
+        """
+        ...
+
+
+class ConversationModel(Protocol):
+    """The LLM behind the quote assistant: one step of a tool-calling conversation. Its
+    instruction is the adapter's, like the Narrative writer's prompt."""
+
+    @property
+    def model_name(self) -> str:
+        """The name of the model that answers."""
+        ...
+
+    async def respond(
+        self,
+        *,
+        messages: Sequence[ChatMessage],
+        tools: Sequence[ToolDeclaration],
+        exchanges: Sequence[ToolExchange] = (),
+        rejected_reply: ReplyRejection | None = None,
+    ) -> ModelReply:
+        """The model's next move: text, or a call to one of `tools`.
+
+        `messages` is the conversation so far, ending with the Sales Rep's message. `exchanges`
+        are the tool calls made since then with their results, oldest first, and
+        `rejected_reply` is a text answer the assistant refused and the reason, to be corrected.
+        Any failure is raised as `ConversationUnavailableError`.
         """
         ...
 

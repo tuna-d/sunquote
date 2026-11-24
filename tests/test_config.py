@@ -110,3 +110,16 @@ def test_the_gemini_timeout_must_be_positive(monkeypatch: pytest.MonkeyPatch) ->
 
     with pytest.raises(ValidationError):
         Settings()
+
+
+def test_the_assistant_time_budget_defaults_to_thirty_seconds_and_must_be_positive(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert Settings().assistant_timeout_seconds == 30
+
+    monkeypatch.setenv("SUNQUOTE_ASSISTANT_TIMEOUT_SECONDS", "12.5")
+    assert Settings().assistant_timeout_seconds == 12.5
+
+    monkeypatch.setenv("SUNQUOTE_ASSISTANT_TIMEOUT_SECONDS", "0")
+    with pytest.raises(ValidationError):
+        Settings()

@@ -13,11 +13,12 @@ from pydantic import SecretStr
 
 from sunquote.adapters.clock import SystemClock
 from sunquote.adapters.gemini import GeminiNarrativeWriter
+from sunquote.adapters.gemini_conversation import GeminiConversationModel
 from sunquote.api.app import create_app
 from sunquote.bootstrap import build_dependencies
 from sunquote.config import Settings
 from tests.api.test_quotes import valid_body
-from tests.fakes import FakeQuoteRepository, ScriptedNarrativeWriter
+from tests.fakes import FakeQuoteRepository, ScriptedConversationModel, ScriptedNarrativeWriter
 
 RECORDINGS = Path(__file__).parent / "adapters" / "recordings"
 RECORDING = RECORDINGS / "pvgis_pvcalc_ankara.json"
@@ -281,3 +282,83 @@ def test_a_quote_gets_a_gemini_narrative_through_the_wired_app(
         r for r in requests_seen if r.url.host == "generativelanguage.googleapis.com"
     )
     assert gemini_request.headers["x-goog-api-key"] == "key-123"
+
+
+def test_without_a_gemini_key_no_conversation_model_is_wired_and_the_assistant_is_off(
+    wired_client: TestClient,
+) -> None:
+    response = wired_client.post(
+        "/assistant/messages", json={"messages": [{"role": "user", "content": "Merhaba"}]}
+    )
+
+    assert response.status_code == 503
+    assert response.json()["type"] == "urn:sunquote:problem:assistant-not-configured"
+    assert wired_client.post("/quotes", json=valid_body()).status_code == 201
+
+
+def test_with_a_gemini_key_the_conversation_model_is_wired_with_model_and_time_budget() -> None:
+    settings = Settings(
+        gemini_api_key=SecretStr("key-123"),
+        gemini_model="gemini-test-model",
+        assistant_timeout_seconds=12.5,
+    )
+
+    dependencies = build_dependencies(settings, quote_repository=FakeQuoteRepository())
+
+    assert isinstance(dependencies.conversation_model, GeminiConversationModel)
+    assert dependencies.conversation_model.model_name == "gemini-test-model"
+    assert dependencies.assistant_budget_seconds == 12.5
+
+
+def test_an_injected_conversation_model_wins_over_the_gemini_key() -> None:
+    injected = ScriptedConversationModel()
+    settings = Settings(gemini_api_key=SecretStr("key-123"))
+
+    dependencies = build_dependencies(
+        settings, quote_repository=FakeQuoteRepository(), conversation_model=injected
+    )
+
+    assert dependencies.conversation_model is injected
+
+
+def test_the_assistant_creates_a_quote_through_the_wired_app_with_recorded_gemini_answers(
+    recorded_transport: httpx.MockTransport,
+    requests_seen: list[httpx.Request],
+) -> None:
+    answers = iter(
+        [
+            (RECORDINGS / "gemini_conversation_function_call.json").read_bytes(),
+            # The Quote's Narrative is written by the same Gemini while the tool runs.
+            (RECORDINGS / "gemini_generate_content_success.json").read_bytes(),
+            (RECORDINGS / "gemini_conversation_text.json").read_bytes(),
+        ]
+    )
+
+    def upstream(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "generativelanguage.googleapis.com":
+            requests_seen.append(request)
+            return httpx.Response(200, content=next(answers))
+        return recorded_transport.handler(request)  # type: ignore[attr-defined,no-any-return]
+
+    settings = Settings(redis_url=None, gemini_api_key=SecretStr("key-123"))
+    dependencies = build_dependencies(
+        settings, transport=httpx.MockTransport(upstream), quote_repository=FakeQuoteRepository()
+    )
+    with TestClient(create_app(settings, dependencies)) as client:
+        response = client.post(
+            "/assistant/messages",
+            json={"messages": [{"role": "user", "content": "Ayşe Yılmaz için teklif: Etimesgut"}]},
+        )
+        assert response.status_code == 200, response.text
+        body = response.json()
+        stored = client.get(f"/quotes/{body['quote']['id']}").json()
+
+    assert stored["quote_number"] == body["quote"]["quote_number"]
+    assert body["reply"].startswith(f"Teklifiniz hazır. {stored['quote_number']} numaralı")
+    assert "{" not in body["reply"]
+    gemini_requests = [
+        r for r in requests_seen if r.url.host == "generativelanguage.googleapis.com"
+    ]
+    assert len(gemini_requests) == 3
+    assert stored["narrative"]["source"] == "llm"
+    assert gemini_requests[0].headers["x-goog-api-key"] == "key-123"

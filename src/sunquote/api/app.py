@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from sunquote.api.assistant import router as assistant_router
 from sunquote.api.dependencies import AppDependencies
 from sunquote.api.errors import register_error_handlers
 from sunquote.api.health import router as health_router
@@ -40,6 +41,7 @@ def create_app(
     register_error_handlers(app)
     app.include_router(health_router)
     app.include_router(quotes_router)
+    app.include_router(assistant_router)
     return app
 
 

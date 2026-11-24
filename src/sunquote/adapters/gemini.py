@@ -19,6 +19,13 @@ from typing import Any
 
 import httpx
 
+from sunquote.adapters.gemini_transport import (
+    DEFAULT_GEMINI_BASE_URL,
+    candidate_parts,
+    first_candidate,
+    generate_content_endpoint,
+    post_generate_content,
+)
 from sunquote.domain.errors import NarrativeUnavailableError
 from sunquote.domain.narrative import (
     COMPARISON_FIELD,
@@ -38,7 +45,6 @@ from sunquote.domain.placeholders import (
     option_placeholder,
 )
 
-DEFAULT_GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 # `gemini-3.5-flash-lite`: stable, structured outputs supported, and "Free of charge" in the
 # Free Tier column of Google's pricing page (https://ai.google.dev/gemini-api/docs/pricing,
 # redirects to aistudio.google.com/docs/pricing), checked 2026-11-24. The free tier may use
@@ -160,10 +166,7 @@ def _user_content(context: NarrativeContext, violations: tuple[Violation, ...]) 
         "field_length_limits_characters": LENGTH_LIMITS,
     }
     if violations:
-        content["previous_attempt_violations"] = [
-            {"kind": violation.kind.value, "field": violation.field, "detail": violation.detail}
-            for violation in violations
-        ]
+        content["previous_attempt_violations"] = [violation.as_dict() for violation in violations]
     return json.dumps(content, ensure_ascii=False)
 
 
@@ -187,7 +190,7 @@ class GeminiNarrativeWriter:
         self._client = client
         self._api_key = api_key
         self._model = model
-        self._endpoint = f"{base_url.rstrip('/')}/models/{model}:generateContent"
+        self._endpoint = generate_content_endpoint(base_url, model)
         self._timeout_seconds = timeout_seconds
 
     def __repr__(self) -> str:
@@ -205,24 +208,14 @@ class GeminiNarrativeWriter:
         return _parse_draft(payload)
 
     async def _post(self, body: dict[str, Any]) -> Any:
-        try:
-            response = await self._client.post(
-                self._endpoint,
-                json=body,
-                headers={"x-goog-api-key": self._api_key},
-                timeout=self._timeout_seconds,
-            )
-        except httpx.TimeoutException:
-            raise NarrativeUnavailableError("the request timed out") from None
-        except httpx.TransportError as error:
-            raise NarrativeUnavailableError(f"could not connect ({type(error).__name__})") from None
-        if response.status_code != 200:
-            # The body is deliberately not read: an error message could echo the key.
-            raise NarrativeUnavailableError(f"HTTP {response.status_code}")
-        try:
-            return response.json()
-        except ValueError:
-            raise NarrativeUnavailableError("the response body is not JSON") from None
+        return await post_generate_content(
+            self._client,
+            self._endpoint,
+            api_key=self._api_key,
+            body=body,
+            timeout_seconds=self._timeout_seconds,
+            fail=NarrativeUnavailableError,
+        )
 
 
 def _request_body(context: NarrativeContext, violations: tuple[Violation, ...]) -> dict[str, Any]:
@@ -238,18 +231,7 @@ def _request_body(context: NarrativeContext, violations: tuple[Violation, ...]) 
 
 def _parse_draft(payload: Any) -> NarrativeDraft:
     """The draft inside a `generateContent` response, or `NarrativeUnavailableError`."""
-    if not isinstance(payload, dict):
-        raise NarrativeUnavailableError("unexpected response shape")
-    feedback = payload.get("promptFeedback")
-    if isinstance(feedback, dict) and feedback.get("blockReason"):
-        raise NarrativeUnavailableError(f"the prompt was blocked ({feedback['blockReason']})")
-    candidates = payload.get("candidates")
-    if not isinstance(candidates, list) or not candidates or not isinstance(candidates[0], dict):
-        raise NarrativeUnavailableError("the response has no candidate")
-    candidate = candidates[0]
-    finish_reason = candidate.get("finishReason")
-    if finish_reason not in (None, "STOP"):
-        raise NarrativeUnavailableError(f"the answer was cut off or blocked ({finish_reason})")
+    candidate = first_candidate(payload, NarrativeUnavailableError)
     text = _candidate_text(candidate)
     try:
         fields = json.loads(text)
@@ -259,12 +241,8 @@ def _parse_draft(payload: Any) -> NarrativeDraft:
 
 
 def _candidate_text(candidate: dict[str, Any]) -> str:
-    content = candidate.get("content")
-    parts = content.get("parts") if isinstance(content, dict) else None
     texts = [
-        part["text"]
-        for part in parts or []
-        if isinstance(part, dict) and isinstance(part.get("text"), str) and not part.get("thought")
+        part["text"] for part in candidate_parts(candidate) if isinstance(part.get("text"), str)
     ]
     if not texts:
         raise NarrativeUnavailableError("the candidate has no text")

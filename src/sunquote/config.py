@@ -6,7 +6,9 @@ from typing import Literal
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from sunquote.adapters.gemini import DEFAULT_GEMINI_BASE_URL, DEFAULT_GEMINI_MODEL
+from sunquote.adapters.gemini import DEFAULT_GEMINI_MODEL
+from sunquote.adapters.gemini_transport import DEFAULT_GEMINI_BASE_URL
+from sunquote.domain.conversation import DEFAULT_ASSISTANT_BUDGET_SECONDS
 from sunquote.domain.service import DEFAULT_NARRATIVE_BUDGET_SECONDS
 
 
@@ -62,6 +64,10 @@ class Settings(BaseSettings):
     # Per-request timeout of the Gemini call; the Narrative budget above bounds both attempts.
     gemini_timeout_seconds: float = Field(default=10.0, gt=0)
     gemini_base_url: str = DEFAULT_GEMINI_BASE_URL
+
+    # Total time one assistant request gets for its model calls and the Quote creation between
+    # them. Past it, a request that already created a Quote gets the fixed confirmation.
+    assistant_timeout_seconds: float = Field(default=DEFAULT_ASSISTANT_BUDGET_SECONDS, gt=0)
 
     @field_validator("gemini_api_key", mode="before")
     @classmethod

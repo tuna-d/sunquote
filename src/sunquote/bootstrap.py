@@ -21,6 +21,7 @@ from sunquote.adapters.data_files import (
     load_residential_tariff,
 )
 from sunquote.adapters.gemini import GeminiNarrativeWriter
+from sunquote.adapters.gemini_conversation import GeminiConversationModel
 from sunquote.adapters.nominatim import NominatimGeocoder
 from sunquote.adapters.postgres.migrate import upgrade_to_head
 from sunquote.adapters.postgres.quote_repository import PostgresQuoteRepository, create_engine
@@ -34,6 +35,7 @@ from sunquote.adapters.tcmb import TcmbExchangeRateProvider
 from sunquote.api.dependencies import AppDependencies
 from sunquote.config import Settings
 from sunquote.domain.ports import (
+    ConversationModel,
     ExchangeRateProvider,
     Geocoder,
     NarrativeWriter,
@@ -50,6 +52,7 @@ def build_dependencies(
     transport: httpx.AsyncBaseTransport | None = None,
     quote_repository: QuoteRepository | None = None,
     narrative_writer: NarrativeWriter | None = None,
+    conversation_model: ConversationModel | None = None,
 ) -> AppDependencies:
     """Load the data files and wire the adapters. Makes no network call itself.
 
@@ -57,7 +60,8 @@ def build_dependencies(
     `quote_repository` replaces the Postgres one (no database is touched then, and no
     migration runs). `narrative_writer` writes the Quotes' Narrative; with none, the Gemini
     writer is wired when `SUNQUOTE_GEMINI_API_KEY` is set, and otherwise every Quote records
-    `fallback` and shows the fixed text.
+    `fallback` and shows the fixed text. `conversation_model` is the quote assistant's LLM, wired
+    the same way; with none, the assistant endpoint answers 503.
     """
     data_dir = settings.data_dir or default_data_dir()
     reference_data = ReferenceData(
@@ -86,6 +90,14 @@ def build_dependencies(
     )
     if narrative_writer is None and settings.gemini_api_key is not None:
         narrative_writer = GeminiNarrativeWriter(
+            client=http_client,
+            api_key=settings.gemini_api_key.get_secret_value(),
+            model=settings.gemini_model,
+            base_url=settings.gemini_base_url,
+            timeout_seconds=settings.gemini_timeout_seconds,
+        )
+    if conversation_model is None and settings.gemini_api_key is not None:
+        conversation_model = GeminiConversationModel(
             client=http_client,
             api_key=settings.gemini_api_key.get_secret_value(),
             model=settings.gemini_model,
@@ -126,6 +138,8 @@ def build_dependencies(
     return AppDependencies(
         quote_service=service,
         quote_repository=quote_repository,
+        conversation_model=conversation_model,
+        assistant_budget_seconds=settings.assistant_timeout_seconds,
         startup=startup,
         closers=closers,
     )

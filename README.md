@@ -165,7 +165,7 @@ a second rejected draft, the Quote still succeeds: it uses the fixed Turkish tex
 Set `SUNQUOTE_GEMINI_API_KEY` in `.env` or the shell and run from the repository root:
 
 ```sh
-uv run pytest -m eval -rs
+uv run pytest -m eval -rs tests/eval/test_gemini_eval.py
 ```
 
 The eval skips when the key is unset. With a key, it builds 20 Quotes from fixed test inputs,
@@ -183,6 +183,90 @@ requests, depending on retries. Check your project's free-tier per-minute and da
 The live eval is opt-in and excluded from CI. The default offline suite checks the set's coverage
 of System Option count, Roof Type, Binding Limit, Tariff Tier, Payback Period and both forms of
 consumption input.
+
+## Optional: the quote assistant
+
+`POST /assistant/messages` lets a Sales Rep describe a Customer in Turkish instead of filling in
+the `POST /quotes` form. It needs the same free Gemini key as the Narrative
+(`SUNQUOTE_GEMINI_API_KEY`, see above). Without a key it answers `503` with the problem type
+`urn:sunquote:problem:assistant-not-configured`, and the rest of the API works as usual.
+
+```sh
+curl http://localhost:8000/assistant/messages -H 'Content-Type: application/json' -d '{
+  "messages": [
+    {"role": "user", "content": "Ayşe Yılmaz için teklif: Etimesgut, Ankara. 40 m² eğimli çatı, güneye bakıyor, 30 derece. Aylık 500 kWh tüketiyor."}
+  ]
+}'
+```
+
+Gemini turns the message into a `create_quote` tool call, which runs the normal Quote creation
+(geocoding, PVGIS, TCMB, Narrative, storage). The response has three fields:
+
+- `reply`: a Turkish explanation of the Quote with every figure filled from the Quote;
+- `quote`: `{id, quote_number, document_url}` when a Quote was created in this turn, else `null`;
+- `missing_fields`: when the message lacks something a Quote needs, the assistant asks for all of
+  it in one Turkish question (the `reply`) and lists the field paths here (`customer.name`,
+  `site.address`, `roof.roof_type`, `roof.tilt_deg`, `roof.azimuth_deg`, `roof.usable_area_m2`,
+  `consumption`, `subscriber_group`); otherwise the list is empty.
+
+Answer in a further message, resending the whole conversation, and the Quote is created once
+everything is there. When Quote creation fails (Address not found, invalid value, no viable
+system, unsupported Subscriber Group, a service unavailable), the reply explains in Turkish what
+to change.
+
+The server keeps no conversation: the client sends the whole conversation (1 to 20 messages of
+at most 2,000 characters, the last one from `user`) with every request. The model never
+supplies Coordinates, since the tool takes only an Address, which is always geocoded. At most one
+Quote is created per request and the model is called at most three times, within
+`SUNQUOTE_ASSISTANT_TIMEOUT_SECONDS` (30 s) for the model calls and the tools (geocoding, PVGIS,
+TCMB, Narrative) together.
+
+With the shipped placeholder catalog the example above gives a Quote with two options. A very
+small consumption (for example 300 kWh a month on 40 m²) is too small for any catalog inverter;
+the assistant then explains in Turkish that no compatible inverter was found.
+
+**Figures.** As with the Narrative, the model refers to figures through placeholders and the
+service fills them ([ADR 0001](docs/adr/0001-llm-never-writes-figures.md)). A reply that breaks
+the rules is requested once more. If it breaks them again, or the model fails after the Quote was
+created, the reply is a fixed Turkish confirmation with the Quote Number, each option's capacity
+and total price, and the document link. When the model is unavailable before any Quote exists,
+the endpoint answers `503` with `urn:sunquote:problem:assistant-unavailable`.
+
+A reply without a Quote (a question, an explanation or plain text) may contain digits only as the
+Sales Rep wrote them ([ADR 0004](docs/adr/0004-assistant-replies-may-echo-the-sales-reps-digits.md))
+and no placeholder syntax; the model is asked again once for each kind of reply (a question, a
+text), and then a fixed Turkish reply is used (the missing fields with labels, a generic "the
+Quote could not be created" sentence naming the problem, or a request to restate the
+information). If the three calls or the time budget run out without a
+Quote, the answer is `200` with that request to restate the information and no Quote.
+
+**Privacy.** Unlike the Narrative, the Sales Rep's own messages go to Gemini and may include the
+Customer's name and Address. Google's free tier may use submitted content for training.
+
+### Run the extraction eval
+
+Set `SUNQUOTE_GEMINI_API_KEY` in `.env` or the shell, then run from the repository root:
+
+```sh
+uv run pytest -m eval -rs tests/eval/test_gemini_extraction_eval.py
+```
+
+Use `uv run pytest -m eval -rs` to run both the Narrative and extraction evals. Both are
+opt-in, excluded from CI, and skip with a message when the key is unset.
+
+The extraction eval sends [20 synthetic Turkish scenarios](tests/eval/extraction_scenarios.toml)
+through the same assistant tool loop used by the endpoint. Only Gemini is contacted. A fake
+Quote service records the attempted `create_quote` arguments and returns a canned Quote.
+The report shows results per scenario and field. At least 18 of 20 scenarios must pass.
+Quote scenarios require one successful tool call with matching fields and no extra arguments.
+Addresses are compared after trimming, collapsing whitespace and Turkish lowercasing. Numeric
+fields allow a difference of 1% or 0.5, whichever is larger. Question scenarios require exactly
+the expected `missing_fields` and no `create_quote` attempt.
+
+`SUNQUOTE_EVAL_DELAY_SECONDS` controls the pause between Gemini requests (15 seconds by default),
+including requests within a turn. A call that fails (a rate limit or an outage) is repeated up to
+twice after one more pause, so a single HTTP 429 does not fail a scenario. The 20 scenarios contain up to 23 turns with at most three
+Gemini calls per turn. Check your project's free-tier limits before running both evals.
 
 ## Placeholder data
 

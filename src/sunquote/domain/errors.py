@@ -52,6 +52,26 @@ class NarrativeUnavailableError(DomainError):
         super().__init__(f"the Narrative writer is unavailable: {reason}")
 
 
+class ConversationUnavailableError(DomainError):
+    """A `ConversationModel` could not answer: it timed out, was rate limited, could not be
+    reached, blocked the prompt or answered with something unusable.
+
+    Mapped to a 503 when no Quote exists yet. Once the assistant has created a Quote it falls
+    back to a fixed confirmation instead.
+    """
+
+    def __init__(self, reason: str) -> None:
+        self.reason = reason
+        super().__init__(f"the conversation model is unavailable: {reason}")
+
+
+class AssistantNotConfiguredError(DomainError):
+    """The quote assistant has no conversation model, because no Gemini key is set."""
+
+    def __init__(self) -> None:
+        super().__init__("the assistant needs a Gemini API key (SUNQUOTE_GEMINI_API_KEY)")
+
+
 class UpstreamUnavailableError(DomainError):
     """An external service (PVGIS, ...) could not be reached or gave no usable answer.
 

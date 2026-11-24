@@ -173,3 +173,20 @@ The prose slots as the LLM wrote them, text with Placeholders still unfilled. It
 
 **Narrative source**:
 Where a Quote's Narrative came from: `llm` (a validated Narrative Draft) or `fallback` (the template's fixed Turkish text, used when there is no key, the LLM fails, times out or is rejected twice).
+
+### Quote assistant
+
+**Assistant**:
+The chat endpoint (`POST /assistant/messages`) through which a Sales Rep describes a Customer in Turkish and receives a Quote and a Turkish explanation of it. One request is one turn: the Assistant keeps no state, so the client sends the whole conversation each time.
+_Avoid_: chatbot, agent, bot
+
+**Conversation Model**:
+The LLM behind the Assistant. In each step it either answers with text or calls one of the Assistant's tools (create the Quote, ask for Missing Fields); the Assistant calls it at most three times per request.
+_Avoid_: chat model, agent
+
+**Missing Fields**:
+The required values of a Quote that the Sales Rep's conversation does not yet give, named by their `create_quote` field paths such as `roof.tilt_deg`. The Assistant asks for all of them in one Turkish question and lists them in the response.
+_Avoid_: gaps, unknowns
+
+**Echoed Digits**:
+In a reply without a Quote, a digit sequence that the Sales Rep wrote themselves in their own messages. Only these may appear in such a reply (ADR 0004); a reply after a Quote may show figures only through Placeholders (ADR 0001).
