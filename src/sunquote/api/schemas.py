@@ -1,8 +1,8 @@
 """Request and response schemas of the quote API, and the mapping to and from the domain.
 
 Rounding for display happens here, through the domain's rounding policy, and nowhere else.
-Decimals leave the API as JSON numbers: the displayed figures are already rounded, and the
-inputs recorded in the assumptions are short decimals that survive the trip exactly.
+Displayed figures are rounded JSON numbers. Monthly Bills and their derived Monthly
+Consumption are recorded as decimal strings to preserve their precision.
 """
 
 import datetime as dt
@@ -122,7 +122,28 @@ class RoofBody(BaseModel):
 
 
 class ConsumptionBody(BaseModel):
-    monthly_consumption_kwh: Annotated[Decimal, Field(gt=0)]
+    monthly_bill_try: Annotated[Decimal, Field(gt=0)] | None = Field(
+        default=None, description="Average Monthly Bill in TRY, used when kWh is missing."
+    )
+    monthly_consumption_kwh: Annotated[Decimal, Field(gt=0)] | None = Field(
+        default=None,
+        validate_default=True,
+        description="Average Monthly Consumption in kWh. Takes precedence over the bill.",
+    )
+
+    @field_validator("monthly_consumption_kwh")
+    @classmethod
+    def _require_consumption_or_bill(
+        cls, value: Decimal | None, info: ValidationInfo
+    ) -> Decimal | None:
+        # If the bill failed validation, it already has a field error of its own.
+        if (
+            value is None
+            and "monthly_bill_try" in info.data
+            and info.data["monthly_bill_try"] is None
+        ):
+            raise ValueError("monthly_consumption_kwh or monthly_bill_try is required")
+        return value
 
 
 class ExchangeRateOverrideBody(BaseModel):
@@ -176,7 +197,8 @@ class QuoteRequestBody(BaseModel):
                 address=self.site.address,
             ),
             consumption=Consumption(
-                monthly_consumption_kwh=self.consumption.monthly_consumption_kwh
+                monthly_consumption_kwh=self.consumption.monthly_consumption_kwh,
+                monthly_bill_try=self.consumption.monthly_bill_try,
             ),
             subscriber_group=SubscriberGroup.parse(self.subscriber_group),
             contracted_power_kw=self.contracted_power_kw,
@@ -212,7 +234,8 @@ class SubmittedRoof(BaseModel):
 
 
 class SubmittedConsumption(BaseModel):
-    monthly_consumption_kwh: JsonNumber
+    monthly_consumption_kwh: JsonNumber | None
+    monthly_bill_try: Decimal | None = Field(default=None, exclude_if=lambda bill: bill is None)
 
 
 class SubmittedRequest(BaseModel):
@@ -399,6 +422,8 @@ class AssumptionsResponse(BaseModel):
     contracted_power: ContractedPowerResponse
     pricing: PricingResponse
     exchange_rate: ExchangeRateResponse
+    consumption_derived_from_bill: bool
+    derived_monthly_consumption_kwh: Decimal | None
     annual_consumption_kwh: JsonNumber
     low_tier_consumption_kwh: JsonNumber
     high_tier_consumption_kwh: JsonNumber
@@ -534,7 +559,8 @@ def _submitted_request(request: QuoteRequest) -> SubmittedRequest:
             tilt_deg=roof.tilt_deg,
         ),
         consumption=SubmittedConsumption(
-            monthly_consumption_kwh=request.consumption.monthly_consumption_kwh
+            monthly_consumption_kwh=request.consumption.monthly_consumption_kwh,
+            monthly_bill_try=request.consumption.monthly_bill_try,
         ),
         subscriber_group=request.subscriber_group,
         contracted_power_kw=request.contracted_power_kw,
@@ -637,6 +663,8 @@ def quote_response(stored: StoredQuote) -> QuoteResponse:
             ),
             pricing=_pricing_response(recorded.pricing),
             exchange_rate=_exchange_rate_response(recorded.exchange_rate),
+            consumption_derived_from_bill=recorded.consumption_derived_from_bill,
+            derived_monthly_consumption_kwh=recorded.derived_monthly_consumption_kwh,
             annual_consumption_kwh=recorded.annual_consumption_kwh,
             low_tier_consumption_kwh=recorded.low_tier_consumption_kwh,
             high_tier_consumption_kwh=recorded.high_tier_consumption_kwh,

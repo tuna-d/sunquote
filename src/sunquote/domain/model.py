@@ -102,11 +102,18 @@ class Site:
 
 @dataclass(frozen=True, slots=True)
 class Consumption:
-    monthly_consumption_kwh: Decimal
+    monthly_consumption_kwh: Decimal | None = None
+    monthly_bill_try: Decimal | None = None
 
     def __post_init__(self) -> None:
-        if self.monthly_consumption_kwh <= 0:
+        kwh = self.monthly_consumption_kwh
+        bill = self.monthly_bill_try
+        if kwh is None and bill is None:
+            raise ValueError("monthly_consumption_kwh or monthly_bill_try is required")
+        if kwh is not None and (not kwh.is_finite() or kwh <= 0):
             raise ValueError("monthly_consumption_kwh must be positive")
+        if bill is not None and (not bill.is_finite() or bill <= 0):
+            raise ValueError("monthly_bill_try must be positive")
 
 
 @dataclass(frozen=True, slots=True)

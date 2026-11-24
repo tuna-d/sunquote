@@ -2,8 +2,10 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import HTMLResponse
 
 from sunquote.api.dependencies import get_quote_repository, get_quote_service
+from sunquote.api.document import render_quote_document
 from sunquote.api.errors import (
     ADDRESS_NOT_FOUND,
     LOCATION_NOT_SUPPORTED,
@@ -90,6 +92,26 @@ async def get_quote(
     if stored is None:
         raise QuoteNotFoundError(quote_id)
     return quote_response(stored)
+
+
+@router.get(
+    "/quotes/{quote_id}/document",
+    summary="Get the printable Turkish quote document",
+    response_class=HTMLResponse,
+    responses=problem_responses(QUOTE_NOT_FOUND, VALIDATION_ERROR),
+)
+async def get_quote_document(
+    quote_id: UUID,
+    repository: Annotated[QuoteRepository, Depends(get_quote_repository)],
+) -> HTMLResponse:
+    """A stored Quote as an A4-printable Turkish HTML page, to send or print to PDF.
+
+    Every figure is the Quote's own displayed value; the text around them is fixed Turkish.
+    """
+    stored = await repository.get(quote_id)
+    if stored is None:
+        raise QuoteNotFoundError(quote_id)
+    return HTMLResponse(render_quote_document(stored))
 
 
 @router.get(

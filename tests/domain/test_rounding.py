@@ -48,3 +48,25 @@ def test_payback_period_rounds_to_one_decimal_half_up(years: str, expected: str)
 
     assert result == Decimal(expected)
     assert result.as_tuple().exponent == -1
+
+
+@pytest.mark.parametrize(
+    ("price", "expected"), [("3.245", "3.25"), ("3.24", "3.24"), ("2.9", "2.90")]
+)
+def test_try_per_kwh_rounds_to_two_decimals_half_up(price: str, expected: str) -> None:
+    assert rounding.round_try_per_kwh(Decimal(price)) == Decimal(expected)
+
+
+@pytest.mark.parametrize(("rate", "expected"), [("40.12345", "40.1235"), ("40", "40.0000")])
+def test_exchange_rate_rounds_to_four_decimals_half_up(rate: str, expected: str) -> None:
+    assert rounding.round_exchange_rate(Decimal(rate)) == Decimal(expected)
+
+
+@pytest.mark.parametrize(
+    ("share", "expected"),
+    [("0.25", "25.0"), ("0.004", "0.4"), ("0.02", "2.0"), ("0.0125", "1.3"), ("0.85", "85.0")],
+)
+def test_a_share_is_shown_as_a_percentage_with_one_decimal_half_up(
+    share: str, expected: str
+) -> None:
+    assert rounding.round_percent(Decimal(share)) == Decimal(expected)
