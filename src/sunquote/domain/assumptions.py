@@ -27,6 +27,7 @@ class DcAcRatioRange:
 class EngineeringAssumptions:
     coverage_ratio_by_roof_type: Mapping[RoofType, Decimal]
     system_loss_percent: Decimal
+    flat_roof_tilt_deg: Decimal
     dc_ac_ratio_range: DcAcRatioRange
 
     def coverage_ratio(self, roof_type: RoofType) -> Decimal:

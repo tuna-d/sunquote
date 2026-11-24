@@ -52,10 +52,12 @@ def test_shipped_catalog_has_the_huawei_inverter_family_priced_in_usd() -> None:
     assert {i.unit_price.currency for i in inverters} == {Currency.USD}
 
 
-def test_shipped_assumptions_hold_the_pitched_coverage_ratio_and_system_loss() -> None:
+def test_shipped_assumptions_hold_coverage_ratios_flat_roof_tilt_and_system_loss() -> None:
     assumptions = load_engineering_assumptions(ASSUMPTIONS_FILE)
 
     assert assumptions.coverage_ratio(RoofType.PITCHED) == Decimal("0.80")
+    assert assumptions.coverage_ratio(RoofType.FLAT) == Decimal("0.50")
+    assert assumptions.flat_roof_tilt_deg == Decimal("15")
     assert assumptions.system_loss_percent == Decimal("14")
 
 
@@ -108,6 +110,7 @@ def test_every_assumption_value_names_its_source_kind_and_date() -> None:
 
     values = [
         data["system_loss_percent"],
+        data["flat_roof_tilt_deg"],
         *data["coverage_ratio"].values(),
         data["dc_ac_ratio_min"],
         data["dc_ac_ratio_max"],

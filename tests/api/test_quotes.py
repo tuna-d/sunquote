@@ -116,6 +116,9 @@ def test_assumptions_record_the_submitted_input_pvgis_inputs_ratio_and_panel(
         "aspect_deg": 0,
         "system_loss_percent": 14,
     }
+    assert assumptions["roof_type"] == "pitched"
+    assert assumptions["effective_azimuth_deg"] == 180
+    assert assumptions["effective_tilt_deg"] == 30
     assert assumptions["coverage_ratio"] == 0.8
     assert assumptions["default_panel"] == {
         "panel_id": "test-panel-500w",
@@ -184,7 +187,7 @@ def test_assumptions_record_the_exchange_rate_and_every_unit_price(client: TestC
     }
     assert assumptions["dc_ac_ratio_range"] == {"minimum": 1.0, "maximum": 1.3}
     inverters = {i["inverter_id"]: i for i in assumptions["inverters"]}
-    assert set(inverters) == {"i05", "i3", "i35", "i4", "i6", "i8"}
+    assert set(inverters) == {"i05", "i25", "i3", "i35", "i4", "i6", "i8"}
     assert inverters["i35"]["unit_price"] == {"amount": 650, "currency": "USD"}
     assert inverters["i35"]["ac_power_kw"] == 3.5
 
@@ -293,12 +296,15 @@ def test_pvgis_is_asked_for_the_roof_orientation_at_the_site(
         ("site.latitude", ...),
         ("roof.usable_area_m2", 0),
         ("roof.usable_area_m2", -5),
+        ("roof.azimuth_deg", ...),
+        ("roof.azimuth_deg", None),
         ("roof.azimuth_deg", 360),
         ("roof.azimuth_deg", -1),
+        ("roof.tilt_deg", ...),
+        ("roof.tilt_deg", None),
         ("roof.tilt_deg", 90.5),
         ("roof.tilt_deg", -1),
         ("roof.roof_type", "gabled"),
-        ("roof.roof_type", "flat"),
         ("consumption.monthly_consumption_kwh", 0),
         ("consumption.monthly_consumption_kwh", -3),
         ("consumption.monthly_consumption_kwh", ...),
@@ -326,12 +332,33 @@ def test_boundary_values_are_accepted(client: TestClient) -> None:
     assert client.post("/quotes", json=body).status_code == 201
 
 
-def test_flat_roofs_are_rejected_until_the_flat_roof_ticket(client: TestClient) -> None:
-    response = client.post("/quotes", json=with_change("roof.roof_type", "flat"))
+@pytest.mark.parametrize(
+    "orientation",
+    [{}, {"azimuth_deg": 90, "tilt_deg": 30}, {"azimuth_deg": -1, "tilt_deg": "ignored"}],
+)
+def test_flat_roof_uses_installer_orientation_regardless_of_submitted_angles(
+    client: TestClient, orientation: dict[str, Any]
+) -> None:
+    body = valid_body()
+    body["roof"] = {"roof_type": "flat", "usable_area_m2": 20, **orientation}
 
-    assert response.status_code == 422
-    messages = " ".join(error["message"] for error in response.json()["errors"])
-    assert "flat" in messages
+    response = client.post("/quotes", json=body)
+
+    assert response.status_code == 201
+    quote = response.json()
+    [option] = quote["system_options"]
+    assert option["panel_count"] == 5
+    assumptions = quote["assumptions"]
+    assert assumptions["roof_type"] == "flat"
+    assert assumptions["effective_azimuth_deg"] == 180
+    assert assumptions["effective_tilt_deg"] == 15
+    assert assumptions["coverage_ratio"] == 0.50
+    assert assumptions["submitted_request"]["roof"] == {
+        "roof_type": "flat",
+        "usable_area_m2": 20,
+        "azimuth_deg": None,
+        "tilt_deg": None,
+    }
 
 
 def test_malformed_json_is_a_validation_problem(client: TestClient) -> None:

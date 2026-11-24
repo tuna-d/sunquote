@@ -9,6 +9,7 @@ from decimal import Decimal
 import pytest
 
 from sunquote.domain.errors import NoViableSystemError
+from sunquote.domain.model import RoofType
 from sunquote.domain.quote import build_quote
 from sunquote.domain.sizing import BindingLimit, SizingStrategy
 from tests.factories import (
@@ -94,6 +95,33 @@ def test_production_is_capacity_times_specific_yield() -> None:
     assert option.monthly_production_kwh == tuple(
         Decimal(kwh) for kwh in (280, 360, 480, 560, 640, 700, 740, 680, 560, 440, 320, 240)
     )
+
+
+def test_flat_roof_uses_its_coverage_ratio_and_the_installer_orientation() -> None:
+    request = make_request(
+        roof_type=RoofType.FLAT, monthly_consumption_kwh="2000", azimuth_deg="90", tilt_deg="30"
+    )
+    quote = build_quote(
+        request=request,
+        specific_yield=make_specific_yield(tilt_deg="18"),
+        catalog=make_catalog(),
+        assumptions=make_assumptions(flat_roof_tilt_deg="18"),
+        pricing=make_pricing_assumptions(),
+        exchange_rate=make_exchange_rate(),
+        quote_date=QUOTE_DATE,
+    )
+
+    # The consumption target is 32 panels. A flat Roof fits 10, while a pitched one fits 16.
+    [option] = quote.system_options
+    assert option.panel_count == 10
+    assert option.binding_limit is BindingLimit.ROOF
+    recorded = quote.assumptions
+    assert recorded.roof_type is RoofType.FLAT
+    assert recorded.coverage_ratio == Decimal("0.50")
+    assert recorded.effective_azimuth_deg == Decimal("180")
+    assert recorded.effective_tilt_deg == Decimal("18")
+    assert recorded.submitted_request.site.roof.azimuth_deg is None
+    assert recorded.submitted_request.site.roof.tilt_deg is None
 
 
 def test_quote_carries_customer_date_and_the_assumptions_it_was_built_with() -> None:

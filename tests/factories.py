@@ -62,9 +62,11 @@ def make_inverter(inverter_id: str, ac_power_kw: str, usd_price: str) -> Inverte
 
 # For the default 4.0 kWp system (DC/AC range 1.00-1.30): "i3" is the cheapest but its ratio is
 # 1.33, "i4" is 1.00 and "i35" is 1.14 (the cheapest compatible one), "i6" is oversized (0.67).
-# "i05" and "i8" cover the one-panel (0.5 kWp) and 16-panel (8 kWp) systems of the sizing tests.
+# "i05", "i25" and "i8" cover the one-panel (0.5 kWp), five-panel (2.5 kWp) and 16-panel (8 kWp)
+# systems of the sizing and flat-roof tests.
 DEFAULT_INVERTERS = (
     make_inverter("i05", "0.5", "300"),
+    make_inverter("i25", "2.5", "400"),
     make_inverter("i3", "3", "500"),
     make_inverter("i4", "4", "700"),
     make_inverter("i35", "3.5", "650"),
@@ -108,12 +110,17 @@ def make_pricing_assumptions(
 def make_assumptions(
     *,
     pitched_coverage_ratio: str = "0.80",
+    flat_roof_tilt_deg: str = "15",
     system_loss_percent: str = "14",
     dc_ac_ratio_min: str = "1.00",
     dc_ac_ratio_max: str = "1.30",
 ) -> EngineeringAssumptions:
     return EngineeringAssumptions(
-        coverage_ratio_by_roof_type={RoofType.PITCHED: Decimal(pitched_coverage_ratio)},
+        coverage_ratio_by_roof_type={
+            RoofType.PITCHED: Decimal(pitched_coverage_ratio),
+            RoofType.FLAT: Decimal("0.50"),
+        },
+        flat_roof_tilt_deg=Decimal(flat_roof_tilt_deg),
         system_loss_percent=Decimal(system_loss_percent),
         dc_ac_ratio_range=DcAcRatioRange(
             minimum=Decimal(dc_ac_ratio_min), maximum=Decimal(dc_ac_ratio_max)
@@ -125,6 +132,7 @@ def make_specific_yield(
     *,
     annual: str = "1500",
     monthly: tuple[Decimal, ...] = MONTHLY_YIELD_KWH_PER_KWP,
+    tilt_deg: str = "30",
 ) -> SpecificYield:
     return SpecificYield(
         annual_kwh_per_kwp=Decimal(annual),
@@ -133,7 +141,7 @@ def make_specific_yield(
             source="test",
             latitude=Decimal("39.930"),
             longitude=Decimal("32.860"),
-            tilt_deg=Decimal("30"),
+            tilt_deg=Decimal(tilt_deg),
             aspect_deg=Decimal("0"),
             system_loss_percent=Decimal("14"),
         ),
