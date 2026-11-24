@@ -12,6 +12,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from sunquote.domain import rounding
 from sunquote.domain.errors import (
     AddressNotFoundError,
     DomainError,
@@ -120,9 +121,21 @@ async def _handle_validation_error(_: Request, error: Exception) -> JSONResponse
     )
 
 
+def _detail(error: DomainError) -> str:
+    """The error's message, with any figure it carries shown through the rounding policy."""
+    if isinstance(error, NoCompatibleInverterError):
+        capacity_kwp = rounding.round_capacity_kwp(error.capacity_kwp)
+        return (
+            f"no compatible inverter: none of the catalog inverters fits a {capacity_kwp} kWp "
+            "system within the allowed DC/AC Ratio and the Contracted Power"
+        )
+    return str(error)
+
+
 async def _handle_domain_error(_: Request, error: Exception) -> JSONResponse:
-    problem_type = PROBLEMS_BY_EXCEPTION[type(error)]  # type: ignore[index]
-    return problem_response(problem_type, str(error))
+    assert isinstance(error, DomainError)
+    problem_type = PROBLEMS_BY_EXCEPTION[type(error)]
+    return problem_response(problem_type, _detail(error))
 
 
 def register_error_handlers(app: FastAPI) -> None:

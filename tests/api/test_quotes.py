@@ -5,21 +5,36 @@ specific yield 1,500 kWh/kWp, 40 TRY/USD unless a test says otherwise. The defau
 system gets the 3.5 kW inverter and costs 106,000 TRY (Sale Price 132,500, VAT 26,500).
 """
 
+from dataclasses import replace
 from decimal import Decimal
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 
+from sunquote.api.app import create_app
+from sunquote.api.dependencies import AppDependencies
+from sunquote.config import Settings
+from sunquote.domain.catalog import Catalog
 from sunquote.domain.errors import LocationNotSupportedError, UpstreamUnavailableError
 from sunquote.domain.money import Currency
+from sunquote.domain.service import QuoteService
 from tests.factories import (
+    DEFAULT_INVERTERS,
     MONTHLY_YIELD_KWH_PER_KWP,
     QUOTE_DATE,
     make_exchange_rate,
+    make_panel,
+    make_reference_data,
     make_specific_yield,
 )
-from tests.fakes import FakeExchangeRateProvider, FakeSpecificYieldProvider
+from tests.fakes import (
+    FakeExchangeRateProvider,
+    FakeGeocoder,
+    FakeQuoteRepository,
+    FakeSpecificYieldProvider,
+    FixedClock,
+)
 
 PROBLEM_JSON = "application/problem+json"
 
@@ -545,7 +560,35 @@ def test_a_system_no_inverter_fits_is_a_no_compatible_inverter_problem(
     assert problem["type"] == "urn:sunquote:problem:no-compatible-inverter"
     assert problem["title"] == "No compatible inverter"
     assert problem["status"] == 422
-    assert "1.0 kWp" in problem["detail"]
+    assert "1.00 kWp" in problem["detail"]
+
+
+def test_the_no_compatible_inverter_detail_shows_the_capacity_rounded_by_the_policy() -> None:
+    odd_panel = replace(make_panel(), panel_id="odd-437w", power_w=437)  # 2 panels = 0.874 kWp
+    catalog = Catalog(
+        panels=(odd_panel,), default_panel_id=odd_panel.panel_id, inverters=DEFAULT_INVERTERS
+    )
+    repository = FakeQuoteRepository()
+    service = QuoteService(
+        quote_repository=repository,
+        geocoder=FakeGeocoder(),
+        specific_yield_provider=FakeSpecificYieldProvider(),
+        exchange_rate_provider=FakeExchangeRateProvider(),
+        clock=FixedClock(),
+        reference_data=make_reference_data(catalog=catalog),
+    )
+    app = create_app(
+        settings=Settings(),
+        dependencies=AppDependencies(quote_service=service, quote_repository=repository),
+    )
+
+    with TestClient(app) as odd_client:
+        response = odd_client.post("/quotes", json=with_change("roof.usable_area_m2", 6))
+
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert "0.87 kWp" in detail
+    assert "0.874" not in detail
 
 
 def test_a_location_pvgis_rejects_is_a_422_problem_carrying_its_message(

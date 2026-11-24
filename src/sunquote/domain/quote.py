@@ -17,9 +17,9 @@ from sunquote.domain.money import Currency, ExchangeRate, Money
 from sunquote.domain.pricing import (
     SystemPrice,
     dc_ac_ratio,
+    inverter_price_incl_vat,
     price_system,
     select_inverter,
-    to_try,
 )
 from sunquote.domain.production import (
     SpecificYield,
@@ -152,7 +152,9 @@ def _build_option(
         degradation_rate_per_year=panel.degradation_rate_per_year,
         tariff=reference_data.tariff,
         financial=reference_data.financial,
-        inverter_price_incl_vat=to_try(inverter.unit_price, exchange_rate) * (1 + pricing.vat_rate),
+        inverter_price_incl_vat=inverter_price_incl_vat(
+            inverter, pricing=pricing, rate=exchange_rate
+        ),
         total_price_incl_vat=price.total,
     )
     return SystemOption(

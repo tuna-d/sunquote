@@ -1,5 +1,7 @@
 """Typed errors the domain and its ports raise. The API layer maps each to a problem response."""
 
+from decimal import Decimal
+
 
 class DomainError(Exception):
     """Base class for every typed error that is part of the domain's contract."""
@@ -65,11 +67,12 @@ class CurrencyMismatchError(DomainError):
 class NoCompatibleInverterError(DomainError):
     """No inverter in the Catalog keeps the system's DC/AC Ratio within the configured range."""
 
-    def __init__(self, capacity_kwp: str) -> None:
+    def __init__(self, capacity_kwp: Decimal) -> None:
+        # The unrounded number: the API shows it through the rounding policy.
         self.capacity_kwp = capacity_kwp
         super().__init__(
-            f"no compatible inverter: none of the catalog inverters fits a {capacity_kwp} kWp "
-            "system within the allowed DC/AC Ratio and the Contracted Power"
+            "no compatible inverter: none of the catalog inverters fits the system within the "
+            "allowed DC/AC Ratio and the Contracted Power"
         )
 
 

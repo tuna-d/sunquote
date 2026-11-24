@@ -8,9 +8,11 @@ from decimal import Decimal
 
 import pytest
 
+from sunquote.domain.assumptions import DcAcRatioRange
 from sunquote.domain.catalog import Inverter
 from sunquote.domain.errors import CurrencyMismatchError, NoCompatibleInverterError
 from sunquote.domain.money import Currency, ExchangeRate, Money
+from sunquote.domain.pricing import inverter_price_incl_vat, select_inverter
 from sunquote.domain.quote import Quote, build_quote
 from tests.factories import (
     DEFAULT_INVERTERS,
@@ -115,6 +117,32 @@ def test_no_compatible_inverter_is_a_domain_error() -> None:
     for inverters in (too_big, too_small, ()):
         with pytest.raises(NoCompatibleInverterError):
             build(inverters=inverters)
+
+
+def test_no_compatible_inverter_carries_the_unrounded_capacity_as_a_number() -> None:
+    capacity_kwp = Decimal("0.874")  # 2 panels of 437 W
+
+    with pytest.raises(NoCompatibleInverterError) as raised:
+        select_inverter(
+            inverters=(make_inverter("huge", "20", "2000"),),
+            capacity_kwp=capacity_kwp,
+            ratio_range=DcAcRatioRange(minimum=Decimal(1), maximum=Decimal("1.3")),
+            max_ac_power_kw=Decimal(20),
+            rate=make_exchange_rate(),
+        )
+
+    assert raised.value.capacity_kwp == capacity_kwp
+    assert isinstance(raised.value.capacity_kwp, Decimal)
+
+
+def test_the_inverter_price_including_vat_is_in_try_at_the_rate() -> None:
+    inverter = make_inverter("i35", "3.5", "650")  # USD 650 x 40 = 26,000 TRY
+
+    price = inverter_price_incl_vat(
+        inverter, pricing=make_pricing_assumptions(vat_rate="0.20"), rate=make_exchange_rate("40")
+    )
+
+    assert price == try_amount("31200")  # x 1.20
 
 
 # --- Pricing -------------------------------------------------------------------------------

@@ -41,7 +41,7 @@ def select_inverter(
         and ratio_range.contains(dc_ac_ratio(capacity_kwp, inverter))
     ]
     if not compatible:
-        raise NoCompatibleInverterError(str(capacity_kwp))
+        raise NoCompatibleInverterError(capacity_kwp)
     return min(
         compatible,
         key=lambda inverter: (
@@ -50,6 +50,16 @@ def select_inverter(
             inverter.inverter_id,
         ),
     )
+
+
+def inverter_price_incl_vat(
+    inverter: Inverter, *, pricing: PricingAssumptions, rate: ExchangeRate
+) -> Money:
+    """What replacing the inverter costs the Customer today: its TRY price plus VAT.
+
+    A residential Customer cannot reclaim VAT, so the cash flow uses the price including it.
+    """
+    return to_try(inverter.unit_price, rate) * (1 + pricing.vat_rate)
 
 
 @dataclass(frozen=True, slots=True)
