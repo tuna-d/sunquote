@@ -22,6 +22,24 @@ DEFAULT_ASSISTANT_BUDGET_SECONDS = 30.0
 REPLY_MAX_CHARACTERS = 1500
 
 
+# The two tools the model may call, by name.
+CREATE_QUOTE = "create_quote"
+ASK_FOR_MISSING_FIELDS = "ask_for_missing_fields"
+
+
+class MissingField(StrEnum):
+    """The `create_quote` field paths the model can say are still missing."""
+
+    CUSTOMER_NAME = "customer.name"
+    SITE_ADDRESS = "site.address"
+    ROOF_TYPE = "roof.roof_type"
+    ROOF_TILT = "roof.tilt_deg"
+    ROOF_AZIMUTH = "roof.azimuth_deg"
+    ROOF_USABLE_AREA = "roof.usable_area_m2"
+    CONSUMPTION = "consumption"
+    SUBSCRIBER_GROUP = "subscriber_group"
+
+
 class MessageRole(StrEnum):
     USER = "user"
     ASSISTANT = "assistant"

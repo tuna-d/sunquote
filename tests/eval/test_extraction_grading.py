@@ -1,7 +1,6 @@
 import pytest
 
-from sunquote.api.assistant_tools import MissingField
-from sunquote.domain.conversation import ToolCall
+from sunquote.domain.conversation import MissingField, ToolCall
 from tests.eval.extraction import grade_extraction
 
 

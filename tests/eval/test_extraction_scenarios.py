@@ -1,6 +1,7 @@
 import re
 
-from sunquote.api.assistant_tools import MissingField, create_quote_request
+from sunquote.api.assistant_tools import create_quote_request
+from sunquote.domain.conversation import MissingField
 from sunquote.domain.model import RoofType
 from tests.eval.extraction import load_extraction_scenarios
 

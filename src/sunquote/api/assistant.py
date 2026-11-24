@@ -6,8 +6,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field, StringConstraints, field_validator
 
-from sunquote.api.assistant_loop import Assistant
-from sunquote.api.assistant_tools import ask_for_missing_fields_tool, create_quote_tool
+from sunquote.api.assistant_tools import QuoteAssistantTools
+from sunquote.api.assistant_turn import run_assistant_turn
 from sunquote.api.dependencies import AppDependencies, get_quote_service
 from sunquote.api.errors import (
     ASSISTANT_NOT_CONFIGURED,
@@ -15,7 +15,7 @@ from sunquote.api.errors import (
     VALIDATION_ERROR,
     problem_responses,
 )
-from sunquote.domain.conversation import ChatMessage, MessageRole
+from sunquote.domain.conversation import ChatMessage, MessageRole, MissingField
 from sunquote.domain.errors import AssistantNotConfiguredError
 from sunquote.domain.service import QuoteService
 
@@ -62,7 +62,7 @@ class AssistantResponse(BaseModel):
     quote: QuoteReference | None = Field(
         description="The Quote created in this turn, or null when none was."
     )
-    missing_fields: list[str] = Field(
+    missing_fields: list[MissingField] = Field(
         description=(
             "When the turn ends with a question: the `create_quote` field paths still missing "
             "(`customer.name`, `site.address`, `roof.roof_type`, `roof.tilt_deg`, "
@@ -102,9 +102,10 @@ async def post_assistant_messages(
     The server keeps no conversation state: send the whole conversation every time (1 to 20
     messages of at most 2000 characters, the last one from the `user`). At most one Quote is
     created per request, and the model is called at most three times within a total time
-    budget. If the model's reply after the Quote breaks the placeholder rules, or the model
-    fails after the Quote was created, the reply is a fixed Turkish confirmation with the Quote
-    Number, each option's capacity and total price, and the document link.
+    budget, which covers the model calls and the tools together. If the model's reply after the
+    Quote breaks the placeholder rules, or the model fails after the Quote was created, the
+    reply is a fixed Turkish confirmation with the Quote Number, each option's capacity and
+    total price, and the document link.
 
     **Privacy.** The Sales Rep's messages are sent to Gemini and may include the Customer's name
     and Address. Gemini's free tier may use submitted content for training. Do not send what
@@ -122,16 +123,16 @@ async def post_assistant_messages(
     def document_url(quote_id: UUID) -> str:
         return str(request.url_for("get_quote_document", quote_id=quote_id))
 
-    assistant = Assistant(
+    turn = await run_assistant_turn(
         model=model,
-        tools=[create_quote_tool(service), ask_for_missing_fields_tool()],
+        tools=QuoteAssistantTools(service),
+        messages=body.to_domain(),
         document_url=document_url,
         budget_seconds=dependencies.assistant_budget_seconds,
     )
-    outcome = await assistant.run(body.to_domain())
-    stored = outcome.quote
+    stored = turn.quote
     return AssistantResponse(
-        reply=outcome.reply,
+        reply=turn.reply,
         quote=(
             None
             if stored is None
@@ -141,5 +142,5 @@ async def post_assistant_messages(
                 document_url=document_url(stored.id),
             )
         ),
-        missing_fields=list(outcome.missing_fields),
+        missing_fields=list(turn.missing_fields),
     )

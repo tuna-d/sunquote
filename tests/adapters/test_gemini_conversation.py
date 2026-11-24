@@ -13,8 +13,9 @@ from typing import Any
 import httpx
 import pytest
 
-from sunquote.adapters.gemini_conversation import GeminiConversationModel
+from sunquote.adapters.gemini_conversation import SYSTEM_INSTRUCTION, GeminiConversationModel
 from sunquote.domain.conversation import (
+    REPLY_MAX_CHARACTERS,
     ChatMessage,
     MessageRole,
     ReplyRejection,
@@ -25,6 +26,7 @@ from sunquote.domain.conversation import (
 )
 from sunquote.domain.errors import ConversationUnavailableError
 from sunquote.domain.narrative import Violation, ViolationKind
+from sunquote.domain.placeholders import PLACEHOLDER_PATTERN, known_placeholders
 
 pytestmark = pytest.mark.anyio
 
@@ -87,7 +89,6 @@ async def ask(
     rejected_reply: ReplyRejection | None = None,
 ) -> Any:
     return await model_with(fake).respond(
-        system_instruction="You are the assistant.",
         messages=MESSAGES,
         tools=TOOLS,
         exchanges=exchanges,
@@ -153,6 +154,27 @@ async def test_thought_parts_are_not_part_of_the_reply() -> None:
     assert await ask(FakeGemini(response)) == TextReply("Merhaba")
 
 
+async def test_only_the_first_of_several_parallel_function_calls_is_used() -> None:
+    response = httpx.Response(
+        200,
+        json={
+            "candidates": [
+                {
+                    "content": {
+                        "parts": [
+                            {"functionCall": {"name": "create_quote", "args": {"a": 1}}},
+                            {"functionCall": {"name": "ask_for_missing_fields", "args": {}}},
+                        ]
+                    },
+                    "finishReason": "STOP",
+                }
+            ]
+        },
+    )
+
+    assert await ask(FakeGemini(response)) == ToolCall("create_quote", {"a": 1})
+
+
 async def test_the_model_name_is_the_configured_one() -> None:
     model = model_with(FakeGemini(recording("gemini_conversation_text.json")))
 
@@ -181,7 +203,7 @@ async def test_the_request_carries_the_instruction_the_tools_and_the_messages() 
     await ask(fake)
 
     body = fake.body
-    assert body["systemInstruction"] == {"parts": [{"text": "You are the assistant."}]}
+    assert body["systemInstruction"] == {"parts": [{"text": SYSTEM_INSTRUCTION}]}
     assert body["tools"] == [
         {
             "functionDeclarations": [
@@ -361,3 +383,48 @@ async def test_the_key_never_appears_in_the_models_repr() -> None:
 
     assert API_KEY not in repr(model)
     assert MODEL in repr(model)
+
+
+# --- The instruction -------------------------------------------------------------------------
+
+ORIENTATION_BEARINGS = {
+    "kuzey": 0,
+    "kuzeydoğu": 45,
+    "doğu": 90,
+    "güneydoğu": 135,
+    "güney": 180,
+    "güneybatı": 225,
+    "batı": 270,
+    "kuzeybatı": 315,
+}
+
+
+def test_the_instruction_is_english_and_states_the_assistants_rules() -> None:
+    lowered = SYSTEM_INSTRUCTION.lower()
+
+    assert "reply in turkish" in lowered
+    assert "never estimate" in lowered
+    assert "coordinates" in lowered
+    assert "kwh over a bill" in lowered
+    assert "placeholder" in lowered
+    assert f"{REPLY_MAX_CHARACTERS} characters" in SYSTEM_INSTRUCTION
+
+
+def test_the_instruction_maps_every_orientation_word_to_its_compass_bearing() -> None:
+    for word, bearing in ORIENTATION_BEARINGS.items():
+        assert f"{word} {bearing}" in SYSTEM_INSTRUCTION
+
+
+def test_the_instruction_names_only_placeholders_of_the_vocabulary() -> None:
+    named = set(PLACEHOLDER_PATTERN.findall(SYSTEM_INSTRUCTION))
+
+    assert named
+    assert named <= known_placeholders()
+
+
+def test_the_instruction_lets_the_model_ask_for_the_required_subscriber_group() -> None:
+    # subscriber_group is a required request field and a missing-field choice of the ask tool,
+    # so the instruction must not call it "always residential".
+    assert "always residential" not in SYSTEM_INSTRUCTION
+    assert "subscriber_group is required" in SYSTEM_INSTRUCTION
+    assert "unclear whether the Site is a home or a business" in SYSTEM_INSTRUCTION

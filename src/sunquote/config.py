@@ -6,7 +6,8 @@ from typing import Literal
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from sunquote.adapters.gemini import DEFAULT_GEMINI_BASE_URL, DEFAULT_GEMINI_MODEL
+from sunquote.adapters.gemini import DEFAULT_GEMINI_MODEL
+from sunquote.adapters.gemini_transport import DEFAULT_GEMINI_BASE_URL
 from sunquote.domain.conversation import DEFAULT_ASSISTANT_BUDGET_SECONDS
 from sunquote.domain.service import DEFAULT_NARRATIVE_BUDGET_SECONDS
 

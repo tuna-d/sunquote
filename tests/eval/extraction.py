@@ -8,7 +8,7 @@ from typing import Self
 
 from pydantic import BaseModel, Field, model_validator
 
-from sunquote.api.assistant_tools import MissingField
+from sunquote.domain.conversation import MissingField
 
 
 class ExtractionScenario(BaseModel):
@@ -29,12 +29,12 @@ def load_extraction_scenarios() -> list[ExtractionScenario]:
         return [ExtractionScenario.model_validate(item) for item in tomllib.load(file)["scenario"]]
 
 
-def _flatten(arguments: Mapping[str, object], prefix: str = "") -> dict[str, object]:
+def _leaf_paths(arguments: Mapping[str, object], prefix: str = "") -> dict[str, object]:
     fields = {}
     for name, value in arguments.items():
         path = f"{prefix}{name}"
         if isinstance(value, Mapping) and value:
-            fields.update(_flatten(value, f"{path}."))
+            fields.update(_leaf_paths(value, f"{path}."))
         else:
             fields[path] = value
     return fields
@@ -80,8 +80,8 @@ def grade_extraction(
             "missing_fields": set(missing_fields) == set(expected_missing_fields),
         }
 
-    expected = _flatten(expected_arguments)
-    actual = _flatten(calls[0]) if calls else {}
+    expected = _leaf_paths(expected_arguments)
+    actual = _leaf_paths(calls[0]) if calls else {}
     grades = {"create_quote": len(calls) == 1}
     for path in sorted(expected.keys() | actual.keys()):
         grades[path] = (

@@ -108,6 +108,10 @@ class Violation:
     field: str
     detail: str
 
+    def as_dict(self) -> dict[str, str]:
+        """The violation as the JSON object a model is told (`kind`, `field`, `detail`)."""
+        return {"kind": self.kind.value, "field": self.field, "detail": self.detail}
+
 
 class NarrativeSource(StrEnum):
     LLM = "llm"
@@ -151,15 +155,12 @@ def _fields(draft: NarrativeDraft) -> tuple[tuple[str, str | None], ...]:
     )
 
 
-def validate_text(
-    text: str, *, field: str, available_placeholders: Collection[str], max_length: int
+def validate_placeholder_syntax(
+    text: str, *, field: str, available_placeholders: Collection[str]
 ) -> tuple[Violation, ...]:
-    """Every per-text rule `text` breaks: digits outside placeholders, unknown or unavailable
-    placeholders, unbalanced curly braces and length. `field` names the text in the violations.
-
-    The Narrative's slots use it, and so does any other text that may refer to a Quote's
-    figures only through placeholders (the assistant's reply).
-    """
+    """The placeholder rules of one text: no unknown name, no name the Quote cannot fill and no
+    unbalanced curly brace. With no available placeholders any `{...}` is a violation, which is
+    the rule for a text that has no Quote to fill from."""
     violations: list[Violation] = []
     available = set(available_placeholders)
     known = known_placeholders()
@@ -181,7 +182,26 @@ def validate_text(
         violations.append(
             Violation(ViolationKind.UNKNOWN_PLACEHOLDER, field, "unbalanced curly brace")
         )
-    if any(character.isdigit() for character in outside):
+    return tuple(violations)
+
+
+def validate_text(
+    text: str, *, field: str, available_placeholders: Collection[str], max_length: int
+) -> tuple[Violation, ...]:
+    """Every per-text rule `text` breaks: digits outside placeholders, unknown or unavailable
+    placeholders, unbalanced curly braces and length. `field` names the text in the violations.
+
+    The Narrative's slots use it, and so does any other text that may refer to a Quote's
+    figures only through placeholders (the assistant's reply). A digit is a decimal digit: the
+    superscript of "m²" is not one.
+    """
+    violations = list(
+        validate_placeholder_syntax(
+            text, field=field, available_placeholders=available_placeholders
+        )
+    )
+    outside = PLACEHOLDER_PATTERN.sub("", text)
+    if any(character.isdecimal() for character in outside):
         violations.append(
             Violation(
                 ViolationKind.DIGIT_OUTSIDE_PLACEHOLDER,

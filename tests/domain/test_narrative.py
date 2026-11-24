@@ -14,8 +14,10 @@ from sunquote.domain.narrative import (
     NarrativeRecord,
     NarrativeSource,
     Orientation,
+    Violation,
     ViolationKind,
     validate_narrative,
+    validate_placeholder_syntax,
     validate_text,
 )
 from sunquote.domain.narrative_context import build_narrative_context
@@ -529,3 +531,58 @@ def test_a_single_text_has_its_own_length_limit() -> None:
     violations = validate_text("a" * 11, field="reply", available_placeholders=(), max_length=10)
 
     assert [(v.kind, v.field) for v in violations] == [(ViolationKind.TOO_LONG, "reply")]
+
+
+def test_a_superscript_is_not_a_digit_in_a_single_text() -> None:
+    violations = validate_text(
+        "Çatı alanı m² olarak girildi.", field="reply", available_placeholders=(), max_length=100
+    )
+
+    assert violations == ()
+
+
+def test_a_superscript_is_not_a_digit_in_a_narrative_slot() -> None:
+    context = build_narrative_context(one_option())
+    draft = NarrativeDraft(
+        greeting="Sayın {customer_name},",
+        summary="Çatınızın m² değeri sistemi sınırlar: {option_1_capacity_kwp} kWp.",
+        next_steps="Geçerlilik {valid_until} tarihine kadardır.",
+    )
+
+    assert validate_narrative(draft, context) == ()
+
+
+def test_a_real_digit_next_to_a_superscript_is_still_a_digit() -> None:
+    violations = validate_text(
+        "40 m² çatı", field="reply", available_placeholders=(), max_length=100
+    )
+
+    assert [v.kind for v in violations] == [ViolationKind.DIGIT_OUTSIDE_PLACEHOLDER]
+
+
+# --- Placeholder syntax on its own -----------------------------------------------------------
+
+
+def test_placeholder_syntax_checks_names_and_braces_but_not_digits_or_length() -> None:
+    clean = validate_placeholder_syntax(
+        "40 m² için hangi ilde?", field="reply", available_placeholders=()
+    )
+    broken = validate_placeholder_syntax(
+        "{customer_name} {nothing} {", field="reply", available_placeholders=()
+    )
+
+    assert clean == ()
+    assert {v.kind for v in broken} == {
+        ViolationKind.UNAVAILABLE_PLACEHOLDER,
+        ViolationKind.UNKNOWN_PLACEHOLDER,
+    }
+
+
+def test_a_violation_serialises_to_the_dict_a_model_is_told() -> None:
+    violation = Violation(ViolationKind.TOO_LONG, "reply", "11 characters; the limit is 10")
+
+    assert violation.as_dict() == {
+        "kind": "too_long",
+        "field": "reply",
+        "detail": "11 characters; the limit is 10",
+    }

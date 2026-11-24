@@ -94,7 +94,6 @@ class ConversationModel(Protocol):
     async def respond(
         self,
         *,
-        system_instruction: str,
         messages: Sequence[ChatMessage],
         tools: Sequence[ToolDeclaration],
         exchanges: Sequence[ToolExchange] = (),

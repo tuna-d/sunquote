@@ -20,6 +20,7 @@ from typing import Any
 import httpx
 
 from sunquote.adapters.gemini_transport import (
+    DEFAULT_GEMINI_BASE_URL,
     candidate_parts,
     first_candidate,
     generate_content_endpoint,
@@ -44,7 +45,6 @@ from sunquote.domain.placeholders import (
     option_placeholder,
 )
 
-DEFAULT_GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 # `gemini-3.5-flash-lite`: stable, structured outputs supported, and "Free of charge" in the
 # Free Tier column of Google's pricing page (https://ai.google.dev/gemini-api/docs/pricing,
 # redirects to aistudio.google.com/docs/pricing), checked 2026-11-24. The free tier may use
@@ -166,10 +166,7 @@ def _user_content(context: NarrativeContext, violations: tuple[Violation, ...]) 
         "field_length_limits_characters": LENGTH_LIMITS,
     }
     if violations:
-        content["previous_attempt_violations"] = [
-            {"kind": violation.kind.value, "field": violation.field, "detail": violation.detail}
-            for violation in violations
-        ]
+        content["previous_attempt_violations"] = [violation.as_dict() for violation in violations]
     return json.dumps(content, ensure_ascii=False)
 
 

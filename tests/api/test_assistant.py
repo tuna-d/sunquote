@@ -140,7 +140,6 @@ def test_the_model_gets_the_conversation_the_tool_and_then_the_quotes_placeholde
     assert [tool.name for tool in first.tools] == ["create_quote", "ask_for_missing_fields"]
     assert first.exchanges == ()
     assert first.rejected_reply is None
-    assert "Turkish" in first.system_instruction
     (exchange,) = second.exchanges
     assert exchange.call.name == "create_quote"
     assert exchange.result["status"] == "created"

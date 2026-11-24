@@ -10,6 +10,8 @@ from typing import Any
 
 import httpx
 
+DEFAULT_GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
+
 # Builds the adapter's typed error from a short reason; the adapter's code raises its result.
 Failure = Callable[[str], Exception]
 

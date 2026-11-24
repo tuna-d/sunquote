@@ -1,25 +1,82 @@
 """Drive and report on the endpoint's tool loop with an in-memory Quote service."""
 
-from collections.abc import Mapping, Sequence
-from dataclasses import replace
-from typing import Any, cast
+import asyncio
+from collections.abc import Sequence
+from typing import cast
 from uuid import UUID
 
-from sunquote.api.assistant_loop import Assistant
-from sunquote.api.assistant_tools import (
-    AssistantTool,
-    ConversationState,
-    ask_for_missing_fields_tool,
-    create_quote_tool,
+from sunquote.api.assistant_tools import QuoteAssistantTools
+from sunquote.api.assistant_turn import AssistantTurn, run_assistant_turn
+from sunquote.domain.assistant import AssistantTools, ToolResult
+from sunquote.domain.conversation import (
+    CREATE_QUOTE,
+    MAX_MODEL_CALLS,
+    ChatMessage,
+    MessageRole,
+    ModelReply,
+    ReplyRejection,
+    ToolCall,
+    ToolDeclaration,
+    ToolExchange,
 )
-from sunquote.domain.conversation import ChatMessage, MessageRole
 from sunquote.domain.errors import ConversationUnavailableError
 from sunquote.domain.model import QuoteRequest
+from sunquote.domain.narrative import Violation
 from sunquote.domain.ports import ConversationModel, StoredQuote
 from sunquote.domain.service import QuoteService
 from tests.eval.extraction import ExtractionScenario, grade_extraction
 from tests.eval.scenarios import SCENARIOS
 from tests.fakes import NARRATIVE_TIME
+
+# How often the eval repeats a Gemini call that failed (a 429 or an outage) before it counts.
+MODEL_RETRIES = 2
+
+
+class PacedRetryModel:
+    """A ConversationModel that repeats a failed call after the eval's pacing delay.
+
+    Free-tier limits answer a burst of requests with HTTP 429, which the model raises as
+    `ConversationUnavailableError`. The eval waits `delay_seconds` and asks again, up to
+    `MODEL_RETRIES` times, so a rate limit does not fail a scenario by itself.
+    """
+
+    def __init__(self, model: ConversationModel, *, delay_seconds: float) -> None:
+        self._model = model
+        self._delay_seconds = delay_seconds
+
+    @property
+    def model_name(self) -> str:
+        return self._model.model_name
+
+    async def respond(
+        self,
+        *,
+        messages: Sequence[ChatMessage],
+        tools: Sequence[ToolDeclaration],
+        exchanges: Sequence[ToolExchange] = (),
+        rejected_reply: ReplyRejection | None = None,
+    ) -> ModelReply:
+        for attempt in range(MODEL_RETRIES + 1):
+            try:
+                return await self._model.respond(
+                    messages=messages,
+                    tools=tools,
+                    exchanges=exchanges,
+                    rejected_reply=rejected_reply,
+                )
+            except ConversationUnavailableError:
+                if attempt == MODEL_RETRIES:
+                    raise
+                await asyncio.sleep(self._delay_seconds)
+        raise AssertionError("unreachable")
+
+
+def eval_budget_seconds(assistant_timeout_seconds: float, delay_seconds: float) -> float:
+    """The normal time budget plus the pauses the eval adds: before each request, and after
+    each failed one."""
+    requests_per_turn = MAX_MODEL_CALLS * (1 + MODEL_RETRIES)
+    pauses = requests_per_turn + MAX_MODEL_CALLS * MODEL_RETRIES
+    return assistant_timeout_seconds + pauses * delay_seconds
 
 
 class RecordingQuoteService:
@@ -32,37 +89,49 @@ class RecordingQuoteService:
         self.requests.append(request)
         return self.stored
 
-    def tool(self) -> AssistantTool:
-        # The tool only needs create_quote; the fake does not initialise real providers.
-        tool = create_quote_tool(cast(QuoteService, self))
+    def tools(self) -> AssistantTools:
+        # The tools only need create_quote; the fake does not initialise real providers.
+        return _RecordingTools(self, QuoteAssistantTools(cast(QuoteService, self)))
 
-        async def capture(
-            arguments: Mapping[str, object], state: ConversationState
-        ) -> dict[str, Any]:
-            # Record before validation, which can reject a call or drop unexpected fields.
-            self.arguments.append(dict(arguments))
-            return await tool.handler(arguments, state)
 
-        return replace(tool, handler=capture)
+class _RecordingTools:
+    """The assistant's tools, recording the `create_quote` arguments as the model wrote them,
+    before validation rejects a call or drops unexpected fields."""
+
+    def __init__(self, service: RecordingQuoteService, tools: QuoteAssistantTools) -> None:
+        self._service = service
+        self._tools = tools
+
+    @property
+    def declarations(self) -> Sequence[ToolDeclaration]:
+        return self._tools.declarations
+
+    async def run(self, call: ToolCall) -> ToolResult:
+        if call.name == CREATE_QUOTE:
+            self._service.arguments.append(dict(call.arguments))
+        return await self._tools.run(call)
+
+    def rejection(self, violations: Sequence[Violation]) -> ToolResult:
+        return self._tools.rejection(violations)
 
 
 async def evaluate_extraction(
     scenario: ExtractionScenario, *, model: ConversationModel, budget_seconds: float
 ) -> dict[str, bool]:
     service = RecordingQuoteService()
-    assistant = Assistant(
-        model=model,
-        tools=[service.tool(), ask_for_missing_fields_tool()],
-        document_url=lambda quote_id: f"/quotes/{quote_id}/document",
-        budget_seconds=budget_seconds,
-    )
     history: list[ChatMessage] = []
-    outcome = None
+    outcome: AssistantTurn | None = None
     failure = None
     for turn, message in enumerate(scenario.messages, start=1):
         history.append(ChatMessage(MessageRole.USER, message))
         try:
-            outcome = await assistant.run(history)
+            outcome = await run_assistant_turn(
+                model=model,
+                tools=service.tools(),
+                messages=history,
+                document_url=lambda quote_id: f"/quotes/{quote_id}/document",
+                budget_seconds=budget_seconds,
+            )
         except ConversationUnavailableError:
             failure = "Gemini response"
             break

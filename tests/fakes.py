@@ -82,7 +82,6 @@ class ScriptedNarrativeWriter:
 class ConversationCall:
     """What the assistant sent the model in one call."""
 
-    system_instruction: str
     messages: tuple[ChatMessage, ...]
     tools: tuple[ToolDeclaration, ...]
     exchanges: tuple[ToolExchange, ...]
@@ -109,7 +108,6 @@ class ScriptedConversationModel:
     async def respond(
         self,
         *,
-        system_instruction: str,
         messages: Sequence[ChatMessage],
         tools: Sequence[ToolDeclaration],
         exchanges: Sequence[ToolExchange] = (),
@@ -117,7 +115,6 @@ class ScriptedConversationModel:
     ) -> ModelReply:
         self.calls.append(
             ConversationCall(
-                system_instruction,
                 tuple(messages),
                 tuple(tools),
                 tuple(exchanges),

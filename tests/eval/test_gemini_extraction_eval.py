@@ -6,9 +6,13 @@ import httpx
 import pytest
 
 from sunquote.adapters.gemini_conversation import GeminiConversationModel
-from sunquote.domain.conversation import MAX_MODEL_CALLS
 from tests.eval.extraction import load_extraction_scenarios
-from tests.eval.extraction_runner import evaluate_extraction, format_extraction_report
+from tests.eval.extraction_runner import (
+    PacedRetryModel,
+    eval_budget_seconds,
+    evaluate_extraction,
+    format_extraction_report,
+)
 from tests.eval.settings import EvalSettings
 
 
@@ -29,17 +33,20 @@ async def test_gemini_extraction_eval(capsys: pytest.CaptureFixture[str]) -> Non
             await asyncio.sleep(settings.eval_delay_seconds)
         sent_request = True
 
-    # Preserve the normal time budget for the model and tools after allowing for pacing.
-    budget = settings.assistant_timeout_seconds + MAX_MODEL_CALLS * settings.eval_delay_seconds
+    # Preserve the normal time budget for the model and tools after allowing for pacing and for
+    # the pauses before a repeated call.
+    budget = eval_budget_seconds(settings.assistant_timeout_seconds, settings.eval_delay_seconds)
     results: list[tuple[str, dict[str, bool]]] = []
     async with httpx.AsyncClient(event_hooks={"request": [pace_request]}) as client:
-        model = GeminiConversationModel(
+        gemini = GeminiConversationModel(
             client=client,
             api_key=settings.gemini_api_key.get_secret_value(),
             model=settings.gemini_model,
             base_url=settings.gemini_base_url,
             timeout_seconds=settings.gemini_timeout_seconds,
         )
+        # A 429 or an outage is repeated after the pacing delay, like the free tier needs.
+        model = PacedRetryModel(gemini, delay_seconds=settings.eval_delay_seconds)
         for scenario in load_extraction_scenarios():
             grades = await evaluate_extraction(scenario, model=model, budget_seconds=budget)
             results.append((scenario.name, grades))

@@ -9,7 +9,6 @@ import pytest
 
 from sunquote.adapters.gemini import GeminiNarrativeWriter
 from sunquote.adapters.gemini_conversation import GeminiConversationModel
-from sunquote.api.assistant_text import SYSTEM_INSTRUCTION
 from sunquote.api.assistant_tools import create_quote_declaration
 from sunquote.config import Settings
 from sunquote.domain.conversation import ChatMessage, MessageRole, ToolCall
@@ -58,7 +57,6 @@ async def test_real_gemini_turns_a_complete_turkish_message_into_a_create_quote_
             timeout_seconds=30.0,
         )
         reply = await model.respond(
-            system_instruction=SYSTEM_INSTRUCTION,
             messages=[ChatMessage(MessageRole.USER, message)],
             tools=[create_quote_declaration()],
         )

@@ -54,6 +54,7 @@ UPSTREAM_UNAVAILABLE = ProblemType("upstream-unavailable", "Upstream service una
 # Only ever tool errors of the quote assistant, never HTTP responses.
 QUOTE_ALREADY_CREATED = ProblemType("quote-already-created", "A Quote was already created", 409)
 REPLY_REJECTED = ProblemType("reply-rejected", "Reply rejected", 422)
+UNKNOWN_TOOL = ProblemType("unknown-tool", "Unknown tool", 422)
 ASSISTANT_NOT_CONFIGURED = ProblemType("assistant-not-configured", "Assistant not configured", 503)
 ASSISTANT_UNAVAILABLE = ProblemType("assistant-unavailable", "Assistant unavailable", 503)
 
