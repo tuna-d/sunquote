@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     # Apply the Alembic migrations when the app starts.
     migrate_on_startup: bool = True
 
+    # Cache external lookups only when a Redis URL is supplied.
+    redis_url: str | None = None
+
     nominatim_base_url: str = "https://nominatim.openstreetmap.org"
     nominatim_timeout_seconds: float = Field(default=10.0, gt=0)
 

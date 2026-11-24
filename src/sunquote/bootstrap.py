@@ -7,6 +7,9 @@ from collections.abc import Awaitable, Callable
 from functools import partial
 
 import httpx
+from redis.asyncio import Redis
+from redis.asyncio.retry import Retry
+from redis.backoff import NoBackoff
 
 from sunquote.adapters.clock import SystemClock
 from sunquote.adapters.data_files import (
@@ -21,10 +24,20 @@ from sunquote.adapters.nominatim import NominatimGeocoder
 from sunquote.adapters.postgres.migrate import upgrade_to_head
 from sunquote.adapters.postgres.quote_repository import PostgresQuoteRepository, create_engine
 from sunquote.adapters.pvgis import PvgisSpecificYieldProvider
+from sunquote.adapters.redis_cache import (
+    CachedExchangeRateProvider,
+    CachedGeocoder,
+    CachedSpecificYieldProvider,
+)
 from sunquote.adapters.tcmb import TcmbExchangeRateProvider
 from sunquote.api.dependencies import AppDependencies
 from sunquote.config import Settings
-from sunquote.domain.ports import QuoteRepository
+from sunquote.domain.ports import (
+    ExchangeRateProvider,
+    Geocoder,
+    QuoteRepository,
+    SpecificYieldProvider,
+)
 from sunquote.domain.service import QuoteService
 
 
@@ -48,23 +61,35 @@ def build_dependencies(
     tariff = load_residential_tariff(data_dir / "tariff.toml")
 
     http_client = httpx.AsyncClient(timeout=settings.pvgis_timeout_seconds, transport=transport)
-    geocoder = NominatimGeocoder(
+    geocoder: Geocoder = NominatimGeocoder(
         client=http_client,
         base_url=settings.nominatim_base_url,
         timeout_seconds=settings.nominatim_timeout_seconds,
     )
-    provider = PvgisSpecificYieldProvider(
+    specific_yield_provider: SpecificYieldProvider = PvgisSpecificYieldProvider(
         client=http_client,
         base_url=settings.pvgis_base_url,
         timeout_seconds=settings.pvgis_timeout_seconds,
     )
-    exchange_rate_provider = TcmbExchangeRateProvider(
+    exchange_rate_provider: ExchangeRateProvider = TcmbExchangeRateProvider(
         client=http_client,
         base_url=settings.tcmb_base_url,
         timeout_seconds=settings.tcmb_timeout_seconds,
     )
     startup: tuple[Callable[[], Awaitable[None]], ...] = ()
     closers: tuple[Callable[[], Awaitable[None]], ...] = (http_client.aclose,)
+    if settings.redis_url:
+        redis = Redis.from_url(
+            settings.redis_url,
+            socket_connect_timeout=0.25,
+            socket_timeout=0.25,
+            retry=Retry(NoBackoff(), 0),
+        )
+        geocoder = CachedGeocoder(geocoder, redis)
+        specific_yield_provider = CachedSpecificYieldProvider(specific_yield_provider, redis)
+        exchange_rate_provider = CachedExchangeRateProvider(exchange_rate_provider, redis)
+        closers = (*closers, redis.aclose)
+
     if quote_repository is None:
         engine = create_engine(settings.database_url)
         quote_repository = PostgresQuoteRepository(engine)
@@ -75,7 +100,7 @@ def build_dependencies(
     service = QuoteService(
         quote_repository=quote_repository,
         geocoder=geocoder,
-        specific_yield_provider=provider,
+        specific_yield_provider=specific_yield_provider,
         exchange_rate_provider=exchange_rate_provider,
         clock=SystemClock(),
         catalog=catalog,

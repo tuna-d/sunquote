@@ -1,6 +1,7 @@
 """The real adapters and shipped data files wired together, with recorded PVGIS and TCMB
 responses."""
 
+import socket
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -27,7 +28,7 @@ def requests_seen() -> list[httpx.Request]:
 
 
 @pytest.fixture
-def wired_client(requests_seen: list[httpx.Request]) -> Iterator[TestClient]:
+def recorded_transport(requests_seen: list[httpx.Request]) -> httpx.MockTransport:
     def upstream(request: httpx.Request) -> httpx.Response:
         requests_seen.append(request)
         if request.url.host == "nominatim.openstreetmap.org":
@@ -37,14 +38,51 @@ def wired_client(requests_seen: list[httpx.Request]) -> Iterator[TestClient]:
             return httpx.Response(200, content=TCMB_MONDAY.read_bytes())
         return httpx.Response(200, text=RECORDING.read_text(encoding="utf-8"))
 
-    settings = Settings()
+    return httpx.MockTransport(upstream)
+
+
+@pytest.fixture
+def wired_client(recorded_transport: httpx.MockTransport) -> Iterator[TestClient]:
+    settings = Settings(redis_url=None)
     dependencies = build_dependencies(
         settings,
-        transport=httpx.MockTransport(upstream),
+        transport=recorded_transport,
         quote_repository=FakeQuoteRepository(),
     )
     with TestClient(create_app(settings, dependencies)) as client:
         yield client
+
+
+@pytest.mark.parametrize("override", [False, True], ids=["tcmb", "override"])
+def test_an_unreachable_redis_cache_still_allows_quote_creation(
+    recorded_transport: httpx.MockTransport,
+    requests_seen: list[httpx.Request],
+    caplog: pytest.LogCaptureFixture,
+    override: bool,
+) -> None:
+    repository = FakeQuoteRepository()
+    body = {**valid_body(), "site": {"address": "An\u0131tkabir, Ankara"}}
+    if override:
+        body["exchange_rate_override"] = {"rate": 45, "date": "2026-11-01"}
+    # Reserve a port without listening so the Redis connection is refused.
+    with socket.socket() as unreachable:
+        unreachable.bind(("127.0.0.1", 0))
+        port = unreachable.getsockname()[1]
+        settings = Settings(redis_url=f"redis://127.0.0.1:{port}/0")
+        dependencies = build_dependencies(
+            settings, transport=recorded_transport, quote_repository=repository
+        )
+        with TestClient(create_app(settings, dependencies)) as client:
+            response = client.post("/quotes", json=body)
+
+    assert response.status_code == 201
+    assert len(repository.stored) == 1
+    rate = response.json()["assumptions"]["exchange_rate"]
+    assert rate["overridden"] is override
+    assert any(request.url.host == "www.tcmb.gov.tr" for request in requests_seen) is not override
+    assert sum("Redis cache read failed" in message for message in caplog.messages) == (
+        2 if override else 3
+    )
 
 
 def test_quote_from_shipped_data_files_and_recorded_pvgis_response(

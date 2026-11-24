@@ -103,6 +103,16 @@ Persistence is async SQLAlchemy 2.0 with asyncpg. The schema is managed with Ale
 applies the migrations when it starts (turn that off with `SUNQUOTE_MIGRATE_ON_STARTUP=false`).
 To run the API outside Compose, start the database with `docker compose up postgres` first.
 
+## Lookup cache
+
+Compose starts Redis and enables caching for Specific Yield, geocoding and Exchange Rates.
+Specific Yield and geocoding matches are kept for 30 days. Exchange Rates are kept by quote
+date and currency without expiry. A quote with `exchange_rate_override` skips the Exchange
+Rate cache. If Redis is unreachable, the API uses the providers directly.
+
+To enable caching when running the API outside Compose, start Redis with
+`docker compose up redis` and set `SUNQUOTE_REDIS_URL=redis://localhost:6379/0`.
+
 ## Placeholder data
 
 The catalog (panels and inverters, with USD unit prices) and the engineering and pricing
@@ -127,9 +137,13 @@ then run `SUNQUOTE_TEST_DATABASE_URL=postgresql+asyncpg://sunquote:sunquote@loca
 uv run pytest`. Without that variable they are skipped. Each test works in its own temporary
 schema.
 
+For the real Redis cache tests, start `docker compose up redis` and run
+`SUNQUOTE_TEST_REDIS_URL=redis://localhost:6379/15 uv run pytest`. These tests skip locally
+when the URL is unset or Redis is unreachable. In CI, either condition fails the cache tests.
+
 The `integration` and `eval` markers are excluded from the default `uv run pytest` run.
 CI (GitHub Actions) runs lint, format check, type check and the default tests on every
-push and pull request, with a Postgres service container for the repository tests. The integration
+push and pull request, with service containers for the Postgres and Redis tests. The integration
 tests (real Nominatim, PVGIS and TCMB calls) run from a separate
 workflow that is started by hand from the Actions tab.
 
