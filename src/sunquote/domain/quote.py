@@ -4,9 +4,15 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 
-from sunquote.domain.assumptions import EngineeringAssumptions
-from sunquote.domain.catalog import Catalog, Panel
+from sunquote.domain.assumptions import (
+    DcAcRatioRange,
+    EngineeringAssumptions,
+    PricingAssumptions,
+)
+from sunquote.domain.catalog import Catalog, Inverter, Panel
 from sunquote.domain.model import Customer, QuoteRequest
+from sunquote.domain.money import ExchangeRate
+from sunquote.domain.pricing import SystemPrice, dc_ac_ratio, price_system, select_inverter
 from sunquote.domain.production import (
     SpecificYield,
     SpecificYieldInputs,
@@ -27,19 +33,27 @@ class SystemOption:
     binding_limit: BindingLimit
     annual_production_kwh: Decimal
     monthly_production_kwh: tuple[Decimal, ...]
+    inverter: Inverter
+    dc_ac_ratio: Decimal
+    price: SystemPrice
 
 
 @dataclass(frozen=True, slots=True)
 class QuoteAssumptions:
     """Everything the Quote was calculated with, so it can be reproduced later.
 
-    Later tickets add the Exchange Rate, Tariff, unit prices, Margin, VAT and the rest.
+    `inverters` is the whole list the inverter choice was made from. Later tickets add the
+    Tariff and the financial assumptions.
     """
 
     submitted_request: QuoteRequest
     pvgis_inputs: SpecificYieldInputs
     coverage_ratio: Decimal
     default_panel: Panel
+    inverters: tuple[Inverter, ...]
+    dc_ac_ratio_range: DcAcRatioRange
+    pricing: PricingAssumptions
+    exchange_rate: ExchangeRate
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,11 +70,14 @@ def build_quote(
     specific_yield: SpecificYield,
     catalog: Catalog,
     assumptions: EngineeringAssumptions,
+    pricing: PricingAssumptions,
+    exchange_rate: ExchangeRate,
     quote_date: date,
 ) -> Quote:
     """Build the Quote. No clock, file system or network: everything arrives as an argument.
 
-    Raises `NoViableSystemError` when the Roof fits no panel.
+    Raises `NoViableSystemError` when the Roof fits no panel and `NoCompatibleInverterError`
+    when no inverter keeps the DC/AC Ratio within the configured range.
     """
     roof = request.site.roof
     panel = catalog.default_panel
@@ -74,6 +91,12 @@ def build_quote(
         panel=panel,
     )
     capacity_kwp = sizing.panel_count * panel.capacity_kwp
+    inverter = select_inverter(
+        inverters=catalog.inverters,
+        capacity_kwp=capacity_kwp,
+        ratio_range=assumptions.dc_ac_ratio_range,
+        rate=exchange_rate,
+    )
 
     option = SystemOption(
         strategy=SizingStrategy.CONSUMPTION_MATCHED,
@@ -83,6 +106,16 @@ def build_quote(
         binding_limit=sizing.binding_limit,
         annual_production_kwh=annual_production_kwh(capacity_kwp, specific_yield),
         monthly_production_kwh=monthly_production_kwh(capacity_kwp, specific_yield),
+        inverter=inverter,
+        dc_ac_ratio=dc_ac_ratio(capacity_kwp, inverter),
+        price=price_system(
+            panel=panel,
+            panel_count=sizing.panel_count,
+            inverter=inverter,
+            capacity_kwp=capacity_kwp,
+            pricing=pricing,
+            rate=exchange_rate,
+        ),
     )
     return Quote(
         customer=request.customer,
@@ -93,5 +126,9 @@ def build_quote(
             pvgis_inputs=specific_yield.inputs,
             coverage_ratio=coverage_ratio,
             default_panel=panel,
+            inverters=catalog.inverters,
+            dc_ac_ratio_range=assumptions.dc_ac_ratio_range,
+            pricing=pricing,
+            exchange_rate=exchange_rate,
         ),
     )

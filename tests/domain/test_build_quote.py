@@ -15,6 +15,8 @@ from tests.factories import (
     QUOTE_DATE,
     make_assumptions,
     make_catalog,
+    make_exchange_rate,
+    make_pricing_assumptions,
     make_request,
     make_specific_yield,
 )
@@ -33,6 +35,8 @@ def build(
         specific_yield=make_specific_yield(annual=annual_yield),
         catalog=make_catalog(),
         assumptions=make_assumptions(),
+        pricing=make_pricing_assumptions(),
+        exchange_rate=make_exchange_rate(),
         quote_date=QUOTE_DATE,
     )
 
@@ -99,6 +103,8 @@ def test_quote_carries_customer_date_and_the_assumptions_it_was_built_with() -> 
         specific_yield=make_specific_yield(),
         catalog=make_catalog(),
         assumptions=make_assumptions(pitched_coverage_ratio="0.75", system_loss_percent="12"),
+        pricing=make_pricing_assumptions(),
+        exchange_rate=make_exchange_rate(),
         quote_date=QUOTE_DATE,
     )
 

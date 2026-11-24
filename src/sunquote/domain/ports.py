@@ -6,6 +6,7 @@ from decimal import Decimal
 from typing import Protocol
 
 from sunquote.domain.model import Coordinates
+from sunquote.domain.money import Currency, ExchangeRate
 from sunquote.domain.production import SpecificYield
 
 
@@ -22,6 +23,17 @@ class SpecificYieldQuery:
 class SpecificYieldProvider(Protocol):
     async def fetch(self, query: SpecificYieldQuery) -> SpecificYield:
         """Raises `UpstreamUnavailableError` when the source cannot give an answer."""
+        ...
+
+
+class ExchangeRateProvider(Protocol):
+    async def fetch(self, currency: Currency, quote_date: date) -> ExchangeRate:
+        """The `currency`/TRY rate a Quote issued on `quote_date` is priced with.
+
+        The adapter decides which published rate that is (TCMB: the forex selling rate of the
+        last business day before `quote_date`). Raises `UpstreamUnavailableError` when the
+        source cannot give an answer.
+        """
         ...
 
 

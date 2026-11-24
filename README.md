@@ -42,10 +42,13 @@ uv run fastapi dev src/sunquote/api/app.py --port 8000
 
 `POST /quotes` takes the customer, the site's coordinates, a pitched roof and the monthly
 consumption, and returns a quote with one consumption-matched system option (panel count,
-`capacity_kwp`, first-year annual and monthly production, and what limited its size). The
+`capacity_kwp`, first-year annual and monthly production, what limited its size, the chosen
+inverter, and its price: Installation Cost, Sale Price, VAT and total in whole lira). The
 production figure comes from [PVGIS](https://re.jrc.ec.europa.eu/pvg_tools/en/) for that
-site and roof, so the service needs internet access; no key is needed. Nothing is priced
-or stored yet.
+site and roof. Equipment prices are USD and are converted to TRY with the USD forex selling
+rate that the central bank ([TCMB](https://www.tcmb.gov.tr/kurlar/kurlar_tr.html)) published
+on the last business day before the quote date. The service needs internet access; no key is
+needed. Nothing is stored yet.
 
 ```sh
 curl -X POST http://localhost:8000/quotes -H 'content-type: application/json' -d '{
@@ -57,12 +60,15 @@ curl -X POST http://localhost:8000/quotes -H 'content-type: application/json' -d
 }'
 ```
 
-`azimuth_deg` is a compass bearing (180 = south). Errors are `application/problem+json`
+`azimuth_deg` is a compass bearing (180 = south). To price with your own rate (and skip
+TCMB), add `"exchange_rate_override": {"rate": 45.5, "date": "2026-11-20"}` (TRY per USD);
+the quote records that the rate was overridden. Errors are `application/problem+json`
 (RFC 9457) with a stable `type`, for example `urn:sunquote:problem:no-viable-system`.
 
 ## Placeholder data
 
-The panel catalog and the engineering assumptions are TOML files in
+The catalog (panels and inverters, with USD unit prices) and the engineering and pricing
+assumptions (DC/AC range, BOS, labour, fixed project cost, Margin, VAT) are TOML files in
 [`src/sunquote/data/`](src/sunquote/data). They are placeholders: every value names its
 kind (direct, derived or estimate), its source and its date, taken from
 [`docs/research/placeholder-market-data.md`](docs/research/placeholder-market-data.md).
@@ -80,7 +86,7 @@ uv run mypy src
 
 The `integration` and `eval` markers are excluded from the default `uv run pytest` run.
 CI (GitHub Actions) runs lint, format check, type check and the default tests on every
-push and pull request. The integration tests (a real PVGIS call) run from a separate
+push and pull request. The integration tests (real PVGIS and TCMB calls) run from a separate
 workflow that is started by hand from the Actions tab.
 
 ## Layout

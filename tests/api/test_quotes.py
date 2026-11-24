@@ -1,7 +1,8 @@
 """POST /quotes through the real FastAPI app with a fake Specific Yield provider.
 
-Fixed inputs (see tests/factories.py): panel 0.5 kWp / 2.0 m2, coverage ratio 0.80,
-specific yield 1,500 kWh/kWp unless a test says otherwise.
+Fixed inputs (see tests/factories.py): panel 0.5 kWp / 2.0 m2 at USD 100, coverage ratio 0.80,
+specific yield 1,500 kWh/kWp, 40 TRY/USD unless a test says otherwise. The default 4.0 kWp
+system gets the 3.5 kW inverter and costs 106,000 TRY (Sale Price 132,500, VAT 26,500).
 """
 
 from decimal import Decimal
@@ -10,9 +11,15 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from sunquote.domain.errors import UpstreamUnavailableError
-from tests.factories import MONTHLY_YIELD_KWH_PER_KWP, make_specific_yield
-from tests.fakes import FakeSpecificYieldProvider
+from sunquote.domain.errors import LocationNotSupportedError, UpstreamUnavailableError
+from sunquote.domain.money import Currency
+from tests.factories import (
+    MONTHLY_YIELD_KWH_PER_KWP,
+    QUOTE_DATE,
+    make_exchange_rate,
+    make_specific_yield,
+)
+from tests.fakes import FakeExchangeRateProvider, FakeSpecificYieldProvider
 
 PROBLEM_JSON = "application/problem+json"
 
@@ -119,7 +126,129 @@ def test_assumptions_record_the_submitted_input_pvgis_inputs_ratio_and_panel(
         "width_mm": 1000,
         "area_m2": 2.0,
         "degradation_rate_per_year": 0.005,
+        "unit_price": {"amount": 100, "currency": "USD"},
     }
+
+
+def test_each_option_shows_the_inverter_and_the_price_in_whole_lira(client: TestClient) -> None:
+    option = client.post("/quotes", json=valid_body()).json()["system_options"][0]
+
+    assert option["inverter"] == {
+        "inverter_id": "i35",
+        "manufacturer": "Test",
+        "model": "I35",
+        "ac_power_kw": 3.5,
+    }
+    assert option["price"] == {
+        "installation_cost_try": 106000,
+        "sale_price_try": 132500,
+        "vat_try": 26500,
+        "total_try": 159000,
+    }
+
+
+def test_prices_are_rounded_half_up_but_the_assumptions_keep_full_precision(
+    client: TestClient, exchange_rate_provider: FakeExchangeRateProvider
+) -> None:
+    exchange_rate_provider.rate = make_exchange_rate("41.2345")
+
+    quote = client.post("/quotes", json=valid_body()).json()
+
+    # Installation Cost 108,283.825; Sale Price 135,354.78125; VAT 27,070.95625; total 162,425.7375
+    assert quote["system_options"][0]["price"] == {
+        "installation_cost_try": 108284,
+        "sale_price_try": 135355,
+        "vat_try": 27071,
+        "total_try": 162426,
+    }
+    assert quote["assumptions"]["exchange_rate"]["rate"] == 41.2345
+    assert quote["assumptions"]["pricing"]["margin"] == 0.25
+
+
+def test_assumptions_record_the_exchange_rate_and_every_unit_price(client: TestClient) -> None:
+    assumptions = client.post("/quotes", json=valid_body()).json()["assumptions"]
+
+    assert assumptions["exchange_rate"] == {
+        "base_currency": "USD",
+        "quote_currency": "TRY",
+        "rate": 40,
+        "date": "2026-11-23",
+        "overridden": False,
+    }
+    assert assumptions["pricing"] == {
+        "bos_price_per_kwp": {"amount": 100, "currency": "USD"},
+        "labour_price_per_kwp": {"amount": 3000, "currency": "TRY"},
+        "fixed_project_cost": {"amount": 20000, "currency": "TRY"},
+        "margin": 0.25,
+        "vat_rate": 0.2,
+    }
+    assert assumptions["dc_ac_ratio_range"] == {"minimum": 1.0, "maximum": 1.3}
+    inverters = {i["inverter_id"]: i for i in assumptions["inverters"]}
+    assert set(inverters) == {"i05", "i3", "i35", "i4", "i6", "i8"}
+    assert inverters["i35"]["unit_price"] == {"amount": 650, "currency": "USD"}
+    assert inverters["i35"]["ac_power_kw"] == 3.5
+
+
+def test_tcmb_is_asked_for_the_usd_rate_of_the_quote_date(
+    client: TestClient, exchange_rate_provider: FakeExchangeRateProvider
+) -> None:
+    client.post("/quotes", json=valid_body())
+
+    assert exchange_rate_provider.requests == [(Currency.USD, QUOTE_DATE)]
+
+
+def test_an_exchange_rate_override_is_used_and_tcmb_is_not_called(
+    client: TestClient, exchange_rate_provider: FakeExchangeRateProvider
+) -> None:
+    body = {**valid_body(), "exchange_rate_override": {"rate": 45, "date": "2026-11-01"}}
+
+    quote = client.post("/quotes", json=body).json()
+
+    assert exchange_rate_provider.requests == []
+    assert quote["assumptions"]["exchange_rate"] == {
+        "base_currency": "USD",
+        "quote_currency": "TRY",
+        "rate": 45,
+        "date": "2026-11-01",
+        "overridden": True,
+    }
+    # USD 1,850 x 45 = 83,250 + 12,000 + 20,000 = 115,250; x 1.25 = 144,062.5; VAT 28,812.5
+    assert quote["system_options"][0]["price"] == {
+        "installation_cost_try": 115250,
+        "sale_price_try": 144063,
+        "vat_try": 28813,
+        "total_try": 172875,
+    }
+
+
+def test_an_override_still_works_while_tcmb_is_down(
+    client: TestClient, exchange_rate_provider: FakeExchangeRateProvider
+) -> None:
+    exchange_rate_provider.error = UpstreamUnavailableError("TCMB", "the request timed out")
+    body = {**valid_body(), "exchange_rate_override": {"rate": 45, "date": "2026-11-01"}}
+
+    assert client.post("/quotes", json=body).status_code == 201
+
+
+@pytest.mark.parametrize(
+    "override",
+    [
+        {"rate": 0, "date": "2026-11-01"},
+        {"rate": -40, "date": "2026-11-01"},
+        {"rate": 45},
+        {"rate": 45, "date": "not-a-date"},
+        {"date": "2026-11-01"},
+    ],
+)
+def test_an_invalid_override_is_a_422_problem_naming_the_field(
+    client: TestClient, override: dict[str, Any]
+) -> None:
+    response = client.post("/quotes", json={**valid_body(), "exchange_rate_override": override})
+
+    assert response.status_code == 422
+    assert response.json()["type"] == "urn:sunquote:problem:validation-error"
+    fields = [error["field"] for error in response.json()["errors"]]
+    assert any(field.startswith("exchange_rate_override") for field in fields)
 
 
 def test_the_same_request_gives_the_same_quote(client: TestClient) -> None:
@@ -250,6 +379,53 @@ def test_pvgis_outage_is_a_503_problem(
     assert problem["type"] == "urn:sunquote:problem:upstream-unavailable"
     assert problem["status"] == 503
     assert "PVGIS" in problem["detail"]
+
+
+def test_tcmb_outage_is_a_503_problem(
+    client: TestClient, exchange_rate_provider: FakeExchangeRateProvider
+) -> None:
+    exchange_rate_provider.error = UpstreamUnavailableError("TCMB", "the request timed out")
+
+    response = client.post("/quotes", json=valid_body())
+
+    assert response.status_code == 503
+    assert response.headers["content-type"].startswith(PROBLEM_JSON)
+    problem = response.json()
+    assert problem["type"] == "urn:sunquote:problem:upstream-unavailable"
+    assert "TCMB" in problem["detail"]
+
+
+def test_a_system_no_inverter_fits_is_a_no_compatible_inverter_problem(
+    client: TestClient,
+) -> None:
+    # 6 m2 x 0.80 / 2.0 m2 = 2 panels = 1.0 kWp: the smallest test inverter (0.5 kW) gives a
+    # DC/AC Ratio of 2.0, above the 1.30 maximum, and every other one is oversized.
+    response = client.post("/quotes", json=with_change("roof.usable_area_m2", 6))
+
+    assert response.status_code == 422
+    assert response.headers["content-type"].startswith(PROBLEM_JSON)
+    problem = response.json()
+    assert problem["type"] == "urn:sunquote:problem:no-compatible-inverter"
+    assert problem["title"] == "No compatible inverter"
+    assert problem["status"] == 422
+    assert "1.0 kWp" in problem["detail"]
+
+
+def test_a_location_pvgis_rejects_is_a_422_problem_carrying_its_message(
+    client: TestClient, specific_yield_provider: FakeSpecificYieldProvider
+) -> None:
+    specific_yield_provider.error = LocationNotSupportedError(
+        "Location over the sea. Please, select another location"
+    )
+
+    response = client.post("/quotes", json=valid_body())
+
+    assert response.status_code == 422
+    assert response.headers["content-type"].startswith(PROBLEM_JSON)
+    problem = response.json()
+    assert problem["type"] == "urn:sunquote:problem:location-not-supported"
+    assert problem["title"] == "Location not supported"
+    assert problem["detail"] == "Location over the sea. Please, select another location"
 
 
 def test_openapi_documents_the_endpoint(client: TestClient) -> None:

@@ -42,7 +42,7 @@ def roof(**overrides: str) -> Roof:
             monthly_kwh_per_kwp=(Decimal("1"),) * 11,
             inputs=make_specific_yield().inputs,
         ),
-        lambda: Catalog(panels=(make_panel(),), default_panel_id="missing"),
+        lambda: Catalog(panels=(make_panel(),), default_panel_id="missing", inverters=()),
     ],
 )
 def test_invalid_domain_objects_are_rejected(build: object) -> None:
