@@ -33,6 +33,7 @@ def test_a_created_quote_has_an_id_a_number_a_creation_time_and_a_valid_until_da
 
     assert isinstance(quote["id"], str)
     assert quote["quote_number"] == "SQ-2026-000001"
+    assert quote["is_sample"] is False
     assert quote["quote_date"] == "2026-11-24"
     assert quote["valid_until"] == "2026-12-09"  # 15 days of validity
     assert str(quote["created_at"]).startswith("2026-11-24T")
@@ -53,6 +54,7 @@ def test_a_stored_quote_is_fetched_by_id_exactly_as_it_was_created(client: TestC
     response = client.get(f"/quotes/{created['id']}")
 
     assert response.status_code == 200
+    assert response.json()["is_sample"] is False
     assert response.json() == created
 
 
@@ -85,6 +87,7 @@ def test_the_list_is_newest_first_and_each_item_summarises_the_quote(client: Tes
         "id": created[2]["id"],
         "quote_number": "SQ-2026-000003",
         "created_at": created[2]["created_at"],
+        "is_sample": False,
         "customer_name": "Ceren",
         "district": None,
         "province": None,

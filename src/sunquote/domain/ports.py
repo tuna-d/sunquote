@@ -67,7 +67,7 @@ class Clock(Protocol):
 class CounterStore(Protocol):
     """Shared counters that expire, for limits that hold across serverless instances.
 
-    The per-IP rate limits use it, and the daily Gemini budget will too. A counter is a named
+    The per-IP rate limits and the daily Gemini budget use it. A counter is a named
     integer that starts at zero and disappears `ttl_seconds` after it was created.
     """
 
@@ -94,7 +94,8 @@ class NarrativeWriter(Protocol):
         """A draft for the Quote `context` describes.
 
         On a retry, `previous_violations` are what was wrong with the previous attempt. Any
-        failure is raised as `NarrativeUnavailableError`.
+        failure is raised as `NarrativeUnavailableError`, except a spent daily budget, which is
+        `GeminiBudgetExhaustedError`.
         """
         ...
 
@@ -121,7 +122,8 @@ class ConversationModel(Protocol):
         `messages` is the conversation so far, ending with the Sales Rep's message. `exchanges`
         are the tool calls made since then with their results, oldest first, and
         `rejected_reply` is a text answer the assistant refused and the reason, to be corrected.
-        Any failure is raised as `ConversationUnavailableError`.
+        Any failure is raised as `ConversationUnavailableError`, except a spent daily budget,
+        which is `GeminiBudgetExhaustedError`.
         """
         ...
 
@@ -131,6 +133,7 @@ class StoredQuote:
     """A Quote as the repository holds it: the immutable Quote plus its identity.
 
     `district` and `province` are optional listing columns supplied by geocoding.
+    `is_sample` marks a synthetic Quote kept by the demo cleanup.
     """
 
     id: UUID
@@ -138,6 +141,7 @@ class StoredQuote:
     quote: Quote
     district: str | None = None
     province: str | None = None
+    is_sample: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -149,8 +153,7 @@ class QuotePage:
 
 
 class QuoteRepository(Protocol):
-    """Stores Quotes and issues their numbers. A stored Quote can never be changed or deleted,
-    so the port has no update or delete."""
+    """Stores immutable Quotes and issues their numbers. Demo cleanup is outside this port."""
 
     async def next_quote_number(self, year: int) -> str:
         """The next free Quote Number of `year` (`SQ-<year>-<6-digit sequence>`).
@@ -161,9 +164,14 @@ class QuoteRepository(Protocol):
         ...
 
     async def save(
-        self, quote: Quote, *, district: str | None = None, province: str | None = None
+        self,
+        quote: Quote,
+        *,
+        district: str | None = None,
+        province: str | None = None,
+        is_sample: bool = False,
     ) -> StoredQuote:
-        """Store `quote` under a new id and return it as stored."""
+        """Store `quote`, or return the existing sample for the same synthetic Customer."""
         ...
 
     async def get(self, quote_id: UUID) -> StoredQuote | None:

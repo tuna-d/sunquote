@@ -1,0 +1,36 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: en-US
+
+reviews:
+  auto_review:
+    enabled: true
+    base_branches:
+      - ".*"
+  path_filters:
+    - "!uv.lock"
+    - "!web/package-lock.json"
+    - "!web/openapi.json"
+    - "!web/**/openapi.ts"
+    - "!web/**/openapi.d.ts"
+    - "!web/**/openapi-types.ts"
+    - "!web/**/schema.d.ts"
+  path_instructions:
+    - path: "**/*"
+      instructions: >-
+        Require English in repository prose, identifiers, and comments. Preserve
+        Turkish customer-facing copy in Quote templates.
+    - path: "src/sunquote/**"
+      instructions: >-
+        Money must use Decimal and carry its currency. Flag floats for monetary
+        values. Put units in names, such as capacity_kwp, annual_production_kwh,
+        roof_area_m2, and tariff_try_per_kwh. Under ADR 0001, the LLM may refer to
+        Quote figures only through approved Placeholders. Reject digits outside
+        Placeholders and unknown Placeholders. Fill them from calculated Quote
+        values when rendering customer-facing text.
+    - path: "src/sunquote/domain/**"
+      instructions: >-
+        Keep the domain pure. Flag FastAPI, Pydantic request models, database
+        access, file system access, network access, and system clock access.
+        Require pytest coverage under tests/ for every new or changed domain
+        rule. Unit tests use fakes for external services and never access the
+        network.

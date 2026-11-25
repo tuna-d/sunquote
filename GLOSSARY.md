@@ -192,6 +192,10 @@ The anonymised description of a Quote that the LLM receives: structure, flags an
 **Narrative Draft**:
 The prose slots as the LLM wrote them, text with Placeholders still unfilled. It is stored with the Quote only after it passes validation.
 
+**Gemini Budget**:
+The global number of Gemini requests the service may make per day (00:00 to 24:00 Europe/Istanbul), shared by the Narrative, its retries and the Assistant, and set below the free tier's own limit. When it is spent the Narrative is a `fallback` with the reason `budget_spent` and the Assistant answers `503`.
+_Avoid_: quota, token limit
+
 **Narrative source**:
 Where a Quote's Narrative came from: `llm` (a validated Narrative Draft) or `fallback` (the template's fixed Turkish text, used when there is no key, the LLM fails, times out or is rejected twice).
 

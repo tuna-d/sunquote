@@ -118,19 +118,28 @@ class NarrativeSource(StrEnum):
     FALLBACK = "fallback"
 
 
+class FallbackReason(StrEnum):
+    """Why a `fallback` Narrative was recorded, when the cause is worth keeping."""
+
+    BUDGET_SPENT = "budget_spent"
+    """The day's Gemini budget was spent, so the writer was not asked."""
+
+
 @dataclass(frozen=True, slots=True)
 class NarrativeRecord:
     """The Narrative as stored with a Quote.
 
     `llm`: the writer's validated `draft` and the `model` that wrote it. `fallback`: no draft
     and no model, so the template's fixed text is shown. `generated_at` is when the Narrative
-    step ran; it is None only for Quotes stored before the step existed.
+    step ran; it is None only for Quotes stored before the step existed. `fallback_reason` names
+    the cause of a `fallback` when one is recorded (the spent budget); it is None otherwise.
     """
 
     source: NarrativeSource
     draft: NarrativeDraft | None
     model: str | None
     generated_at: datetime | None
+    fallback_reason: FallbackReason | None = None
 
     def __post_init__(self) -> None:
         if self.source is NarrativeSource.LLM:
@@ -138,6 +147,8 @@ class NarrativeRecord:
                 raise ValueError("an llm Narrative needs a draft and a model name")
         elif self.draft is not None or self.model is not None:
             raise ValueError("a fallback Narrative has no draft and no model name")
+        if self.source is NarrativeSource.LLM and self.fallback_reason is not None:
+            raise ValueError("only a fallback Narrative has a fallback reason")
 
 
 # Quotes stored before the Narrative step read back as this.

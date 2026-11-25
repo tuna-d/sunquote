@@ -44,7 +44,7 @@ from sunquote.domain.model import (
     SubscriberGroup,
 )
 from sunquote.domain.money import Currency, ExchangeRate, ExchangeRateOverride, Money
-from sunquote.domain.narrative import NarrativeSource
+from sunquote.domain.narrative import FallbackReason, NarrativeSource
 from sunquote.domain.ports import QuotePage, StoredQuote
 from sunquote.domain.pricing import SystemPrice
 from sunquote.domain.production import SpecificYieldInputs
@@ -483,6 +483,12 @@ class NarrativeResponse(BaseModel):
         description="`llm` when a writer's validated text is shown, `fallback` for the fixed text."
     )
     model: str | None = Field(description="The model that wrote the text; null for `fallback`.")
+    fallback_reason: FallbackReason | None = Field(
+        description=(
+            "Why the fixed text is shown, when the cause is recorded: `budget_spent` when the "
+            "day's Gemini budget was spent. Null for `llm` and for other causes."
+        )
+    )
     generated_at: dt.datetime | None = Field(
         description="When the Narrative step ran; null for Quotes stored before it existed."
     )
@@ -494,6 +500,7 @@ class QuoteResponse(BaseModel):
     id: UUID
     quote_number: str = Field(description="Readable identifier, `SQ-<year>-<6-digit sequence>`.")
     created_at: dt.datetime
+    is_sample: bool = Field(description="Whether this is a synthetic sample Quote.")
     customer: SubmittedCustomer
     quote_date: dt.date
     valid_until: dt.date = Field(description="The last day the quoted price holds.")
@@ -676,6 +683,7 @@ def _narrative_response(stored: StoredQuote) -> NarrativeResponse:
         next_steps=filled.next_steps,
         source=record.source,
         model=record.model,
+        fallback_reason=record.fallback_reason,
         generated_at=record.generated_at,
     )
 
@@ -689,6 +697,7 @@ def quote_response(stored: StoredQuote) -> QuoteResponse:
         id=stored.id,
         quote_number=quote.quote_number,
         created_at=stored.created_at,
+        is_sample=stored.is_sample,
         customer=SubmittedCustomer(
             name=quote.customer.name, phone=quote.customer.phone, email=quote.customer.email
         ),
@@ -761,6 +770,7 @@ class QuoteListItem(BaseModel):
     id: UUID
     quote_number: str
     created_at: dt.datetime
+    is_sample: bool = Field(description="Whether this is a synthetic sample Quote.")
     customer_name: str
     district: str | None = Field(description="Null until address geocoding exists.")
     province: str | None = Field(description="Null until address geocoding exists.")
@@ -783,6 +793,7 @@ def _list_item(stored: StoredQuote) -> QuoteListItem:
         id=stored.id,
         quote_number=quote.quote_number,
         created_at=stored.created_at,
+        is_sample=stored.is_sample,
         customer_name=quote.customer.name,
         district=stored.district,
         province=stored.province,

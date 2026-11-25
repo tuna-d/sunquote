@@ -37,6 +37,7 @@ from sunquote.domain.conversation import (
     ToolExchange,
 )
 from sunquote.domain.errors import ConversationUnavailableError
+from sunquote.domain.gemini_budget import GeminiBudget
 from sunquote.domain.placeholders import BARE_NUMBER_UNITS, MONEY_SUFFIX, option_placeholder
 
 # Placeholder names and units in the prompt come from the shared vocabulary, never from a copy.
@@ -138,12 +139,14 @@ class GeminiConversationModel:
         model: str,
         base_url: str = DEFAULT_GEMINI_BASE_URL,
         timeout_seconds: float,
+        budget: GeminiBudget | None = None,
     ) -> None:
         self._client = client
         self._api_key = api_key
         self._model = model
         self._endpoint = generate_content_endpoint(base_url, model)
         self._timeout_seconds = timeout_seconds
+        self._budget = budget
 
     def __repr__(self) -> str:
         return f"GeminiConversationModel(model={self._model!r})"
@@ -168,6 +171,7 @@ class GeminiConversationModel:
             body=body,
             timeout_seconds=self._timeout_seconds,
             fail=ConversationUnavailableError,
+            budget=self._budget,
         )
         return _parse_reply(payload)
 

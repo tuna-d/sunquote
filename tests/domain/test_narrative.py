@@ -9,6 +9,7 @@ import pytest
 
 from sunquote.domain.model import RoofType
 from sunquote.domain.narrative import (
+    FallbackReason,
     NarrativeContext,
     NarrativeDraft,
     NarrativeRecord,
@@ -499,6 +500,28 @@ def test_an_llm_record_needs_a_draft_and_a_model_and_a_fallback_has_neither() ->
         NarrativeRecord(source=NarrativeSource.FALLBACK, draft=draft, model=None, generated_at=None)
     with pytest.raises(ValueError, match="fallback"):
         NarrativeRecord(source=NarrativeSource.FALLBACK, draft=None, model="m", generated_at=None)
+
+
+def test_only_a_fallback_record_carries_a_fallback_reason() -> None:
+    draft = NarrativeDraft(greeting="a", summary="b", next_steps="c")
+
+    fallback = NarrativeRecord(
+        source=NarrativeSource.FALLBACK,
+        draft=None,
+        model=None,
+        generated_at=None,
+        fallback_reason=FallbackReason.BUDGET_SPENT,
+    )
+
+    assert fallback.fallback_reason is FallbackReason.BUDGET_SPENT
+    with pytest.raises(ValueError, match="fallback reason"):
+        NarrativeRecord(
+            source=NarrativeSource.LLM,
+            draft=draft,
+            model="m",
+            generated_at=None,
+            fallback_reason=FallbackReason.BUDGET_SPENT,
+        )
 
 
 # --- One text on its own (the assistant's reply uses it) -------------------------------------

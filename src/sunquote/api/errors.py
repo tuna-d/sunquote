@@ -19,6 +19,7 @@ from sunquote.domain.errors import (
     AssistantNotConfiguredError,
     ConversationUnavailableError,
     DomainError,
+    GeminiBudgetExhaustedError,
     LocationNotSupportedError,
     NoCompatibleInverterError,
     NoViableSystemError,
@@ -59,6 +60,9 @@ REPLY_REJECTED = ProblemType("reply-rejected", "Reply rejected", 422)
 UNKNOWN_TOOL = ProblemType("unknown-tool", "Unknown tool", 422)
 ASSISTANT_NOT_CONFIGURED = ProblemType("assistant-not-configured", "Assistant not configured", 503)
 ASSISTANT_UNAVAILABLE = ProblemType("assistant-unavailable", "Assistant unavailable", 503)
+ASSISTANT_BUDGET_EXHAUSTED = ProblemType(
+    "assistant-budget-exhausted", "Assistant budget exhausted", 503
+)
 
 PROBLEMS_BY_EXCEPTION: dict[type[DomainError], ProblemType] = {
     UnsupportedSubscriberGroupError: UNSUPPORTED_SUBSCRIBER_GROUP,
@@ -70,6 +74,7 @@ PROBLEMS_BY_EXCEPTION: dict[type[DomainError], ProblemType] = {
     QuoteNotFoundError: QUOTE_NOT_FOUND,
     AssistantNotConfiguredError: ASSISTANT_NOT_CONFIGURED,
     ConversationUnavailableError: ASSISTANT_UNAVAILABLE,
+    GeminiBudgetExhaustedError: ASSISTANT_BUDGET_EXHAUSTED,
 }
 
 

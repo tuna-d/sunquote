@@ -1,6 +1,7 @@
 """The real adapters and shipped data files wired together, with recorded PVGIS and TCMB
 responses."""
 
+import json
 import socket
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
@@ -15,7 +16,11 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.pool import AsyncAdaptedQueuePool, NullPool
 
 from sunquote.adapters.clock import SystemClock
-from sunquote.adapters.gemini import GeminiNarrativeWriter
+from sunquote.adapters.gemini import (
+    DEFAULT_GEMINI_DAILY_REQUEST_BUDGET,
+    GEMINI_FREE_TIER_REQUESTS_PER_DAY,
+    GeminiNarrativeWriter,
+)
 from sunquote.adapters.gemini_conversation import GeminiConversationModel
 from sunquote.adapters.postgres.counter_store import PostgresCounterStore
 from sunquote.adapters.postgres.quote_repository import PostgresQuoteRepository
@@ -215,14 +220,14 @@ def test_savings_come_from_the_shipped_tariff_and_financial_assumptions(
     # 3.96 kWp x the 12 recorded PVGIS months = 5,829.63 kWh, netted month by month against
     # 500 kWh: January-March and October-December (274 to 481 kWh) net everything, April-
     # September (525, 570, 586, 675, 660 and 583 kWh) exceed the 500 kWh and export. Netted
-    # 5,229.80 kWh, exported 599.84 kWh at 2.92 = 1,751.53 TRY. The grid bill (24,429.60 a
+    # 5,229.80 kWh, exported 599.84 kWh at 1.24 = 743.80 TRY. The grid bill (24,429.60 a
     # year) drops by 21,934.14 with each month's own tiers.
     first_year = savings["cash_flow"][0]
     assert first_year["netted_kwh"] == 5230
     assert first_year["exported_kwh"] == 600
     assert first_year["netting_savings_try"] == 21934
-    assert first_year["export_income_try"] == 1752
-    assert savings["first_year_annual_savings_try"] == 23686  # 23,685.67
+    assert first_year["export_income_try"] == 744  # 599.84 x 1.24 = 743.80
+    assert savings["first_year_annual_savings_try"] == 22678  # 22,677.94
     assert option["netted_share"] == 0.897  # 5,229.80 / 5,829.63
     assumptions = quote["assumptions"]
     assert assumptions["tariff"]["tier_threshold_kwh_per_day"] == "8"
@@ -457,3 +462,162 @@ def test_without_a_database_or_a_counter_store_nothing_is_limited() -> None:
     dependencies = build_dependencies(Settings(), quote_repository=FakeQuoteRepository())
 
     assert dependencies.rate_limiter is None
+
+
+# --- The daily Gemini budget (ADR 0007) ----------------------------------------------------------
+
+
+def _gemini_budget_client(
+    recorded_transport: httpx.MockTransport,
+    requests_seen: list[httpx.Request],
+    answers: list[bytes],
+    *,
+    daily_limit: int,
+) -> TestClient:
+    """A wired app whose Gemini answers `answers` in turn and whose budget is `daily_limit`."""
+    remaining = iter(answers)
+
+    def upstream(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "generativelanguage.googleapis.com":
+            requests_seen.append(request)
+            return httpx.Response(200, content=next(remaining))
+        return recorded_transport.handler(request)  # type: ignore[attr-defined,no-any-return]
+
+    settings = Settings(
+        redis_url=None, gemini_api_key=SecretStr("key-123"), gemini_daily_request_budget=daily_limit
+    )
+    dependencies = build_dependencies(
+        settings,
+        transport=httpx.MockTransport(upstream),
+        quote_repository=FakeQuoteRepository(),
+        counter_store=InMemoryCounterStore(clock=lambda: datetime.now(UTC)),
+    )
+    return TestClient(create_app(settings, dependencies))
+
+
+def _gemini_calls(requests_seen: list[httpx.Request]) -> int:
+    return sum(r.url.host == "generativelanguage.googleapis.com" for r in requests_seen)
+
+
+def test_a_spent_budget_gives_a_fallback_narrative_with_its_reason_and_no_gemini_call(
+    recorded_transport: httpx.MockTransport, requests_seen: list[httpx.Request]
+) -> None:
+    success = (RECORDINGS / "gemini_generate_content_success.json").read_bytes()
+    with _gemini_budget_client(
+        recorded_transport, requests_seen, [success], daily_limit=1
+    ) as client:
+        first = client.post("/quotes", json=valid_body())
+        second = client.post("/quotes", json=valid_body())
+
+    assert first.status_code == 201 and second.status_code == 201
+    assert first.json()["narrative"]["source"] == "llm"
+    assert first.json()["narrative"]["fallback_reason"] is None
+    narrative = second.json()["narrative"]
+    assert narrative["source"] == "fallback"
+    assert narrative["fallback_reason"] == "budget_spent"
+    assert narrative["model"] is None
+    assert _gemini_calls(requests_seen) == 1
+
+
+def test_a_narrative_retry_draws_from_the_budget_too(
+    recorded_transport: httpx.MockTransport, requests_seen: list[httpx.Request]
+) -> None:
+    # Well-formed, but a digit outside a placeholder: the validator rejects it and asks again.
+    draft = {
+        "greeting": "Merhaba {customer_name}, 5 teklif.",
+        "summary": "Özet.",
+        "options_comparison": None,
+        "next_steps": "Adımlar.",
+    }
+    invalid = json.dumps(
+        {
+            "candidates": [
+                {
+                    "content": {"parts": [{"text": json.dumps(draft)}]},
+                    "finishReason": "STOP",
+                }
+            ]
+        }
+    ).encode()
+    with _gemini_budget_client(
+        recorded_transport, requests_seen, [invalid, invalid, invalid], daily_limit=2
+    ) as client:
+        client.post("/quotes", json=valid_body())  # attempt and retry: two requests
+        quote = client.post("/quotes", json=valid_body()).json()
+
+    assert quote["narrative"]["fallback_reason"] == "budget_spent"
+    assert _gemini_calls(requests_seen) == 2
+
+
+def test_the_assistant_answers_503_budget_exhausted_without_calling_gemini_when_spent(
+    recorded_transport: httpx.MockTransport, requests_seen: list[httpx.Request]
+) -> None:
+    question = (RECORDINGS / "gemini_conversation_text.json").read_bytes()
+    body = {"messages": [{"role": "user", "content": "Merhaba"}]}
+    with _gemini_budget_client(
+        recorded_transport, requests_seen, [question], daily_limit=1
+    ) as client:
+        client.post("/assistant/messages", json=body)  # spends the one request
+        response = client.post("/assistant/messages", json=body)
+
+    assert response.status_code == 503
+    assert response.headers["content-type"] == "application/problem+json"
+    problem = response.json()
+    assert problem["type"] == "urn:sunquote:problem:assistant-budget-exhausted"
+    assert problem["status"] == 503
+    assert _gemini_calls(requests_seen) == 1
+
+
+def test_a_budget_spent_after_the_assistant_created_a_quote_gives_the_fixed_confirmation(
+    recorded_transport: httpx.MockTransport, requests_seen: list[httpx.Request]
+) -> None:
+    answers = [
+        (RECORDINGS / "gemini_conversation_function_call.json").read_bytes(),
+        (RECORDINGS / "gemini_generate_content_success.json").read_bytes(),
+    ]
+    # Request 1 asks for the tool call; request 2 would write the Narrative; request 3 the reply.
+    with _gemini_budget_client(recorded_transport, requests_seen, answers, daily_limit=2) as client:
+        response = client.post(
+            "/assistant/messages",
+            json={"messages": [{"role": "user", "content": "Ayşe Yılmaz için teklif: Etimesgut"}]},
+        )
+        assert response.status_code == 200, response.text
+        quote_id = response.json()["quote"]["id"]
+        stored = client.get(f"/quotes/{quote_id}").json()
+
+    assert stored["narrative"]["source"] == "llm"
+    assert "{" not in response.json()["reply"]
+    assert _gemini_calls(requests_seen) == 2
+
+
+def test_the_daily_budget_defaults_to_80_percent_of_the_free_tier_requests_per_day() -> None:
+    assert Settings().gemini_daily_request_budget == DEFAULT_GEMINI_DAILY_REQUEST_BUDGET
+    assert DEFAULT_GEMINI_DAILY_REQUEST_BUDGET == GEMINI_FREE_TIER_REQUESTS_PER_DAY * 80 // 100
+
+
+def test_the_budget_counts_in_the_shared_counter_store_under_the_istanbul_day() -> None:
+    store = InMemoryCounterStore(clock=lambda: datetime.now(UTC))
+
+    dependencies = build_dependencies(
+        Settings(gemini_api_key=SecretStr("key-123")),
+        quote_repository=FakeQuoteRepository(),
+        counter_store=store,
+    )
+
+    writer = dependencies.quote_service._narrative_writer
+    assert isinstance(writer, GeminiNarrativeWriter)
+    assert writer._budget is not None
+    assert writer._budget._store is store
+    assert dependencies.conversation_model is not None
+    assert isinstance(dependencies.conversation_model, GeminiConversationModel)
+    assert dependencies.conversation_model._budget is writer._budget
+
+
+def test_without_a_counter_store_gemini_is_not_budgeted() -> None:
+    dependencies = build_dependencies(
+        Settings(gemini_api_key=SecretStr("key-123")), quote_repository=FakeQuoteRepository()
+    )
+
+    writer = dependencies.quote_service._narrative_writer
+    assert isinstance(writer, GeminiNarrativeWriter)
+    assert writer._budget is None
