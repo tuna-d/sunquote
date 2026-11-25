@@ -1,7 +1,8 @@
 # PLACEHOLDER DATA. Not any installer's or distributor's contract terms.
 #
 # Residential Retail Tariff, Export Price and Self-Consumption Ratio, from the research note
-# docs/research/placeholder-market-data.md (section 3, research date 2026-11-24).
+# docs/research/placeholder-market-data.md (section 3, research date 2026-11-24; regulation,
+# taxes and Export Price re-checked against primary sources on 2026-11-25, research note section 9).
 # Every value carries its kind, source and date:
 #   direct   - copied from a primary source
 #   derived  - computed from direct figures (derivation in the source text)
@@ -17,7 +18,7 @@ description = "Placeholder residential tariff: derived from the EPDK table of 20
 
 [tariff]
 valid_from = 2026-04-04
-source = "EPDK electricity tariff table valid from 2026-04-04 (AG tek terim, mesken), https://www.epdk.gov.tr/Detay/DownloadDocument?id=pI+XZjfJIU0=; taxes per https://enerjiajansi.com.tr/elektrik-birim-fiyatlari/ (BTV 5% on energy, KDV 10%)"
+source = "EPDK electricity tariff table valid from 2026-04-04 (AG tek terim, mesken; Kurul Karari 14461), https://www.epdk.gov.tr/Detay/DownloadDocument?id=pI+XZjfJIU0=; taxes verified 2026-11-25: BTV 5% on the energy charge only (Law 2464 Art. 37 and 38(b)), KDV 10% on residential electricity (Decision 2007/13033 list II item 34, CBK 5249 of 2022-03-01, rate 10% since CBK 7346 of 2023-07-10)"
 
 [tier_threshold_kwh_per_year]
 value = 2920
@@ -28,20 +29,20 @@ date = 2026-04-04
 [low_tariff_try_per_kwh]
 value = 3.24
 kind = "derived"
-source = "docs/research/placeholder-market-data.md section 3: (1.05 x 0.494065 + 2.4249) x 1.10 = 3.2380 TRY/kWh from the EPDK 'Mesken (8 kWh/gun ve alti)' row; BTV 5% and KDV 10% not confirmed from a legal text"
+source = "docs/research/placeholder-market-data.md section 3: (1.05 x 0.494065 + 2.4249) x 1.10 = 3.2380 TRY/kWh from the EPDK 'Mesken (8 kWh/gun ve alti)' row; BTV 5% (Law 2464 Art. 38(b)) and KDV 10% (Decision 2007/13033 list II item 34) verified against the legal texts on 2026-11-25; an Enerji Fonu charge, if still levied, is not modelled (unverified)"
 date = 2026-04-04
 
 [high_tariff_try_per_kwh]
 value = 4.86
 kind = "derived"
-source = "docs/research/placeholder-market-data.md section 3: (1.05 x 1.895808 + 2.4249) x 1.10 = 4.8570 TRY/kWh from the EPDK 'Mesken (8 kWh/gun ustu)' row; BTV 5% and KDV 10% not confirmed from a legal text"
+source = "docs/research/placeholder-market-data.md section 3: (1.05 x 1.895808 + 2.4249) x 1.10 = 4.8570 TRY/kWh from the EPDK 'Mesken (8 kWh/gun ustu)' row; BTV 5% (Law 2464 Art. 38(b)) and KDV 10% (Decision 2007/13033 list II item 34) verified against the legal texts on 2026-11-25; an Enerji Fonu charge, if still levied, is not modelled (unverified)"
 date = 2026-04-04
 
 [export_price_try_per_kwh]
-value = 2.92
-kind = "estimate"
-source = "docs/research/placeholder-market-data.md section 3: YEKDEM solar unit price 292.49 kr/kWh (EPIAS, effective 2026-11-01); unverified for a new residential plant, an indicative upper estimate"
-date = 2026-11-01
+value = 1.24
+kind = "derived"
+source = "docs/research/placeholder-market-data.md section 9: a new residential plant (call letter after 2019-05-10) is paid the Customer's own subscriber group's retail single-rate active energy charge (Law 5346 Art. 6/A and Annex I item (e)); for mesken the high-tier energy charge 189.5808 kr/kWh (EPDK table valid from 2026-04-04) less the export-side distribution fee 65.6008 kr/kWh (Lisanssiz Uretici 2, same table's note) = 123.98 kr/kWh. Lower end of a range of 1.24 (net of the fee) to 1.90 (gross, no fee deducted); the YEKDEM 2.92 TRY/kWh does NOT apply to such a plant. Surplus is paid in the month it arises (Regulation Art. 26(7)(b)), no carry-over found. Components direct, the 'price less fee' rule and the high-tier reading rest on a secondary source (gesatlasi.com.tr) and are unverified; the domestic-equipment bonus is not assumed"
+date = 2026-04-04
 
 [self_consumption_ratio]
 value = 0.85
