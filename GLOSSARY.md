@@ -67,7 +67,7 @@ The all-in price per kWh the Customer pays for grid electricity, taxes and fees 
 _Avoid_: electricity price, rate
 
 **Tariff Tier**:
-A marginal band of the Retail Tariff. Annual consumption up to the Subscriber Group's threshold is priced at the low tier; only the part above it is priced at the high tier.
+A marginal band of the Retail Tariff. Each month, consumption up to the Subscriber Group's threshold for that month (a daily allowance times the month's days) is priced at the low tier; only the part above it is priced at the high tier.
 _Avoid_: kademe, step
 
 ### System and production
@@ -92,11 +92,20 @@ The constraint that actually set a System Option's size: the Roof, the consumpti
 Expected annual production per kWp at the Site for the Roof's orientation and tilt, in kWh/kWp/year.
 _Avoid_: yield, irradiation, sun hours
 
-**Self-Consumption Ratio**:
-The share of annual production the Customer uses directly instead of exporting to the grid.
+**Monthly Netting**:
+The settlement rule for residential Sites: each month's production is offset against that month's consumption, and only the production beyond it is exported.
+_Avoid_: net metering, hourly netting
+
+**Netted Energy**:
+The part of a month's production that offsets that month's consumption under Monthly Netting.
+_Avoid_: self-consumption, self-consumed energy
+
+**Netted Share**:
+The share of a System Option's annual production that is Netted Energy. A result of the calculation, not an Assumption.
+_Avoid_: Self-Consumption Ratio
 
 **Exported Energy**:
-Production that is not self-consumed and is sold to the grid.
+The part of a month's production beyond that month's consumption, sold to the grid.
 _Avoid_: surplus, excess
 
 **Export Price**:
@@ -134,11 +143,23 @@ _Avoid_: currency rate, FX
 ### Financial result
 
 **Annual Savings**:
-The money a System Option saves the Customer in one year: the drop in the grid bill from self-consumed energy (which comes off the highest Tariff Tier first) plus Exported Energy at the Export Price.
+The money a System Option saves the Customer in one year: the drop in the grid bill from Netted Energy (which comes off the highest Tariff Tier first) plus Exported Energy at the Export Price.
 _Avoid_: profit, return
 
 **Payback Period**:
 The number of years until cumulative Annual Savings, net of later costs such as inverter replacement, first exceed the Sale Price including VAT, without discounting.
+
+**Discount Rate**:
+The real (inflation-adjusted) yearly rate at which a System Option's future net savings are brought back to today's lira.
+_Avoid_: interest rate, hurdle rate
+
+**Net Present Value**:
+A System Option's net savings over its lifetime, each discounted at the Discount Rate, minus the Sale Price including VAT.
+_Avoid_: profit, lifetime gain
+
+**Internal Rate of Return**:
+The real Discount Rate at which a System Option's Net Present Value is zero.
+_Avoid_: ROI, yield
 _Avoid_: ROI, amortization, break-even
 
 ### Quote

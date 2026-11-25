@@ -1,0 +1,11 @@
+# Monthly Netting replaces the fixed Self-Consumption Ratio
+
+Residential plants are settled by Monthly Netting (Lisanssız Elektrik Üretim Yönetmeliği, amended Madde 26(20), in force 2026-05-01): each month's production is offset against that month's consumption, and only the production beyond it is exported. sunquote therefore computes, for every month, Netted Energy = min(production, consumption) from the 12 monthly PVGIS values and the Monthly Consumption, and treats the rest of the month's production as Exported Energy. The Tariff Tiers follow the same calendar: each month's threshold is the daily allowance (8 kWh) times the month's days, and that month's Netted Energy comes off its high tier first. This supersedes the annual threshold of [ADR 0002](0002-marginal-tariff-tiers.md); the tiers stay marginal.
+
+Spec #1 used a single Self-Consumption Ratio of 0.85 for every System Option. That figure was derived for a Consumption-Matched system, so a Roof-Max option larger than consumption got the same 85% valued at the Retail Tariff and its Annual Savings were overstated. The monthly calculation needs no new data (PVGIS already returns monthly values), and it makes the netted share fall as the system grows, which is the behaviour a Customer's bill actually shows. An hourly self-consumption model was rejected: it needs a load profile the Sales Rep cannot give, and hourly matching does not change a residential bill under Monthly Netting.
+
+## Consequences
+
+- The Self-Consumption Ratio is no longer an Assumption. The Netted Share is a result, reported per System Option.
+- Consumption is assumed flat across the 12 months, because the input is an average month. A Customer with a summer-heavy load nets more than the Quote says, a winter-heavy one less.
+- How unused monthly surplus is valued (carried over or sold) is part of the Export Price research; until it is confirmed, surplus is sold at the Export Price in its month.
