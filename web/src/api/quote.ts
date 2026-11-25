@@ -3,7 +3,10 @@ import type { QuoteResponse } from "./types";
 
 export type QuoteResult =
   | { ok: true; quote: QuoteResponse }
-  /** No such Quote. The page answers 404. */
+  /**
+   * No such Quote. The page calls `notFound()`, which answers a real HTTP 404 only while nothing has
+   * streamed yet: do not add a `loading.tsx` above `quotes/[id]` (it would start the response as 200).
+   */
   | { ok: false; reason: "not-found" }
   /** `unavailable`: the API could not be reached. `error`: it answered with a failure. */
   | { ok: false; reason: "unavailable" | "error" };
