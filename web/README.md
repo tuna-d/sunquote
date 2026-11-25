@@ -40,6 +40,14 @@ build time as well, because the `/api/:path*` rewrite in `next.config.ts` is bak
   renders the failure.
 - **Page pattern.** A page is a thin async server component: read the params, call the loader,
   render a pure view (`QuoteListView`). The view is what the tests render.
+- **Quote detail page.** `src/app/quotes/[id]/page.tsx` loads one Quote (`src/api/quote.ts`, which
+  tells `not-found` from `unavailable` and `error`) and renders `QuoteDetailView`. An unknown id goes
+  to `not-found.tsx` (`QuoteNotFound`). The rows that describe a System Option live in one list,
+  `src/lib/optionRows.ts`: the option card (`OptionCard`) and Tablo 1 both read it, so a figure added
+  there (Netted Share, NPV and IRR in #50) appears in both. Chart data is shaped in `src/lib/charts.ts`;
+  the Recharts components (`ProductionChart`, `CumulativeSavingsChart`) are client components
+  styled from `chartStyle.ts` (token variables). Each figure has a text alternative. Ek A comes from
+  `src/lib/assumptionGroups.ts`.
 - **Formatting.** `src/lib/format.ts` (`formatTry`, `formatCapacityKwp`, `formatCreatedAt`, ...)
   uses non-breaking spaces and Istanbul time. Add new formatters there, with tests.
 

@@ -1,0 +1,412 @@
+/* Option cards */
+.card {
+  min-width: 0;
+  padding: 24px 28px 24px 0;
+}
+
+.card + .card {
+  padding: 24px 0 24px 28px;
+  border-left: 1px solid var(--rule);
+}
+
+.kickOne,
+.kickTwo {
+  margin: 0 0 12px;
+  font: 600 12px var(--sans);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.kickOne {
+  color: var(--primary);
+}
+
+.kickTwo {
+  color: var(--accent);
+}
+
+.big {
+  margin: 6px 0 2px;
+  font: 500 52px/1 var(--serif);
+  letter-spacing: -0.02em;
+  font-variation-settings: "opsz" 72;
+  white-space: nowrap;
+}
+
+.cardNote {
+  margin: 0;
+  font: italic 400 17px/1.35 var(--serif);
+  color: var(--ink-2);
+}
+
+.pay {
+  margin: 14px 0 0;
+  font: italic 400 20px/1.3 var(--serif);
+}
+
+/* The solar-gold highlighter: a fill behind ink text. */
+.pay b {
+  font-style: normal;
+  font-weight: 600;
+  background: linear-gradient(transparent 56%, var(--gold) 56%);
+}
+
+.facts {
+  margin: 20px 0 0;
+}
+
+.facts div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 6px 0;
+  border-bottom: 1px dotted var(--rule-strong);
+}
+
+.facts dt {
+  flex: none;
+  color: var(--ink-2);
+  font-size: 16px;
+}
+
+.facts dd {
+  margin: 0;
+  text-align: right;
+  font-size: 16px;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-top: 1px solid var(--ink);
+  border-bottom: 1px solid var(--ink);
+}
+
+.cards.single {
+  grid-template-columns: 1fr;
+}
+
+.cards.single .card {
+  padding-right: 0;
+}
+
+@media (max-width: 800px) {
+  .cards {
+    grid-template-columns: 1fr;
+  }
+
+  .card,
+  .card + .card {
+    padding: 24px 0;
+  }
+
+  .card + .card {
+    border-left: 0;
+    border-top: 1px solid var(--rule);
+  }
+
+  .big {
+    font-size: 40px;
+  }
+}
+
+/* Sections */
+.part {
+  margin-top: var(--space-7);
+}
+
+.part > header {
+  margin-bottom: 20px;
+}
+
+.actions {
+  margin: 24px 0 0;
+}
+
+/* Tablo 1 */
+.compare {
+  margin-top: 28px;
+}
+
+.compare td {
+  width: 34%;
+}
+
+.compare th[scope="col"]:not(:first-child) {
+  width: 34%;
+}
+
+.total th,
+.total td {
+  background: var(--wash);
+  border-top: 1px solid var(--ink) !important;
+  border-bottom: 1px solid var(--ink) !important;
+  font-weight: 600;
+  color: var(--ink) !important;
+}
+
+.total th {
+  padding-left: 10px !important;
+}
+
+.total td:last-child {
+  padding-right: 10px !important;
+}
+
+/* Figures */
+.figure {
+  margin: 0;
+  min-width: 0;
+}
+
+.figure figcaption {
+  margin-top: 10px;
+  max-width: 46em;
+  font: italic 400 15px/1.45 var(--serif);
+  color: var(--ink-2);
+}
+
+.figure figcaption b {
+  margin-right: 8px;
+  font: 600 12px var(--sans);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-style: normal;
+  color: var(--ink);
+}
+
+.chart {
+  width: 100%;
+  min-width: 0;
+}
+
+/* Recharts draws SVG text; give it the sans face from the tokens. */
+.chart text {
+  font-family: var(--sans);
+}
+
+.key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin: 0 0 6px;
+  font: 600 12px var(--sans);
+  letter-spacing: 0.06em;
+  color: var(--ink);
+}
+
+.key i {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 6px;
+  vertical-align: -1px;
+}
+
+.k1 {
+  background: var(--series-1);
+}
+
+.k2 {
+  background: repeating-linear-gradient(135deg, var(--series-2) 0 3px, var(--paper) 3px 5px);
+  box-shadow: inset 0 0 0 1px var(--series-2);
+}
+
+.key i.kc,
+.key i.kp {
+  width: 20px;
+  height: 0;
+  vertical-align: 4px;
+}
+
+.kc {
+  border-top: 2px dotted var(--ink-2);
+}
+
+.kp {
+  border-top: 2px dashed var(--ink);
+}
+
+.multi {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 40px;
+}
+
+.multi.singleFigure {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.figureTitle {
+  margin: 0 0 6px;
+  font: 500 20px/1.25 var(--serif);
+}
+
+/* Ek A: a collapsible table of every assumption */
+.app {
+  border-top: 1px solid var(--ink);
+  border-bottom: 1px solid var(--ink);
+}
+
+.app summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  min-height: 44px;
+  padding: 16px 0;
+  list-style: none;
+  cursor: pointer;
+}
+
+.app summary::-webkit-details-marker {
+  display: none;
+}
+
+.summaryTitle {
+  font: 500 24px var(--serif);
+}
+
+.summaryTitle small {
+  margin-right: 12px;
+  font: 600 12px var(--sans);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+.toggle {
+  font: 600 12px var(--sans);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  white-space: nowrap;
+}
+
+.whenOpen {
+  display: none;
+}
+
+.app[open] .whenOpen {
+  display: inline;
+}
+
+.app[open] .whenClosed {
+  display: none;
+}
+
+.toggle::after {
+  content: " ▾";
+}
+
+.app[open] .toggle::after {
+  content: " ▴";
+}
+
+.footnote {
+  margin: 0 0 20px;
+  font: italic 15px/1.5 var(--serif);
+  color: var(--ink-2);
+}
+
+.assumptions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 56px;
+  padding: 8px 0 28px;
+}
+
+.assumptions dl {
+  margin: 0 0 20px;
+}
+
+.assumptions dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 6px 0;
+  border-bottom: 1px dotted var(--rule-strong);
+}
+
+.assumptions dt {
+  color: var(--ink-2);
+  font-size: 16px;
+}
+
+.assumptions dd {
+  margin: 0;
+  text-align: right;
+  font-size: 16px;
+}
+
+.assumptions p.footnote {
+  overflow-wrap: anywhere;
+}
+
+.endRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-top: 40px;
+  padding-top: 24px;
+  border-top: 3px double var(--ink);
+}
+
+.endRow p {
+  margin: 0;
+  max-width: 30em;
+  font: italic 16px/1.4 var(--serif);
+  color: var(--ink-2);
+}
+
+/* An error is told by words and a heavy rule, never by colour alone. */
+.failure {
+  margin-top: 40px;
+  padding: 28px 0 28px 20px;
+  border-top: 1px solid var(--ink);
+  border-bottom: 1px solid var(--ink);
+  border-left: 4px solid var(--err);
+}
+
+.failure h2 {
+  color: var(--err);
+  font-size: 26px;
+}
+
+.failure p {
+  margin: 8px 0 0;
+  max-width: 34em;
+}
+
+.failure p:last-child {
+  margin-top: 20px;
+}
+
+@media (max-width: 800px) {
+  .multi,
+  .assumptions {
+    grid-template-columns: 1fr;
+  }
+
+  .compare td,
+  .compare th[scope="col"]:not(:first-child) {
+    width: auto;
+  }
+
+  .compare th,
+  .compare td {
+    font-size: 15px;
+  }
+
+  .summaryTitle {
+    font-size: 20px;
+  }
+
+  .toggle {
+    font-size: 11px;
+  }
+}
