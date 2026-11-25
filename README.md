@@ -9,7 +9,7 @@ selects the panel and inverter, estimates production, prices the installation, a
 Annual Savings and the Payback Period.
 
 Each Quote is stored with its Assumptions and can be opened as a printable Turkish document.
-The bundled Catalog, Tariff and pricing inputs are [placeholder data](#placeholder-data).
+The bundled Catalog, Tariff and pricing inputs are [placeholder data](#placeholder-data-and-how-to-defend-it).
 
 ## Run with Docker Compose
 
@@ -308,7 +308,7 @@ and must not take the demo down. The client IP is the connection's. Behind Verce
 `SUNQUOTE_BEHIND_VERCEL=true` to read it from the `x-vercel-forwarded-for` header instead; the
 header is ignored otherwise, since anyone can send it.
 
-## Placeholder data
+## Placeholder data and how to defend it
 
 The TOML files in [`src/sunquote/data/`](src/sunquote/data) contain placeholder inputs
 for the Catalog (panel and inverter specifications and unit prices), Residential Tariff
@@ -319,8 +319,68 @@ coverage, system loss and escalation rates). Every price entry declares its own 
 fetches the TCMB rate for that currency (USD in the placeholder data) and records it. The
 prices in one data set may use TRY and one foreign currency, not two.
 
+Every value in these files carries a `kind`, a `source` and a `date`:
+
+- **direct**: copied from a primary source (a legal text, an EPDK table, a manufacturer datasheet).
+- **derived**: computed from direct figures; the derivation is in the source text.
+- **estimate**: a judgment value with no primary source. Replace it when real data arrives.
+
+The table below lists every input and whether it was **verified** (the primary source was read, with article and date, in
+the [research note](docs/research/placeholder-market-data.md), section 9 for the regulation, taxes, Export Price and
+Discount Rate) or is **unverified**. It was checked on 2026-11-25.
+
+| Input | Kind | Status | Why, or what is missing |
+| --- | --- | --- | --- |
+| Panel power, dimensions, warranty | direct | verified | Trina datasheets (2025, 2026) |
+| Panel degradation, 0.47%/year | derived | verified | arithmetic on the datasheet guarantee; a worst case, not a field value |
+| Panel unit prices (USD 74-76) | estimate | unverified | no distributor price list; InfoLink spot prices plus an uplift |
+| Inverter AC power, datasheet values | direct | verified | Huawei SUN2000-M1 datasheet (2019, distributor copy) |
+| Inverter unit prices (USD 650-1,200) | estimate | unverified | marketplace asking prices, low confidence |
+| Tier threshold, 8 kWh/day | direct | verified | note of the EPDK tariff table valid from 2026-04-04; a month's threshold is 8 x its days |
+| Low and high Retail Tariff (3.24 and 4.86 TRY/kWh) | derived | verified | EPDK table of 2026-04-04 plus BTV and KDV below; changes every quarter |
+| BTV 5% on the energy charge | direct | verified | Law 2464 Art. 37 and 38(b) |
+| KDV 10% on residential electricity | direct | verified | Decision 2007/13033 list II item 34 (CBK 5249, 7346); amendments after 2025-02-17 not checked |
+| Export Price, 1.24 TRY/kWh | derived | partly verified | Law 5346 Annex I item (e) and the EPDK table are verified; that the export-side fee is deducted and that the high tier applies rest on one secondary site. Lower end of 1.24 to 1.90 |
+| Self-Consumption Ratio, 0.85 | derived | unverified | PVGIS illustration for one city set; being replaced by Monthly Netting |
+| Monthly Netting for residential plants | rule | verified | Lisanssız Elektrik Üretim Yönetmeliği Art. 26(20), in force 2026-05-01 |
+| Contracted Power cap and DC/AC limit of 2.0 | rule | verified | same Yönetmelik, Art. 7(10), 28(5) and 17(7) |
+| Default Contracted Power, 10 kW | estimate | unverified | no regulatory default exists; an installer assumption recorded as defaulted on each Quote |
+| DC/AC ratio, min 1.0 and max 1.5 | estimate | unverified | the legal ceiling is 2.0 (verified); 1.5 is a sizing choice |
+| Roof Coverage Ratio, pitched 0.80 and flat 0.50; flat tilt 15 degrees | estimate / derived | unverified | setbacks and a row-spacing calculation of our own |
+| System loss, 14% | direct | verified | PVGIS default |
+| BOS, labour, fixed project cost, Margin | estimate | unverified | no price list; checked only against one market article |
+| VAT on the sale, 20% | direct | verified | Decision 2007/13033 Art. 1(1)(a); PV is in no reduced-rate list. Confirm with an accountant for a real quote |
+| Validity Period, 15 days | derived | unverified | from exchange-rate drift reported by news tickers |
+| Escalation rates (2% tariff, 0% equipment, real) | estimate | unverified | judgment, see [ADR 0003](docs/adr/0003-real-escalation-rates.md) |
+| Lifetime, 25 years | direct | verified | product warranty in the datasheets |
+| Inverter replacement year, 12 | estimate | unverified | warranty plus margin; Huawei warranty not read |
+| Real Discount Rate, 5.6% | derived | partly verified | CPI-linked Treasury bond auction yield of 2026-06-08 as reported by Bloomberg HT; to be added to the Assumptions by the NPV ticket |
+
+Exchange rates (TCMB) and Specific Yield (PVGIS) are fetched when a Quote is made, so they are not in the data files.
+
+### Replace the data
+
+1. Copy the three files from [`src/sunquote/data/`](src/sunquote/data) (`catalog.toml`, `assumptions.toml`, `tariff.toml`)
+   into one directory of your own and edit them. All three must be present. Keep the `kind`, `source` and `date` of every
+   value. The loader still requires `placeholder = true` under `[meta]`, even for real values.
+2. Point `SUNQUOTE_DATA_DIR` at that directory. Locally, set it in `.env` or in the shell, for example
+   `SUNQUOTE_DATA_DIR=/path/to/my-data uv run fastapi dev src/sunquote/api/app.py --port 8102`.
+3. With Docker Compose, mount the directory and pass the variable through a `compose.override.yaml`:
+
+   ```yaml
+   services:
+     api:
+       environment:
+         SUNQUOTE_DATA_DIR: /data
+       volumes:
+         - ./my-data:/data:ro
+   ```
+
+The files are validated when the API starts, so a bad value stops the start instead of producing a wrong Quote. Each Quote
+stores the Assumptions it was calculated with, so Quotes made with the old data stay reproducible after you change the files.
+
 The [market-data research note](docs/research/placeholder-market-data.md) records sources,
-dates, owner decisions and open questions. Set `SUNQUOTE_DATA_DIR` to load your own files.
+dates, owner decisions and open questions.
 See the ADRs on [figures in the Quote document](docs/adr/0001-llm-never-writes-figures.md),
 [marginal Tariff Tiers](docs/adr/0002-marginal-tariff-tiers.md) and
 [real escalation rates](docs/adr/0003-real-escalation-rates.md).
@@ -470,7 +530,7 @@ the [LLM-written Narrative](https://github.com/tuna-d/sunquote/issues/2) and the
 [quote assistant with its extraction eval](https://github.com/tuna-d/sunquote/issues/3). The
 domain vocabulary is in [GLOSSARY.md](GLOSSARY.md) and the design decisions are in
 [docs/adr](docs/adr). The Catalog, Tariff and pricing inputs remain
-[placeholder data](#placeholder-data).
+[placeholder data](#placeholder-data-and-how-to-defend-it).
 
 ---
 
