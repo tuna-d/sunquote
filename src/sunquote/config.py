@@ -37,9 +37,16 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://sunquote:sunquote@localhost:5432/sunquote"
     # Apply the Alembic migrations when the app starts.
     migrate_on_startup: bool = True
+    # Keep a pool of open connections in the app. Turn off on serverless hosts (Vercel), where
+    # the database host's own pooler pools: every use then opens and closes its own connection.
+    database_client_pool: bool = True
 
     # Cache external lookups only when a Redis URL is supplied.
+    # `rediss://` (two s) connects over TLS, as Upstash requires.
     redis_url: str | None = None
+    # Connect and read timeout of the cache. Past it the lookup goes to the real service and the
+    # cache is skipped, so a cache too far away to answer in time silently turns itself off.
+    redis_timeout_seconds: float = Field(default=0.25, gt=0)
 
     nominatim_base_url: str = "https://nominatim.openstreetmap.org"
     nominatim_timeout_seconds: float = Field(default=10.0, gt=0)

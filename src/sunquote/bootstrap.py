@@ -109,8 +109,8 @@ def build_dependencies(
     if settings.redis_url:
         redis = Redis.from_url(
             settings.redis_url,
-            socket_connect_timeout=0.25,
-            socket_timeout=0.25,
+            socket_connect_timeout=settings.redis_timeout_seconds,
+            socket_timeout=settings.redis_timeout_seconds,
             retry=Retry(NoBackoff(), 0),
         )
         geocoder = CachedGeocoder(geocoder, redis)
@@ -119,7 +119,7 @@ def build_dependencies(
         closers = (*closers, redis.aclose)
 
     if quote_repository is None:
-        engine = create_engine(settings.database_url)
+        engine = create_engine(settings.database_url, client_pool=settings.database_client_pool)
         quote_repository = PostgresQuoteRepository(engine)
         closers = (*closers, engine.dispose)
         if settings.migrate_on_startup:
