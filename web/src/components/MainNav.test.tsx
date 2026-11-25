@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from "vitest";
 const pathname = vi.hoisted(() => ({ current: "/quotes" }));
 vi.mock("next/navigation", () => ({ usePathname: () => pathname.current }));
 
+import { NAV_ITEMS } from "@/lib/navigation";
+
 import { MainNav } from "./MainNav";
 
 describe("MainNav", () => {
@@ -33,7 +35,20 @@ describe("MainNav", () => {
     pathname.current = "/quotes";
     render(<MainNav />);
 
-    expect(screen.queryByRole("link", { name: "Asistan" })).toBeNull();
-    expect(screen.getByText("Asistan")).toHaveAttribute("aria-disabled", "true");
+    for (const item of NAV_ITEMS) {
+      if (item.enabled) {
+        expect(screen.getByRole("link", { name: item.label })).toHaveAttribute("href", item.href);
+      } else {
+        expect(screen.queryByRole("link", { name: item.label })).toBeNull();
+        expect(screen.getByText(item.label)).toHaveAttribute("aria-disabled", "true");
+      }
+    }
+  });
+
+  it("links the Assistant", () => {
+    pathname.current = "/quotes";
+    render(<MainNav />);
+
+    expect(screen.getByRole("link", { name: "Asistan" })).toHaveAttribute("href", "/assistant");
   });
 });

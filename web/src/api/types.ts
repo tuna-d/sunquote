@@ -9,3 +9,6 @@ export type SystemOptionResponse = Schemas["SystemOptionResponse"];
 export type AssumptionsResponse = Schemas["AssumptionsResponse"];
 export type MoneyResponse = Schemas["MoneyResponse"];
 export type CashFlowRow = Schemas["CashFlowRow"];
+export type AssistantResponse = Schemas["AssistantResponse"];
+export type MissingField = Schemas["MissingField"];
+export type QuoteReference = Schemas["QuoteReference"];

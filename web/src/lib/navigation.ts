@@ -13,7 +13,7 @@ export interface NavItem {
 export const NAV_ITEMS: readonly NavItem[] = [
   { href: "/quotes", label: "Teklifler", enabled: true },
   { href: "/quotes/new", label: "Yeni teklif", enabled: false },
-  { href: "/assistant", label: "Asistan", enabled: false },
+  { href: "/assistant", label: "Asistan", enabled: true },
 ];
 
 export function isEnabled(href: string): boolean {
