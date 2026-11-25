@@ -66,6 +66,7 @@ def _assumption_views(stored: StoredQuote) -> tuple[AssumptionView, ...]:
     export = turkish.format_try_per_kwh(tariff.export_price_try_per_kwh)
     tariff_escalation = turkish.format_percent(financial.tariff_escalation_rate_real)
     equipment_escalation = turkish.format_percent(financial.equipment_escalation_rate_real)
+    discount_rate = turkish.format_percent(financial.discount_rate_real)
     system_loss = turkish.format_decimal(recorded.pvgis_inputs.system_loss_percent)
     bill = recorded.submitted_request.consumption.monthly_bill_try
     if recorded.consumption_derived_from_bill and bill is not None:
@@ -112,6 +113,12 @@ def _assumption_views(stored: StoredQuote) -> tuple[AssumptionView, ...]:
             f"faturalarınızda göreceğiniz nominal tutarlarla aynı olmayabilir.",
         ),
         AssumptionView(
+            "İskonto oranı",
+            f"Net bugünkü değer, yıllık {discount_rate} reel iskonto oranıyla hesaplandı. Bu oran "
+            f"da enflasyondan arındırılmış (reel) bir orandır, bu yüzden bugünkü lira cinsinden "
+            f"tasarruflarla tutarlıdır. İç verim oranı bu orandan bağımsızdır.",
+        ),
+        AssumptionView(
             "Panel performansı",
             f"Panel üretimi her yıl {turkish.format_percent(panel.degradation_rate_per_year)} "
             f"azalır. Üretim tahmini PVGIS verisiyle ve %{system_loss} sistem kaybı "
@@ -153,4 +160,5 @@ def render_quote_document(stored: StoredQuote) -> str:
         options=options,
         narrative=stored_narrative(stored, options),
         assumptions=_assumption_views(stored),
+        discount_rate=turkish.format_percent(quote.assumptions.financial.discount_rate_real),
     )

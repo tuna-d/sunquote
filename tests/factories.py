@@ -144,12 +144,14 @@ def make_financial_assumptions(
     equipment_escalation: str = "0",
     lifetime_years: int = 25,
     replacement_year: int = 12,
+    discount_rate: str = "0.05",
 ) -> FinancialAssumptions:
     return FinancialAssumptions(
         tariff_escalation_rate_real=Decimal(tariff_escalation),
         equipment_escalation_rate_real=Decimal(equipment_escalation),
         lifetime_years=lifetime_years,
         inverter_replacement_year=replacement_year,
+        discount_rate_real=Decimal(discount_rate),
     )
 
 

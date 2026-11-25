@@ -132,3 +132,13 @@ value = 12
 kind = "estimate"
 source = "docs/research/placeholder-market-data.md section 6: typical string-inverter warranty of 10 years plus margin; warranty not read from the Huawei datasheet"
 date = 2026-11-24
+
+# The Discount Rate is REAL too (docs/adr/0006): NPV discounts the real cash flow of docs/adr/0003.
+# The riskless real alternative for a household is a CPI-indexed Treasury bond, so the rate is its
+# auction yield, rounded. A higher rate lowers the NPV.
+
+[discount_rate_real]
+value = 0.056
+kind = "derived"
+source = "docs/research/placeholder-market-data.md section 9.3: real compound yield 5.61% at the Treasury auction of the 4-year CPI-linked bond TRT080530T27 (2.63% real coupon), reported 2026-06-08 by Bloomberg HT (https://www.bloomberght.com/hazine-4-yil-vadeli-tufe-endeksli-tahvilde-13-2-milyar-tl-borclandi-3779359), rounded to 5.6%; a 5-year CPI-linked auction earlier in 2026 averaged 5.37% (4.89-5.56%). Unverified against hmb.gov.tr (secondary reporting). Cross-check: the 36% policy rate against the 24.04% 12-month-ahead CPI expectation is about 9.6% real, an upper bound for a short-term deposit"
+date = 2026-06-08

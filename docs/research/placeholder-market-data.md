@@ -365,7 +365,7 @@ sold at the Export Price in its month), so nothing is raised against it.
   used, so the error is small but not zero.
 - Income tax or KDV on the sale of surplus by an individual (e-müstahsil practice) was not researched.
 
-### 9.3 Discount Rate (for ticket #34; not added to the data files here)
+### 9.3 Discount Rate (added to `assumptions.toml` by ticket #34)
 
 | Field | Value |
 |---|---|
@@ -388,6 +388,7 @@ conservative NPV.
 |---|---|---|
 | `tariff.toml` `export_price_try_per_kwh` | 2.92, estimate, 2026-11-01 | **1.24**, derived, 2026-04-04, range and source in the source text |
 | `tariff.toml` `[tariff]` source, low and high tariff source text | BTV and KDV "not confirmed" | verified against Law 2464 and Decision 2007/13033 |
+| `assumptions.toml` `discount_rate_real` | absent | **0.056**, derived, 2026-06-08 (added by ticket #34) |
 | `assumptions.toml` `vat_rate` | 0.20, estimate | 0.20, **direct**, source text with the article and the caveat |
 | `assumptions.toml` `default_contracted_power_kw.residential` | source text only | cap citations added (value stays 10, estimate) |
 | `assumptions.toml` `dc_ac_ratio_max` | source text only | legal 2.0 ceiling cited (value stays 1.50, estimate) |

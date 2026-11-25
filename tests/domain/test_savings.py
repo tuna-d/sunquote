@@ -316,3 +316,154 @@ def test_lifetime_savings_is_the_sum_of_net_savings_after_the_replacement() -> N
 
     # 4 x 22,960 - 1,000
     assert result.lifetime_savings == try_("90840")
+
+
+# --- NPV and IRR (spec #30, ticket #34; ADR 0006) -------------------------------------------
+#
+# Expected values below were computed with exact fractions in a separate script, not with the
+# code under test. Both are at the real Discount Rate and in today's lira, unrounded.
+
+
+def no_escalation(**overrides: object) -> FinancialAssumptions:
+    """22,960 TRY a year with the summer-heavy production: no escalation, no replacement."""
+    return make_financial_assumptions(
+        tariff_escalation="0",
+        replacement_year=99,
+        **overrides,  # type: ignore[arg-type]
+    )
+
+
+def test_npv_discounts_each_years_net_savings_and_subtracts_the_total_price() -> None:
+    """22,960 a year for 3 years at 10%, total price 50,000:
+    NPV = -50,000 + 22,960 x (1/1.1 + 1/1.21 + 1/1.331) = 9,447,600 / 1,331 - 0 = 7,098.1217...
+    """
+    financial = no_escalation(lifetime_years=3, discount_rate="0.10")
+
+    result = analyze(total_price="50000", financial=financial)
+
+    assert result.npv.currency is Currency.TRY
+    assert result.npv.amount == pytest.approx(Decimal("7098.1217129977"), abs=Decimal("1e-9"))
+
+
+def test_npv_uses_the_net_savings_after_the_inverter_replacement_and_escalation() -> None:
+    """The 3-year worked example above (net savings 22,960 / 22,178.44 / 23,601.869352, total
+    40,000) at 5%: -40,000 + 22,960/1.05 + 22,178.44/1.05^2 + 23,601.869352/1.05^3 = 22,371.3477.
+    """
+    financial = make_financial_assumptions(
+        tariff_escalation="0.02",
+        equipment_escalation="0.10",
+        lifetime_years=3,
+        replacement_year=2,
+        discount_rate="0.05",
+    )
+
+    result = analyze(degradation="0.01", total_price="40000", financial=financial)
+
+    assert result.npv.amount == pytest.approx(Decimal("22371.3476747651"), abs=Decimal("1e-9"))
+
+
+def test_npv_is_not_rounded() -> None:
+    financial = no_escalation(lifetime_years=3, discount_rate="0.10")
+
+    result = analyze(total_price="50000", financial=financial)
+
+    assert result.npv.amount != result.npv.amount.to_integral_value()
+    assert len(result.npv.amount.as_tuple().digits) > 10
+
+
+def test_npv_at_a_zero_discount_rate_is_the_lifetime_savings_less_the_price() -> None:
+    financial = no_escalation(lifetime_years=3, discount_rate="0")
+
+    result = analyze(total_price="50000", financial=financial)
+
+    assert result.npv == try_("18880")  # 3 x 22,960 - 50,000
+
+
+def test_a_higher_discount_rate_lowers_the_npv() -> None:
+    low = analyze(total_price="50000", financial=no_escalation(discount_rate="0.03"))
+    high = analyze(total_price="50000", financial=no_escalation(discount_rate="0.12"))
+
+    assert high.npv.amount < low.npv.amount
+
+
+def test_irr_is_the_rate_at_which_the_npv_is_zero() -> None:
+    """Two years of 22,960 for a total price of 165,312 / 5 = 33,062.4: the price equals
+    22,960/1.25 + 22,960/1.25^2 = 18,368 + 14,694.4, so the IRR is exactly 25%."""
+    financial = no_escalation(lifetime_years=2)
+
+    result = analyze(total_price="33062.4", financial=financial)
+
+    assert result.irr is not None
+    assert result.irr == pytest.approx(Decimal("0.25"), abs=Decimal("0.0001"))
+
+
+def test_irr_of_a_single_payment_is_the_simple_return() -> None:
+    """One year of 22,960 for a price of 20,000: the IRR is 22,960/20,000 - 1 = 14.8%."""
+    financial = no_escalation(lifetime_years=1)
+
+    result = analyze(total_price="20000", financial=financial)
+
+    assert result.irr is not None
+    assert result.irr == pytest.approx(Decimal("0.148"), abs=Decimal("0.0001"))
+
+
+def test_irr_does_not_depend_on_the_discount_rate() -> None:
+    low = analyze(total_price="33062.4", financial=no_escalation(lifetime_years=2))
+    high = analyze(
+        total_price="33062.4", financial=no_escalation(lifetime_years=2, discount_rate="0.30")
+    )
+
+    assert low.irr == high.irr
+
+
+def test_irr_above_the_discount_rate_goes_with_a_positive_npv() -> None:
+    result = analyze(
+        total_price="33062.4", financial=no_escalation(lifetime_years=2, discount_rate="0.05")
+    )
+
+    assert result.irr is not None
+    assert result.irr > Decimal("0.05")
+    assert result.npv.amount > 0
+
+
+def test_irr_below_the_discount_rate_goes_with_a_negative_npv() -> None:
+    result = analyze(
+        total_price="33062.4", financial=no_escalation(lifetime_years=2, discount_rate="0.40")
+    )
+
+    assert result.irr is not None
+    assert result.irr < Decimal("0.40")
+    assert result.npv.amount < 0
+
+
+def test_irr_is_zero_when_the_price_is_exactly_recovered() -> None:
+    result = analyze(total_price="68880", financial=no_escalation(lifetime_years=3))
+
+    assert result.irr == Decimal("0")
+    assert result.payback_years == Decimal("3")
+
+
+def test_irr_is_found_even_when_it_is_far_above_one_hundred_percent() -> None:
+    """One year of 22,960 for a price of 1,000: the IRR is 21.96 (2,196%)."""
+    result = analyze(total_price="1000", financial=no_escalation(lifetime_years=1))
+
+    assert result.irr is not None
+    assert result.irr == pytest.approx(Decimal("21.96"), abs=Decimal("0.0001"))
+
+
+def test_irr_is_absent_when_the_price_is_never_recovered() -> None:
+    result = analyze(total_price="10000000", financial=make_financial_assumptions())
+
+    assert result.irr is None
+    assert result.payback_beyond_lifetime is True
+    assert result.npv.amount < 0  # still reported: the NPV exists, only the IRR does not
+
+
+def test_irr_is_absent_exactly_when_the_payback_period_is_absent() -> None:
+    financial = no_escalation(lifetime_years=3)  # lifetime savings 68,880
+
+    recovered = analyze(total_price="68880", financial=financial)
+    not_recovered = analyze(total_price="68880.01", financial=financial)
+
+    assert (recovered.irr is None, recovered.payback_beyond_lifetime) == (False, False)
+    assert (not_recovered.irr is None, not_recovered.payback_beyond_lifetime) == (True, True)

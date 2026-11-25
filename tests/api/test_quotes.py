@@ -337,6 +337,7 @@ def test_money_rates_ratios_and_tariff_prices_are_decimal_strings_without_a_floa
     }
     assert assumptions["financial"]["tariff_escalation_rate_real"] == "0.02"
     assert assumptions["financial"]["equipment_escalation_rate_real"] == "0"
+    assert assumptions["financial"]["discount_rate_real"] == "0.05"
     assert assumptions["coverage_ratio"] == "0.80"
     assert assumptions["default_panel"]["degradation_rate_per_year"] == "0.005"
     assert assumptions["default_panel"]["unit_price"] == {"amount": "100", "currency": "USD"}
@@ -369,6 +370,7 @@ def test_the_openapi_schema_declares_the_precision_sensitive_fields_as_strings(
     assert field_type("TariffResponse", "low_tariff_try_per_kwh") == "string"
     assert field_type("TariffResponse", "export_price_try_per_kwh") == "string"
     assert field_type("FinancialResponse", "tariff_escalation_rate_real") == "string"
+    assert field_type("FinancialResponse", "discount_rate_real") == "string"
     assert field_type("DcAcRatioRangeResponse", "maximum") == "string"
     assert field_type("SystemOptionResponse", "capacity_kwp") == "number"
     assert "decimal string" in schemas["MoneyResponse"]["description"]
@@ -775,6 +777,33 @@ def test_each_option_reports_its_netted_share(client: TestClient) -> None:
     )
 
 
+def test_each_option_reports_its_npv_and_irr_next_to_the_payback_period(
+    client: TestClient,
+) -> None:
+    """Worked outside the code with exact fractions: the cash flow of each option (year 1 is
+    23,256 and 36,140; 2% real escalation, 0.5% degradation, the inverter replaced in year 12)
+    discounted at the test Discount Rate of 5% less the total price (159,000 and 276,000 TRY)
+    gives an NPV of 210,530.83 and 294,306.01; the rate that zeroes it is 15.17% and 13.40%."""
+    matched, roof_max = client.post("/quotes", json=valid_body()).json()["system_options"]
+
+    assert matched["savings"]["npv_try"] == 210531
+    assert matched["savings"]["irr"] == 0.152
+    assert roof_max["savings"]["npv_try"] == 294306
+    assert roof_max["savings"]["irr"] == 0.134
+    assert matched["savings"]["payback_period_years"] == 6.5  # the headline stays
+
+
+def test_a_payback_beyond_the_lifetime_has_a_negative_npv_and_no_irr(client: TestClient) -> None:
+    body = valid_body()
+    body["consumption"]["monthly_consumption_kwh"] = 10  # one panel; the fixed costs dominate
+
+    savings = client.post("/quotes", json=body).json()["system_options"][0]["savings"]
+
+    assert savings["payback_beyond_lifetime"] is True
+    assert savings["irr"] is None
+    assert savings["npv_try"] < 0
+
+
 def test_the_yearly_cash_flow_is_returned_in_whole_lira_and_kwh(client: TestClient) -> None:
     option = client.post("/quotes", json=valid_body()).json()["system_options"][0]
 
@@ -831,5 +860,6 @@ def test_assumptions_record_consumption_split_tariff_and_financial_inputs(
         "equipment_escalation_rate_real": "0",
         "lifetime_years": 25,
         "inverter_replacement_year": 12,
+        "discount_rate_real": "0.05",
     }
     assert assumptions["default_panel"]["degradation_rate_per_year"] == "0.005"

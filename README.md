@@ -6,7 +6,9 @@ sunquote prepares residential rooftop solar Quotes for Turkish Installers. A Sal
 the Customer, the Site's Address or Coordinates, the Roof and the average Monthly Consumption
 or Monthly Bill. The service sizes up to two System Options (Consumption-Matched and Roof-Max),
 selects the panel and inverter, estimates production, prices the installation, and calculates
-Annual Savings and the Payback Period. Savings follow Monthly Netting
+Annual Savings, the Payback Period (the headline) and the Net Present Value and Internal Rate of
+Return at a real Discount Rate ([ADR 0006](docs/adr/0006-npv-and-irr-with-a-real-discount-rate.md)).
+Savings follow Monthly Netting
 ([ADR 0005](docs/adr/0005-monthly-netting-replaces-self-consumption-ratio.md)): each month's
 production is offset against that month's consumption (Netted Energy), the rest is Exported
 Energy sold at the Export Price, and each System Option reports its Netted Share.
@@ -369,7 +371,7 @@ Discount Rate) or is **unverified**. It was checked on 2026-11-25.
 | Escalation rates (2% tariff, 0% equipment, real) | estimate | unverified | judgment, see [ADR 0003](docs/adr/0003-real-escalation-rates.md) |
 | Lifetime, 25 years | direct | verified | product warranty in the datasheets |
 | Inverter replacement year, 12 | estimate | unverified | warranty plus margin; Huawei warranty not read |
-| Real Discount Rate, 5.6% | derived | partly verified | CPI-linked Treasury bond auction yield of 2026-06-08 as reported by Bloomberg HT; to be added to the Assumptions by the NPV ticket |
+| Real Discount Rate, 5.6% (`discount_rate_real`) | derived | partly verified | real yield of the CPI-linked Treasury bond auction of 2026-06-08 as reported by Bloomberg HT, rounded; not verified on hmb.gov.tr. It sets the NPV, not the IRR or the Payback Period ([ADR 0006](docs/adr/0006-npv-and-irr-with-a-real-discount-rate.md)) |
 
 Exchange rates (TCMB) and Specific Yield (PVGIS) are fetched when a Quote is made, so they are not in the data files.
 

@@ -94,12 +94,20 @@
 {% else %}
           <dd>{{ option.payback }} yıl</dd>
 {% endif %}
+          <dt>Net bugünkü değer</dt><dd>{{ option.npv }}</dd>
+          <dt>İç verim oranı</dt>
+{% if option.irr_absent %}
+          <dd>hesaplanamıyor (yatırım geri ödenmediği için)</dd>
+{% else %}
+          <dd>{{ option.irr }} (yıllık)</dd>
+{% endif %}
           <dt>{{ option.lifetime_years }} yıllık toplam tasarruf</dt><dd>{{ option.lifetime_savings }}</dd>
         </dl>
       </section>
 {% endfor %}
     </div>
     <p class="note">Tasarruf ve geri ödeme rakamları reel fiyat artışıyla, bugünkü lira cinsinden hesaplanmıştır (aşağıdaki varsayımlara bakınız).</p>
+    <p class="note">Net bugünkü değer, yıllık net tasarrufların {{ discount_rate }} reel iskonto oranıyla bugüne çevrilmiş toplamından toplam fiyatın düşülmesiyle bulunur (artıysa yatırım paranın bu oranla değerlendirilmesinden daha kazançlıdır); iç verim oranı bu değeri sıfır yapan yıllık orandır. Geri ödeme süresi iskontosuzdur ve ana göstergedir.</p>
   </section>
 
   <section class="assumptions" id="assumptions">
