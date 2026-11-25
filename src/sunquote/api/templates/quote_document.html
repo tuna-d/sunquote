@@ -76,6 +76,7 @@
           <dt>Panel</dt><dd>{{ option.panel_count }} adet {{ option.panel_name }}</dd>
           <dt>İnverter</dt><dd>{{ option.inverter_name }}</dd>
           <dt>Yıllık üretim (ilk yıl)</dt><dd>{{ option.annual_production_kwh }} kWh</dd>
+          <dt>Faturadan düşen üretim</dt><dd>{{ option.netted_share }} (kalanı {{ option.export_price }} fiyatıyla şebekeye satılır)</dd>
         </dl>
         <table class="monthly" aria-label="Aylık üretim (kWh)">
 {% for month in option.months %}

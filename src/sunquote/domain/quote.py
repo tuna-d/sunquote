@@ -129,7 +129,7 @@ def _build_option(
     reference_data: ReferenceData,
     exchange_rate: ExchangeRate,
     contracted_power: ContractedPower,
-    annual_consumption_kwh: Decimal,
+    monthly_consumption_kwh: Decimal,
 ) -> SystemOption:
     pricing = reference_data.pricing
     capacity_kwp = sizing.panel_count * panel.capacity_kwp
@@ -140,7 +140,7 @@ def _build_option(
         max_ac_power_kw=contracted_power.kw,
         rate=exchange_rate,
     )
-    year1_production_kwh = annual_production_kwh(capacity_kwp, specific_yield)
+    monthly_production = monthly_production_kwh(capacity_kwp, specific_yield)
     price = price_system(
         panel=panel,
         panel_count=sizing.panel_count,
@@ -150,8 +150,8 @@ def _build_option(
         rate=exchange_rate,
     )
     savings = analyze_savings(
-        year1_production_kwh=year1_production_kwh,
-        annual_consumption_kwh=annual_consumption_kwh,
+        year1_monthly_production_kwh=monthly_production,
+        monthly_consumption_kwh=monthly_consumption_kwh,
         degradation_rate_per_year=panel.degradation_rate_per_year,
         tariff=reference_data.tariff,
         financial=reference_data.financial,
@@ -166,8 +166,8 @@ def _build_option(
         panel_count=sizing.panel_count,
         capacity_kwp=capacity_kwp,
         binding_limit=sizing.binding_limit,
-        annual_production_kwh=year1_production_kwh,
-        monthly_production_kwh=monthly_production_kwh(capacity_kwp, specific_yield),
+        annual_production_kwh=annual_production_kwh(capacity_kwp, specific_yield),
+        monthly_production_kwh=monthly_production,
         inverter=inverter,
         dc_ac_ratio=dc_ac_ratio(capacity_kwp, inverter),
         price=price,
@@ -246,7 +246,7 @@ def build_quote(
             reference_data=reference_data,
             exchange_rate=exchange_rate,
             contracted_power=contracted_power,
-            annual_consumption_kwh=annual_consumption_kwh,
+            monthly_consumption_kwh=monthly_consumption_kwh,
         )
         for strategy, sizing in sizings
     )

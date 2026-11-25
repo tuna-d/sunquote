@@ -94,12 +94,14 @@ def _assumption_views(stored: StoredQuote) -> tuple[AssumptionView, ...]:
         ),
         AssumptionView(
             "Şebekeye satış fiyatı",
-            f"Şebekeye verilen fazla enerji {export} üzerinden değerlendirildi.",
+            f"Bir ayda tüketiminizi aşan üretimin şebekeye satıldığı varsayıldı; satış fiyatı "
+            f"{export}.",
         ),
         AssumptionView(
-            "Öz tüketim oranı",
-            f"Üretimin {turkish.format_percent(tariff.self_consumption_ratio)} kadarının kendi "
-            f"tüketiminizde kullanıldığı, kalanının şebekeye satıldığı varsayıldı.",
+            "Aylık mahsuplaşma",
+            "Her ayın üretimi o ayki tüketiminizden düşülür; yalnızca tüketimi aşan kısım "
+            "şebekeye satılır. Faturanızdan düşen kısım her seçenek için ayrıca verilmiştir. "
+            "Aylık tüketiminizin yıl boyunca aynı olduğu varsayıldı.",
         ),
         AssumptionView(
             "Fiyat artışı ve bugünkü lira",

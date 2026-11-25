@@ -212,15 +212,18 @@ def test_savings_come_from_the_shipped_tariff_and_financial_assumptions(
     option = quote["system_options"][0]  # Consumption-Matched
     savings = option["savings"]
     assert len(savings["cash_flow"]) == 25
-    # 3.96 kWp x 1,472.13 = 5,829.63 kWh; 85% self-consumed = 4,955.19 kWh of the 6,000 kWh a
-    # year. The grid bill (2,920 kWh at 3.24 + 3,080 kWh at 4.86 = 24,429.60) drops to
-    # 1,044.81 kWh x 3.24 = 3,385.19: 21,044.41 saved. The other 874.45 kWh export at 2.92.
+    # 3.96 kWp x the 12 recorded PVGIS months = 5,829.63 kWh, netted month by month against
+    # 500 kWh: January-March and October-December (274 to 481 kWh) net everything, April-
+    # September (525, 570, 586, 675, 660 and 583 kWh) exceed the 500 kWh and export. Netted
+    # 5,229.80 kWh, exported 599.84 kWh at 2.92 = 1,751.53 TRY. The grid bill (24,429.60 a
+    # year) drops by 21,934.14 with each month's own tiers.
     first_year = savings["cash_flow"][0]
-    assert first_year["self_consumed_kwh"] == 4955
-    assert first_year["exported_kwh"] == 874
-    assert first_year["self_consumption_savings_try"] == 21044
-    assert first_year["export_income_try"] == 2553
-    assert savings["first_year_annual_savings_try"] == 23598  # 23,597.79
+    assert first_year["netted_kwh"] == 5230
+    assert first_year["exported_kwh"] == 600
+    assert first_year["netting_savings_try"] == 21934
+    assert first_year["export_income_try"] == 1752
+    assert savings["first_year_annual_savings_try"] == 23686  # 23,685.67
+    assert option["netted_share"] == 0.897  # 5,229.80 / 5,829.63
     assumptions = quote["assumptions"]
     assert assumptions["tariff"]["tier_threshold_kwh_per_day"] == "8"
     assert assumptions["tariff"]["valid_from"] == "2026-04-04"

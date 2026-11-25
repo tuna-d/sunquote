@@ -79,10 +79,6 @@ class _NonNegativePrice(_NonNegative):
     currency: Currency
 
 
-class _Share(_SourcedValue):
-    value: Decimal = Field(ge=0, le=1)
-
-
 class _Rate(_SourcedValue):
     """A yearly rate as a share (0.02 is 2%); it may be negative but not below -100%."""
 
@@ -173,7 +169,6 @@ class _TariffFile(_Strict):
     low_tariff_try_per_kwh: _Positive
     high_tariff_try_per_kwh: _Positive
     export_price_try_per_kwh: _NonNegative
-    self_consumption_ratio: _Share
 
 
 def default_data_dir() -> Path:
@@ -267,7 +262,6 @@ def load_residential_tariff(path: Path) -> ResidentialTariff:
         low_tariff_try_per_kwh=file.low_tariff_try_per_kwh.value,
         high_tariff_try_per_kwh=file.high_tariff_try_per_kwh.value,
         export_price_try_per_kwh=file.export_price_try_per_kwh.value,
-        self_consumption_ratio=file.self_consumption_ratio.value,
         valid_from=file.tariff.valid_from,
         source=file.tariff.source,
     )

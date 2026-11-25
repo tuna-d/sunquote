@@ -41,6 +41,11 @@ def round_try_per_kwh(price_try_per_kwh: Decimal) -> Decimal:
     return _half_up(price_try_per_kwh, _TWO_DECIMALS)
 
 
+def round_share(share: Decimal) -> Decimal:
+    """A share kept as a ratio (0.853) for the API is given with 3 decimals."""
+    return _half_up(share, Decimal("0.001"))
+
+
 def round_exchange_rate(rate: Decimal) -> Decimal:
     """An Exchange Rate is shown with 4 decimals, the precision TCMB publishes."""
     return _half_up(rate, Decimal("0.0001"))

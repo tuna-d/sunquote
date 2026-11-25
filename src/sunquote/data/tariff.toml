@@ -1,6 +1,6 @@
 # PLACEHOLDER DATA. Not any installer's or distributor's contract terms.
 #
-# Residential Retail Tariff, Export Price and Self-Consumption Ratio, from the research note
+# Residential Retail Tariff and Export Price, from the research note
 # docs/research/placeholder-market-data.md (section 3, research date 2026-11-24).
 # Every value carries its kind, source and date:
 #   direct   - copied from a primary source
@@ -43,9 +43,3 @@ value = 2.92
 kind = "estimate"
 source = "docs/research/placeholder-market-data.md section 3: YEKDEM solar unit price 292.49 kr/kWh (EPIAS, effective 2026-11-01); unverified for a new residential plant, an indicative upper estimate"
 date = 2026-11-01
-
-[self_consumption_ratio]
-value = 0.85
-kind = "derived"
-source = "docs/research/placeholder-market-data.md section 3: monthly netting, PVGIS-SARAH3 monthly output vs flat consumption, Istanbul end (Ankara 0.88, Antalya 0.92); lower for a system larger than consumption"
-date = 2026-11-24

@@ -179,12 +179,12 @@ SCENARIOS = (
     ),
     _scenario(
         19,
-        "west-no-export",
+        "northwest-no-export",
         area_m2="30",
         monthly_bill_try="1800",
-        azimuth_deg="270",
+        azimuth_deg="315",
         contracted_power_kw="3.5",
-        yield_multiplier="0.9",
+        yield_multiplier="0.7",
         reference_data=NO_EXPORT_DATA,
     ),
     _scenario(

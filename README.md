@@ -6,7 +6,10 @@ sunquote prepares residential rooftop solar Quotes for Turkish Installers. A Sal
 the Customer, the Site's Address or Coordinates, the Roof and the average Monthly Consumption
 or Monthly Bill. The service sizes up to two System Options (Consumption-Matched and Roof-Max),
 selects the panel and inverter, estimates production, prices the installation, and calculates
-Annual Savings and the Payback Period.
+Annual Savings and the Payback Period. Savings follow Monthly Netting
+([ADR 0005](docs/adr/0005-monthly-netting-replaces-self-consumption-ratio.md)): each month's
+production is offset against that month's consumption (Netted Energy), the rest is Exported
+Energy sold at the Export Price, and each System Option reports its Netted Share.
 
 Each Quote is stored with its Assumptions and can be opened as a printable Turkish document.
 The bundled Catalog, Tariff and pricing inputs are [placeholder data](#placeholder-data).
@@ -292,7 +295,7 @@ header is ignored otherwise, since anyone can send it.
 
 The TOML files in [`src/sunquote/data/`](src/sunquote/data) contain placeholder inputs
 for the Catalog (panel and inverter specifications and unit prices), Residential Tariff
-(the daily allowance of the monthly Tariff Tiers, Export Price, Self-Consumption Ratio and default Contracted Power), and
+(the daily allowance of the monthly Tariff Tiers, Export Price and default Contracted Power), and
 pricing, engineering and financial Assumptions (installation costs, Margin, VAT, Roof
 coverage, system loss and escalation rates). Every price entry declares its own currency
 (`price_currency` for Catalog items, `currency` for the pricing Assumptions); the Quote
