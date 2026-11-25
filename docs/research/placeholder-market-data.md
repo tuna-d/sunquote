@@ -167,7 +167,9 @@ Notes:
 - Proposed per-panel prices: Jinko JKM440N-54HL4-(V) **USD 72**; Trina NEG9RH.25 **USD 76**; Trina NE09RH.05 **USD 74**.
   The differences are illustrative, not sourced.
 
-## 3. Residential tariff and Self-Consumption Ratio
+## 3. Residential tariff
+
+> Status (ticket #33): the fixed ratio proposed in this section (the last table row and the derivation after it) was replaced by Monthly Netting ([ADR 0005](../adr/0005-monthly-netting-replaces-self-consumption-ratio.md)). It is no longer an input; each System Option reports a Netted Share as a result. The derivation is kept as the history of how it was found.
 
 | Value | Proposed | Unit | Source / derivation | Source date | Kind |
 |---|---|---|---|---|---|

@@ -191,13 +191,30 @@ def test_the_assumptions_section_states_what_the_quote_was_calculated_with(
         turkish.format_try_per_kwh(Decimal(str(tariff["low_tariff_try_per_kwh"]))),
         turkish.format_try_per_kwh(Decimal(str(tariff["high_tariff_try_per_kwh"]))),
         turkish.format_try_per_kwh(Decimal(str(tariff["export_price_try_per_kwh"]))),
-        "%80",  # Self-Consumption Ratio
+        "Aylık mahsuplaşma",
         "%2",  # real tariff escalation
         "%0,5",  # panel degradation (0.005 in the test Catalog)
         "15 gün",  # Validity Period
     ]
     for text in expected:
         assert text in page, text
+
+
+def test_the_document_says_what_share_comes_off_the_bill_and_the_price_of_the_rest(
+    client: TestClient,
+) -> None:
+    quote = create(client)
+    export = turkish.format_try_per_kwh(
+        Decimal(str(quote["assumptions"]["tariff"]["export_price_try_per_kwh"]))
+    )
+
+    page = document(client, quote)
+
+    # 5,120 of 6,000 kWh (Consumption-Matched) and 5,980 of 12,000 kWh (Roof-Max), by month.
+    assert "Faturadan düşen üretim" in page
+    assert f"%85,3 (kalanı {export} fiyatıyla şebekeye satılır)" in page
+    assert f"%49,8 (kalanı {export} fiyatıyla şebekeye satılır)" in page
+    assert "Öz tüketim" not in page
 
 
 def test_the_document_says_lifetime_figures_are_in_todays_lira(client: TestClient) -> None:

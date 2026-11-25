@@ -6,7 +6,10 @@ sunquote prepares residential rooftop solar Quotes for Turkish Installers. A Sal
 the Customer, the Site's Address or Coordinates, the Roof and the average Monthly Consumption
 or Monthly Bill. The service sizes up to two System Options (Consumption-Matched and Roof-Max),
 selects the panel and inverter, estimates production, prices the installation, and calculates
-Annual Savings and the Payback Period.
+Annual Savings and the Payback Period. Savings follow Monthly Netting
+([ADR 0005](docs/adr/0005-monthly-netting-replaces-self-consumption-ratio.md)): each month's
+production is offset against that month's consumption (Netted Energy), the rest is Exported
+Energy sold at the Export Price, and each System Option reports its Netted Share.
 
 Each Quote is stored with its Assumptions and can be opened as a printable Turkish document.
 The bundled Catalog, Tariff and pricing inputs are [placeholder data](#placeholder-data-and-how-to-defend-it).
@@ -325,7 +328,7 @@ header is ignored otherwise, since anyone can send it.
 
 The TOML files in [`src/sunquote/data/`](src/sunquote/data) contain placeholder inputs
 for the Catalog (panel and inverter specifications and unit prices), Residential Tariff
-(the daily allowance of the monthly Tariff Tiers, Export Price, Self-Consumption Ratio and default Contracted Power), and
+(the daily allowance of the monthly Tariff Tiers, Export Price and default Contracted Power), and
 pricing, engineering and financial Assumptions (installation costs, Margin, VAT, Roof
 coverage, system loss and escalation rates). Every price entry declares its own currency
 (`price_currency` for Catalog items, `currency` for the pricing Assumptions); the Quote
@@ -354,7 +357,6 @@ Discount Rate) or is **unverified**. It was checked on 2026-11-25.
 | BTV 5% on the energy charge | direct | verified | Law 2464 Art. 37 and 38(b) |
 | KDV 10% on residential electricity | direct | verified | Decision 2007/13033 list II item 34 (CBK 5249, 7346); amendments after 2025-02-17 not checked |
 | Export Price, 1.24 TRY/kWh | derived | partly verified | Law 5346 Annex I item (e) and the EPDK table are verified; that the export-side fee is deducted and that the high tier applies rest on one secondary site. Lower end of 1.24 to 1.90 |
-| Self-Consumption Ratio, 0.85 | derived | unverified | PVGIS illustration for one city set; being replaced by Monthly Netting |
 | Monthly Netting for residential plants | rule | verified | Lisanssız Elektrik Üretim Yönetmeliği Art. 26(20), in force 2026-05-01 |
 | Contracted Power cap and DC/AC limit of 2.0 | rule | verified | same Yönetmelik, Art. 7(10), 28(5) and 17(7) |
 | Default Contracted Power, 10 kW | estimate | unverified | no regulatory default exists; an installer assumption recorded as defaulted on each Quote |
@@ -532,7 +534,7 @@ The rules are in [docs/agents/workflow.md](docs/agents/workflow.md), "Implementi
 | 2 | Spec #1 used a single Tariff Tier chosen by annual consumption. A Monthly Bill converted to kWh jumped at the threshold (a higher bill could give a lower consumption) and savings near the threshold were mispriced. | Surfaced after the placeholder market research of [ticket #4](https://github.com/tuna-d/sunquote/issues/4), then recorded as an owner decision ([ticket #9 comment](https://github.com/tuna-d/sunquote/issues/9)). **Who first spotted it: unconfirmed.** | [b44e2b0](https://github.com/tuna-d/sunquote/commit/b44e2b0) and [ADR 0002](docs/adr/0002-marginal-tariff-tiers.md): marginal bands |
 | 3 | A Quote build that failed (no viable system, no compatible inverter) still used up a Quote Number, leaving gaps in the numbering. | Part of the spec #1 code review fixes ([5e490e8](https://github.com/tuna-d/sunquote/commit/5e490e8)). **Whether a reviewer or a test run found it: unconfirmed.** | [2cecba9](https://github.com/tuna-d/sunquote/commit/2cecba9), with API and domain tests; listed in [PR #17](https://github.com/tuna-d/sunquote/pull/17) |
 | 4 | The Contracted Power cap used the Contracted Power itself: with 7 kW and inverters of 6 and 8 kW, the capped Roof-Max system fit no inverter. | Part of the spec #1 code review fixes ([5e490e8](https://github.com/tuna-d/sunquote/commit/5e490e8)). **Who: unconfirmed.** | [0c91bde](https://github.com/tuna-d/sunquote/commit/0c91bde): cap with the largest Catalog inverter within the Contracted Power |
-| 5 | The fixed Self-Consumption Ratio of 0.85, derived for a Consumption-Matched system, was applied to Roof-Max too, so a system larger than consumption had its Annual Savings overstated. | The phase 1 grilling session ([PR #28](https://github.com/tuna-d/sunquote/pull/28)). **Who in the session: unconfirmed.** | [ADR 0005](docs/adr/0005-monthly-netting-replaces-self-consumption-ratio.md) in [30b3bb3](https://github.com/tuna-d/sunquote/commit/30b3bb3); the calculation itself is built in [spec #30](https://github.com/tuna-d/sunquote/issues/30) |
+| 5 | A fixed 85% share of production, derived for a Consumption-Matched system, was credited as offsetting the bill for Roof-Max too, so a system larger than consumption had its Annual Savings overstated. | The phase 1 grilling session ([PR #28](https://github.com/tuna-d/sunquote/pull/28)). **Who in the session: unconfirmed.** | [ADR 0005](docs/adr/0005-monthly-netting-replaces-self-consumption-ratio.md) in [30b3bb3](https://github.com/tuna-d/sunquote/commit/30b3bb3); the calculation itself is built in [ticket #33](https://github.com/tuna-d/sunquote/issues/33) of [spec #30](https://github.com/tuna-d/sunquote/issues/30): Monthly Netting, with the Netted Share as a result |
 | 6 | The live extraction eval passed 15 of 20 scenarios, below the 90% bar: the assistant kept asking for fields a Quote does not need (the tilt and azimuth of a flat roof, the Subscriber Group, the roof type of an "eğimli" roof). | The extraction eval run against real Gemini, as stated in [PR #26](https://github.com/tuna-d/sunquote/pull/26) (follow-up to spec #3). | [d85a6cb](https://github.com/tuna-d/sunquote/commit/d85a6cb): prompt and tool description list the fields that are never missing; the eval then passed 19 of 20 |
 | 7 | The README and integration-test example of the assistant used 300 kWh for a 40 m² roof, which has no compatible inverter in the shipped Catalog, so the example would not produce a Quote. | Fixed in the spec #3 review-fix commit [9fd57c1](https://github.com/tuna-d/sunquote/commit/9fd57c1) (the commit message states the cause). **Who or what found it: unconfirmed.** | [9fd57c1](https://github.com/tuna-d/sunquote/commit/9fd57c1): the examples use 500 kWh ([PR #25](https://github.com/tuna-d/sunquote/pull/25)) |
 

@@ -373,9 +373,9 @@ class CashFlowRow(BaseModel):
 
     year: int = Field(ge=1)
     production_kwh: int
-    self_consumed_kwh: int
+    netted_kwh: int
     exported_kwh: int
-    self_consumption_savings_try: int
+    netting_savings_try: int
     export_income_try: int
     annual_savings_try: int
     inverter_replacement_try: int
@@ -407,6 +407,12 @@ class SystemOptionResponse(BaseModel):
     binding_limit: BindingLimit
     annual_production_kwh: int
     monthly_production_kwh: list[MonthlyProduction]
+    netted_share: JsonNumber = Field(
+        description=(
+            "Share of year 1's production that offsets the bill month by month (Monthly "
+            "Netting); the rest is exported. A decimal between 0 and 1."
+        )
+    )
     inverter: InverterSummary
     price: PriceResponse
     savings: SavingsResponse
@@ -421,7 +427,6 @@ class TariffResponse(BaseModel):
     low_tariff_try_per_kwh: Decimal
     high_tariff_try_per_kwh: Decimal
     export_price_try_per_kwh: Decimal
-    self_consumption_ratio: Decimal
     valid_from: dt.date
     source: str
 
@@ -544,9 +549,9 @@ def _cash_flow_row(row: YearlyCashFlow) -> CashFlowRow:
     return CashFlowRow(
         year=row.year,
         production_kwh=rounding.round_kwh(row.production_kwh),
-        self_consumed_kwh=rounding.round_kwh(row.self_consumed_kwh),
+        netted_kwh=rounding.round_kwh(row.netted_kwh),
         exported_kwh=rounding.round_kwh(row.exported_kwh),
-        self_consumption_savings_try=_whole_lira(row.self_consumption_savings),
+        netting_savings_try=_whole_lira(row.netting_savings),
         export_income_try=_whole_lira(row.export_income),
         annual_savings_try=_whole_lira(row.annual_savings),
         inverter_replacement_try=_whole_lira(row.inverter_replacement),
@@ -572,7 +577,6 @@ def _tariff_response(tariff: ResidentialTariff) -> TariffResponse:
         low_tariff_try_per_kwh=tariff.low_tariff_try_per_kwh,
         high_tariff_try_per_kwh=tariff.high_tariff_try_per_kwh,
         export_price_try_per_kwh=tariff.export_price_try_per_kwh,
-        self_consumption_ratio=tariff.self_consumption_ratio,
         valid_from=tariff.valid_from,
         source=tariff.source,
     )
@@ -599,6 +603,7 @@ def _option_response(option: SystemOption) -> SystemOptionResponse:
             MonthlyProduction(month=month, production_kwh=rounding.round_kwh(kwh))
             for month, kwh in enumerate(option.monthly_production_kwh, start=1)
         ],
+        netted_share=rounding.round_share(option.savings.netted_share),
         inverter=_inverter_summary(option.inverter),
         price=_price_response(option.price),
         savings=_savings_response(option.savings),

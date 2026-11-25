@@ -1,7 +1,8 @@
 """The residential Retail Tariff: two marginal Tariff Tiers applied month by month, the Export
-Price and the Self-Consumption Ratio (ADR 0002, ADR 0005).
+Price (ADR 0002, ADR 0005).
 
-Savings value self-consumed energy through `annual_cost`. Its inverse turns a bill into kWh.
+Savings value Netted Energy through `monthly_cost`. The inverse of `annual_cost` turns a bill
+into kWh.
 """
 
 from dataclasses import dataclass
@@ -31,7 +32,6 @@ class ResidentialTariff:
     low_tariff_try_per_kwh: Decimal
     high_tariff_try_per_kwh: Decimal
     export_price_try_per_kwh: Decimal
-    self_consumption_ratio: Decimal
     valid_from: date
     source: str
 
@@ -44,8 +44,6 @@ class ResidentialTariff:
             raise ValueError("the low Retail Tariff must not exceed the high one")
         if self.export_price_try_per_kwh < 0:
             raise ValueError("the Export Price must not be negative")
-        if not 0 <= self.self_consumption_ratio <= 1:
-            raise ValueError("the Self-Consumption Ratio must be within [0, 1]")
 
     def monthly_threshold_kwh(self, month: int) -> Decimal:
         """The kWh a month can use at the low tier. `month` counts from 1 (January)."""

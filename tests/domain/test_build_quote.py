@@ -186,16 +186,23 @@ def test_same_inputs_give_an_identical_quote() -> None:
 def test_option_savings_follow_from_production_consumption_and_tariff() -> None:
     savings = build().system_options[0].savings
 
-    assert savings.first_year_annual_savings == Money(Decimal("22960"), Currency.TRY)
+    # Production 280, 360, 480, 560, 640, 700, 740, 680, 560, 440, 320, 240 kWh against 500 a
+    # month nets 5,120 kWh (Netted Share 5,120 / 6,000) and exports 880 kWh x 2 = 1,760. The
+    # month's bills drop by 1,344 + 1,632 + 1,944 + 2,020 + 2,004 + 2,020 + 2,004 + 2,004 +
+    # 2,020 + 1,824 + 1,480 + 1,200 = 21,496 (worked month by month, see test_savings.py).
+    assert savings.first_year_annual_savings == Money(Decimal("23256"), Currency.TRY)
+    assert savings.cash_flow[0].netted_kwh == Decimal("5120")
+    assert savings.cash_flow[0].exported_kwh == Decimal("880")
+    assert savings.netted_share == Decimal("5120") / Decimal("6000")
     assert len(savings.cash_flow) == 25
     # The 31,200 TRY replacement (inverter incl. 20% VAT, equipment escalation 0) falls in year 12.
     year_twelve = savings.cash_flow[11]
     assert year_twelve.inverter_replacement == Money(Decimal("31200"), Currency.TRY)
     assert year_twelve.net_savings.amount < 0
-    assert savings.payback_years == pytest.approx(Decimal("6.6132055794"), abs=Decimal("1e-9"))
+    assert savings.payback_years == pytest.approx(Decimal("6.5239972861"), abs=Decimal("1e-9"))
     assert savings.payback_beyond_lifetime is False
     assert savings.lifetime_savings.amount == pytest.approx(
-        Decimal("670530.38855"), abs=Decimal("1e-4")
+        Decimal("684384.57038"), abs=Decimal("1e-4")
     )
 
 
@@ -223,13 +230,42 @@ def test_quote_records_the_consumption_tier_split_and_the_tariff_and_financial_a
 def test_the_roof_max_option_gets_its_own_savings_from_its_own_price_and_production() -> None:
     matched, roof_max = build().system_options  # 4.0 kWp and 8.0 kWp
 
-    # 12,000 kWh produced: the whole 6,000 kWh bill is saved (24,160), 6,000 kWh export at 2.
-    assert roof_max.savings.first_year_annual_savings == Money(Decimal("36160"), Currency.TRY)
-    assert matched.savings.first_year_annual_savings == Money(Decimal("22960"), Currency.TRY)
+    # 12,000 kWh produced against 500 a month: every month but December (480 kWh) nets 500 and
+    # exports the rest, so 5,980 kWh are netted and 6,020 kWh exported at 2 (12,040). The bill
+    # drops by 24,160 - 60 = 24,100 (December keeps 20 kWh on it, 20 x 3).
+    assert roof_max.savings.first_year_annual_savings == Money(Decimal("36140"), Currency.TRY)
+    assert roof_max.savings.netted_share == Decimal("5980") / Decimal("12000")
+    assert matched.savings.first_year_annual_savings == Money(Decimal("23256"), Currency.TRY)
+    # A bigger system nets a smaller share of what it produces.
+    assert roof_max.savings.netted_share < matched.savings.netted_share
     # The replacement is the 8 kW inverter (USD 1,100 x 40 x 1.2 VAT), not the 3.5 kW one.
     assert roof_max.savings.cash_flow[11].inverter_replacement == Money(
         Decimal("52800"), Currency.TRY
     )
+
+
+def test_a_consumption_matched_option_whose_months_never_exceed_consumption_exports_nothing() -> (
+    None
+):
+    """A flat 125 kWh/kWp every month: the 4.0 kWp Consumption-Matched system makes exactly its
+    500 kWh a month, so everything is netted and the whole bill (24,160 TRY) is saved."""
+    quote = build_quote(
+        request=make_request(),
+        specific_yield=make_specific_yield(monthly=(Decimal(125),) * 12),
+        reference_data=make_reference_data(),
+        exchange_rate=make_exchange_rate(),
+        quote_date=QUOTE_DATE,
+        quote_number=QUOTE_NUMBER,
+    )
+
+    savings = quote.system_options[0].savings
+    year_one = savings.cash_flow[0]
+    assert year_one.production_kwh == Decimal("6000")
+    assert year_one.netted_kwh == Decimal("6000")
+    assert year_one.exported_kwh == Decimal("0")
+    assert year_one.export_income == Money(Decimal("0"), Currency.TRY)
+    assert year_one.netting_savings == Money(Decimal("24160"), Currency.TRY)
+    assert savings.netted_share == Decimal("1")
 
 
 @pytest.mark.parametrize(

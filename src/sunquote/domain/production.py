@@ -36,8 +36,11 @@ class SpecificYield:
 
 
 def annual_production_kwh(capacity_kwp: Decimal, specific_yield: SpecificYield) -> Decimal:
-    """Year-1 annual production. The provider's system loss is already in the yield."""
-    return capacity_kwp * specific_yield.annual_kwh_per_kwp
+    """Year-1 annual production: the sum of its 12 months, which Monthly Netting works on.
+
+    The provider's system loss is already in the yield.
+    """
+    return sum(monthly_production_kwh(capacity_kwp, specific_yield), start=Decimal(0))
 
 
 def monthly_production_kwh(
