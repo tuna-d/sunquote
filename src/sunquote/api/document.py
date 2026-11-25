@@ -59,7 +59,7 @@ def _assumption_views(stored: StoredQuote) -> tuple[AssumptionView, ...]:
         if quote.system_options[0].savings.inverter_replaced_within_lifetime
         else "Analiz süresi içinde inverter yenilemesi gerekmediği varsayıldı."
     )
-    threshold = turkish.format_int(rounding.round_kwh(tariff.tier_threshold_kwh_per_year))
+    daily_allowance = turkish.format_decimal(tariff.tier_threshold_kwh_per_day)
     annual_consumption = turkish.format_int(rounding.round_kwh(recorded.annual_consumption_kwh))
     low = turkish.format_try_per_kwh(tariff.low_tariff_try_per_kwh)
     high = turkish.format_try_per_kwh(tariff.high_tariff_try_per_kwh)
@@ -87,8 +87,9 @@ def _assumption_views(stored: StoredQuote) -> tuple[AssumptionView, ...]:
         AssumptionView("Elektrik tüketimi", consumption_text),
         AssumptionView(
             "Elektrik tarifesi",
-            f"Yıllık {threshold} kWh değerine kadar olan tüketim {low}, bu değerin üzerindeki "
-            f"kısım {high} üzerinden hesaplandı (vergiler ve bedeller dahil, kademeli tarife). "
+            f"Her ay, günlük {daily_allowance} kWh sınırına (ayın gün sayısıyla çarpılır) kadar "
+            f"olan tüketim {low}, bu sınırın üzerindeki kısım {high} üzerinden hesaplandı "
+            f"(vergiler ve bedeller dahil, kademeli tarife). "
             f"Tarife {turkish.format_date(tariff.valid_from)} tarihinden itibaren geçerlidir.",
         ),
         AssumptionView(
