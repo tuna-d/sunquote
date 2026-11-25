@@ -24,18 +24,46 @@ From the repository root, with Docker running:
 docker compose up --build
 ```
 
-No `.env` or API keys are required. Compose starts the API, Postgres and Redis. The API
-applies the Alembic migrations at startup. Run `docker compose ps` in another terminal to
-check that all three services are healthy.
+No `.env` or API keys are required. Compose starts the API, Postgres, Redis and the web app.
+The API applies the Alembic migrations at startup. Run `docker compose ps` in another terminal
+to check that all four services are healthy.
 
-Open [Swagger UI](http://localhost:8000/docs) to try the API, or check
-[service health](http://localhost:8000/health). Set `API_HOST_PORT` in your shell to use
-another host port and use that port in the walkthrough. [`.env.example`](.env.example)
+Open the [web app](http://localhost:3000) for the Quote list, [Swagger UI](http://localhost:8000/docs)
+to try the API, or check [service health](http://localhost:8000/health). Set `API_HOST_PORT` or
+`WEB_HOST_PORT` in your shell to use another host port; use the API port in the walkthrough. [`.env.example`](.env.example)
 lists optional settings, including the published Postgres and Redis ports.
 
 Quote creation needs internet access to the public providers listed under
 [Architecture](#architecture). If a provider is unavailable and Redis has no cached value,
 the API returns a `503` and stores no Quote.
+
+## Run the web app locally
+
+The web app is a Next.js app in [`web/`](web). It lists the stored Quotes in Turkish; the
+detail page, the Quote form and the Assistant follow in later tickets. It needs Node 24 (see
+[`web/.nvmrc`](web/.nvmrc)) and a running API. `docker compose up` starts both; for development
+run them side by side:
+
+```sh
+# 1. The API (and Postgres) on port 8000, from the repository root.
+docker compose up postgres redis -d
+uv sync
+SUNQUOTE_DATABASE_URL=postgresql+asyncpg://sunquote:sunquote@localhost:5432/sunquote   uv run fastapi dev src/sunquote/api/app.py --port 8000
+
+# 2. Optional: fill the list with the sample Quotes (needs internet for the data providers).
+uv run python -m sunquote.demo seed
+
+# 3. The web app on http://localhost:3000.
+cd web
+npm ci
+SUNQUOTE_API_URL=http://localhost:8000 npm run dev
+```
+
+`SUNQUOTE_API_URL` is where the API is (it defaults to `http://localhost:8000`). The browser
+calls `/api/...` on the web app's own origin and Next.js forwards it to the API, so no CORS is
+needed. After an API change, `npm run api:sync` regenerates `web/openapi.json` and the
+TypeScript types; CI fails when they are out of date. See [`web/README.md`](web/README.md)
+for the project layout, the scripts and the design tokens.
 
 ## Create, list and open a Quote
 

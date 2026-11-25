@@ -1,0 +1,2106 @@
+{
+  "components": {
+    "schemas": {
+      "AssistantRequestBody": {
+        "properties": {
+          "messages": {
+            "description": "The conversation so far, oldest first. The client keeps it and resends all of it with every request. The last message must be the Sales Rep's (`user`).",
+            "items": {
+              "$ref": "#/components/schemas/MessageBody"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Messages",
+            "type": "array"
+          }
+        },
+        "required": [
+          "messages"
+        ],
+        "title": "AssistantRequestBody",
+        "type": "object"
+      },
+      "AssistantResponse": {
+        "properties": {
+          "missing_fields": {
+            "description": "When the turn ends with a question: the `create_quote` field paths still missing (`customer.name`, `site.address`, `roof.roof_type`, `roof.tilt_deg`, `roof.azimuth_deg`, `roof.usable_area_m2`, `consumption`, `subscriber_group`) and `reply` is that question. Otherwise empty.",
+            "items": {
+              "$ref": "#/components/schemas/MissingField"
+            },
+            "title": "Missing Fields",
+            "type": "array"
+          },
+          "quote": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/QuoteReference"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The Quote created in this turn, or null when none was."
+          },
+          "reply": {
+            "description": "Turkish text. Every placeholder is already filled.",
+            "title": "Reply",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reply",
+          "quote",
+          "missing_fields"
+        ],
+        "title": "AssistantResponse",
+        "type": "object"
+      },
+      "AssumptionsResponse": {
+        "description": "Everything the Quote was calculated with, at full precision. Money, rates, ratios and\ntariff prices are decimal strings; measurements (coordinates, areas, angles, kW, kWh) are\nJSON numbers.",
+        "properties": {
+          "annual_consumption_kwh": {
+            "title": "Annual Consumption Kwh",
+            "type": "number"
+          },
+          "consumption_derived_from_bill": {
+            "title": "Consumption Derived From Bill",
+            "type": "boolean"
+          },
+          "contracted_power": {
+            "$ref": "#/components/schemas/ContractedPowerResponse"
+          },
+          "coverage_ratio": {
+            "title": "Coverage Ratio",
+            "type": "string"
+          },
+          "dc_ac_ratio_range": {
+            "$ref": "#/components/schemas/DcAcRatioRangeResponse"
+          },
+          "default_panel": {
+            "$ref": "#/components/schemas/PanelDatasheet"
+          },
+          "derived_monthly_consumption_kwh": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Derived Monthly Consumption Kwh"
+          },
+          "effective_azimuth_deg": {
+            "title": "Effective Azimuth Deg",
+            "type": "number"
+          },
+          "effective_tilt_deg": {
+            "title": "Effective Tilt Deg",
+            "type": "number"
+          },
+          "exchange_rate": {
+            "$ref": "#/components/schemas/ExchangeRateResponse"
+          },
+          "financial": {
+            "$ref": "#/components/schemas/FinancialResponse"
+          },
+          "geocoding_result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GeocodingResultResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "high_tier_consumption_kwh": {
+            "title": "High Tier Consumption Kwh",
+            "type": "number"
+          },
+          "inverters": {
+            "items": {
+              "$ref": "#/components/schemas/InverterDatasheet"
+            },
+            "title": "Inverters",
+            "type": "array"
+          },
+          "low_tier_consumption_kwh": {
+            "title": "Low Tier Consumption Kwh",
+            "type": "number"
+          },
+          "pricing": {
+            "$ref": "#/components/schemas/PricingResponse"
+          },
+          "pvgis_inputs": {
+            "$ref": "#/components/schemas/PvgisInputs"
+          },
+          "roof_type": {
+            "$ref": "#/components/schemas/RoofType"
+          },
+          "submitted_request": {
+            "$ref": "#/components/schemas/SubmittedRequest"
+          },
+          "tariff": {
+            "$ref": "#/components/schemas/TariffResponse"
+          }
+        },
+        "required": [
+          "submitted_request",
+          "geocoding_result",
+          "pvgis_inputs",
+          "roof_type",
+          "effective_azimuth_deg",
+          "effective_tilt_deg",
+          "coverage_ratio",
+          "default_panel",
+          "inverters",
+          "dc_ac_ratio_range",
+          "contracted_power",
+          "pricing",
+          "exchange_rate",
+          "consumption_derived_from_bill",
+          "derived_monthly_consumption_kwh",
+          "annual_consumption_kwh",
+          "low_tier_consumption_kwh",
+          "high_tier_consumption_kwh",
+          "tariff",
+          "financial"
+        ],
+        "title": "AssumptionsResponse",
+        "type": "object"
+      },
+      "BindingLimit": {
+        "enum": [
+          "roof",
+          "consumption_target",
+          "contracted_power"
+        ],
+        "title": "BindingLimit",
+        "type": "string"
+      },
+      "CashFlowRow": {
+        "description": "One year of the cash flow, in today's lira (escalation rates are real, ADR 0003).",
+        "properties": {
+          "annual_savings_try": {
+            "title": "Annual Savings Try",
+            "type": "integer"
+          },
+          "cumulative_net_savings_try": {
+            "title": "Cumulative Net Savings Try",
+            "type": "integer"
+          },
+          "export_income_try": {
+            "title": "Export Income Try",
+            "type": "integer"
+          },
+          "exported_kwh": {
+            "title": "Exported Kwh",
+            "type": "integer"
+          },
+          "inverter_replacement_try": {
+            "title": "Inverter Replacement Try",
+            "type": "integer"
+          },
+          "net_savings_try": {
+            "title": "Net Savings Try",
+            "type": "integer"
+          },
+          "netted_kwh": {
+            "title": "Netted Kwh",
+            "type": "integer"
+          },
+          "netting_savings_try": {
+            "title": "Netting Savings Try",
+            "type": "integer"
+          },
+          "production_kwh": {
+            "title": "Production Kwh",
+            "type": "integer"
+          },
+          "year": {
+            "minimum": 1.0,
+            "title": "Year",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "year",
+          "production_kwh",
+          "netted_kwh",
+          "exported_kwh",
+          "netting_savings_try",
+          "export_income_try",
+          "annual_savings_try",
+          "inverter_replacement_try",
+          "net_savings_try",
+          "cumulative_net_savings_try"
+        ],
+        "title": "CashFlowRow",
+        "type": "object"
+      },
+      "ConsumptionBody": {
+        "properties": {
+          "monthly_bill_try": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Average Monthly Bill in TRY, used when kWh is missing.",
+            "title": "Monthly Bill Try"
+          },
+          "monthly_consumption_kwh": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Average Monthly Consumption in kWh. Takes precedence over the bill.",
+            "title": "Monthly Consumption Kwh"
+          }
+        },
+        "title": "ConsumptionBody",
+        "type": "object"
+      },
+      "ContractedPowerResponse": {
+        "description": "The Contracted Power every System Option was sized against, and where it came from.",
+        "properties": {
+          "kw": {
+            "title": "Kw",
+            "type": "number"
+          },
+          "source": {
+            "$ref": "#/components/schemas/ContractedPowerSource"
+          }
+        },
+        "required": [
+          "kw",
+          "source"
+        ],
+        "title": "ContractedPowerResponse",
+        "type": "object"
+      },
+      "ContractedPowerSource": {
+        "enum": [
+          "given",
+          "defaulted"
+        ],
+        "title": "ContractedPowerSource",
+        "type": "string"
+      },
+      "Currency": {
+        "enum": [
+          "TRY",
+          "USD",
+          "EUR"
+        ],
+        "title": "Currency",
+        "type": "string"
+      },
+      "CustomerBody": {
+        "properties": {
+          "email": {
+            "anyOf": [
+              {
+                "format": "email",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "CustomerBody",
+        "type": "object"
+      },
+      "DcAcRatioRangeResponse": {
+        "description": "The allowed DC/AC Ratio, as decimal strings.",
+        "properties": {
+          "maximum": {
+            "title": "Maximum",
+            "type": "string"
+          },
+          "minimum": {
+            "title": "Minimum",
+            "type": "string"
+          }
+        },
+        "required": [
+          "minimum",
+          "maximum"
+        ],
+        "title": "DcAcRatioRangeResponse",
+        "type": "object"
+      },
+      "ExchangeRateOverrideBody": {
+        "properties": {
+          "date": {
+            "description": "The date the rate applies to.",
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "rate": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "description": "TRY per 1 unit of the currency the Catalog and pricing data are priced in (USD in the placeholder data).",
+            "title": "Rate"
+          }
+        },
+        "required": [
+          "rate",
+          "date"
+        ],
+        "title": "ExchangeRateOverrideBody",
+        "type": "object"
+      },
+      "ExchangeRateResponse": {
+        "description": "1 `base_currency` buys `rate` `quote_currency` on `date`. `rate` is a decimal string.",
+        "properties": {
+          "base_currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "overridden": {
+            "title": "Overridden",
+            "type": "boolean"
+          },
+          "quote_currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "rate": {
+            "title": "Rate",
+            "type": "string"
+          }
+        },
+        "required": [
+          "base_currency",
+          "quote_currency",
+          "rate",
+          "date",
+          "overridden"
+        ],
+        "title": "ExchangeRateResponse",
+        "type": "object"
+      },
+      "FallbackReason": {
+        "description": "Why a `fallback` Narrative was recorded, when the cause is worth keeping.",
+        "enum": [
+          "budget_spent"
+        ],
+        "title": "FallbackReason",
+        "type": "string"
+      },
+      "FieldError": {
+        "properties": {
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "message"
+        ],
+        "title": "FieldError",
+        "type": "object"
+      },
+      "FinancialResponse": {
+        "description": "Both escalation rates and the Discount Rate are real (inflation-adjusted): all figures\nare in today's lira. The rates are decimal strings (0.02 is 2%).",
+        "properties": {
+          "discount_rate_real": {
+            "title": "Discount Rate Real",
+            "type": "string"
+          },
+          "equipment_escalation_rate_real": {
+            "title": "Equipment Escalation Rate Real",
+            "type": "string"
+          },
+          "inverter_replacement_year": {
+            "title": "Inverter Replacement Year",
+            "type": "integer"
+          },
+          "lifetime_years": {
+            "title": "Lifetime Years",
+            "type": "integer"
+          },
+          "tariff_escalation_rate_real": {
+            "title": "Tariff Escalation Rate Real",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tariff_escalation_rate_real",
+          "equipment_escalation_rate_real",
+          "lifetime_years",
+          "inverter_replacement_year",
+          "discount_rate_real"
+        ],
+        "title": "FinancialResponse",
+        "type": "object"
+      },
+      "GeocodingResultResponse": {
+        "properties": {
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "latitude": {
+            "title": "Latitude",
+            "type": "number"
+          },
+          "longitude": {
+            "title": "Longitude",
+            "type": "number"
+          }
+        },
+        "required": [
+          "display_name",
+          "latitude",
+          "longitude"
+        ],
+        "title": "GeocodingResultResponse",
+        "type": "object"
+      },
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "HealthResponse",
+        "type": "object"
+      },
+      "InverterDatasheet": {
+        "properties": {
+          "ac_power_kw": {
+            "title": "Ac Power Kw",
+            "type": "number"
+          },
+          "inverter_id": {
+            "title": "Inverter Id",
+            "type": "string"
+          },
+          "manufacturer": {
+            "title": "Manufacturer",
+            "type": "string"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "unit_price": {
+            "$ref": "#/components/schemas/MoneyResponse"
+          }
+        },
+        "required": [
+          "inverter_id",
+          "manufacturer",
+          "model",
+          "ac_power_kw",
+          "unit_price"
+        ],
+        "title": "InverterDatasheet",
+        "type": "object"
+      },
+      "InverterSummary": {
+        "properties": {
+          "ac_power_kw": {
+            "title": "Ac Power Kw",
+            "type": "number"
+          },
+          "inverter_id": {
+            "title": "Inverter Id",
+            "type": "string"
+          },
+          "manufacturer": {
+            "title": "Manufacturer",
+            "type": "string"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          }
+        },
+        "required": [
+          "inverter_id",
+          "manufacturer",
+          "model",
+          "ac_power_kw"
+        ],
+        "title": "InverterSummary",
+        "type": "object"
+      },
+      "MessageBody": {
+        "properties": {
+          "content": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Content",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "content"
+        ],
+        "title": "MessageBody",
+        "type": "object"
+      },
+      "MissingField": {
+        "description": "The `create_quote` field paths the model can say are still missing.",
+        "enum": [
+          "customer.name",
+          "site.address",
+          "roof.roof_type",
+          "roof.tilt_deg",
+          "roof.azimuth_deg",
+          "roof.usable_area_m2",
+          "consumption",
+          "subscriber_group"
+        ],
+        "title": "MissingField",
+        "type": "string"
+      },
+      "MoneyResponse": {
+        "description": "An amount with its currency, for unit prices. `amount` is a decimal string at full\nprecision.",
+        "properties": {
+          "amount": {
+            "title": "Amount",
+            "type": "string"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          }
+        },
+        "required": [
+          "amount",
+          "currency"
+        ],
+        "title": "MoneyResponse",
+        "type": "object"
+      },
+      "MonthlyProduction": {
+        "properties": {
+          "month": {
+            "maximum": 12.0,
+            "minimum": 1.0,
+            "title": "Month",
+            "type": "integer"
+          },
+          "production_kwh": {
+            "title": "Production Kwh",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "month",
+          "production_kwh"
+        ],
+        "title": "MonthlyProduction",
+        "type": "object"
+      },
+      "NarrativeResponse": {
+        "description": "The prose of the Quote document, with every placeholder filled from the Quote.",
+        "properties": {
+          "fallback_reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FallbackReason"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the fixed text is shown, when the cause is recorded: `budget_spent` when the day's Gemini budget was spent. Null for `llm` and for other causes."
+          },
+          "generated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the Narrative step ran; null for Quotes stored before it existed.",
+            "title": "Generated At"
+          },
+          "greeting": {
+            "title": "Greeting",
+            "type": "string"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The model that wrote the text; null for `fallback`.",
+            "title": "Model"
+          },
+          "next_steps": {
+            "title": "Next Steps",
+            "type": "string"
+          },
+          "options_comparison": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only for a Quote with two System Options; otherwise null.",
+            "title": "Options Comparison"
+          },
+          "source": {
+            "$ref": "#/components/schemas/NarrativeSource",
+            "description": "`llm` when a writer's validated text is shown, `fallback` for the fixed text."
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "greeting",
+          "summary",
+          "options_comparison",
+          "next_steps",
+          "source",
+          "model",
+          "fallback_reason",
+          "generated_at"
+        ],
+        "title": "Narrative",
+        "type": "object"
+      },
+      "NarrativeSource": {
+        "enum": [
+          "llm",
+          "fallback"
+        ],
+        "title": "NarrativeSource",
+        "type": "string"
+      },
+      "PanelDatasheet": {
+        "properties": {
+          "area_m2": {
+            "title": "Area M2",
+            "type": "number"
+          },
+          "degradation_rate_per_year": {
+            "title": "Degradation Rate Per Year",
+            "type": "string"
+          },
+          "length_mm": {
+            "title": "Length Mm",
+            "type": "integer"
+          },
+          "manufacturer": {
+            "title": "Manufacturer",
+            "type": "string"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "panel_id": {
+            "title": "Panel Id",
+            "type": "string"
+          },
+          "power_w": {
+            "title": "Power W",
+            "type": "integer"
+          },
+          "unit_price": {
+            "$ref": "#/components/schemas/MoneyResponse"
+          },
+          "width_mm": {
+            "title": "Width Mm",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "panel_id",
+          "manufacturer",
+          "model",
+          "power_w",
+          "length_mm",
+          "width_mm",
+          "area_m2",
+          "degradation_rate_per_year",
+          "unit_price"
+        ],
+        "title": "PanelDatasheet",
+        "type": "object"
+      },
+      "PanelSummary": {
+        "properties": {
+          "manufacturer": {
+            "title": "Manufacturer",
+            "type": "string"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "panel_id": {
+            "title": "Panel Id",
+            "type": "string"
+          },
+          "power_w": {
+            "title": "Power W",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "panel_id",
+          "manufacturer",
+          "model",
+          "power_w"
+        ],
+        "title": "PanelSummary",
+        "type": "object"
+      },
+      "PriceResponse": {
+        "description": "What the Customer pays for a System Option, in whole lira.",
+        "properties": {
+          "installation_cost_try": {
+            "title": "Installation Cost Try",
+            "type": "integer"
+          },
+          "sale_price_try": {
+            "title": "Sale Price Try",
+            "type": "integer"
+          },
+          "total_try": {
+            "title": "Total Try",
+            "type": "integer"
+          },
+          "vat_try": {
+            "title": "Vat Try",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "installation_cost_try",
+          "sale_price_try",
+          "vat_try",
+          "total_try"
+        ],
+        "title": "PriceResponse",
+        "type": "object"
+      },
+      "PricingResponse": {
+        "description": "The prices the Installation Cost was built from. `margin` and `vat_rate` are shares as\ndecimal strings (0.25 is 25%).",
+        "properties": {
+          "bos_price_per_kwp": {
+            "$ref": "#/components/schemas/MoneyResponse"
+          },
+          "fixed_project_cost": {
+            "$ref": "#/components/schemas/MoneyResponse"
+          },
+          "labour_price_per_kwp": {
+            "$ref": "#/components/schemas/MoneyResponse"
+          },
+          "margin": {
+            "title": "Margin",
+            "type": "string"
+          },
+          "validity_period_days": {
+            "title": "Validity Period Days",
+            "type": "integer"
+          },
+          "vat_rate": {
+            "title": "Vat Rate",
+            "type": "string"
+          }
+        },
+        "required": [
+          "bos_price_per_kwp",
+          "labour_price_per_kwp",
+          "fixed_project_cost",
+          "margin",
+          "vat_rate",
+          "validity_period_days"
+        ],
+        "title": "PricingResponse",
+        "type": "object"
+      },
+      "Problem": {
+        "description": "The body of a problem response, as documented in OpenAPI.",
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "errors": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/FieldError"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Errors"
+          },
+          "status": {
+            "title": "Status",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "detail"
+        ],
+        "title": "Problem",
+        "type": "object"
+      },
+      "PvgisInputs": {
+        "description": "What PVGIS was actually asked. `aspect_deg` is PVGIS's: 0 = south, 90 = west.",
+        "properties": {
+          "aspect_deg": {
+            "title": "Aspect Deg",
+            "type": "number"
+          },
+          "latitude": {
+            "title": "Latitude",
+            "type": "number"
+          },
+          "longitude": {
+            "title": "Longitude",
+            "type": "number"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "system_loss_percent": {
+            "title": "System Loss Percent",
+            "type": "number"
+          },
+          "tilt_deg": {
+            "title": "Tilt Deg",
+            "type": "number"
+          }
+        },
+        "required": [
+          "source",
+          "latitude",
+          "longitude",
+          "tilt_deg",
+          "aspect_deg",
+          "system_loss_percent"
+        ],
+        "title": "PvgisInputs",
+        "type": "object"
+      },
+      "QuoteListItem": {
+        "description": "What the Sales Rep needs to recognise a Quote without opening it.",
+        "properties": {
+          "capacity_kwp": {
+            "description": "Of the first System Option.",
+            "title": "Capacity Kwp",
+            "type": "number"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "customer_name": {
+            "title": "Customer Name",
+            "type": "string"
+          },
+          "district": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null until address geocoding exists.",
+            "title": "District"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_sample": {
+            "description": "Whether this is a synthetic sample Quote.",
+            "title": "Is Sample",
+            "type": "boolean"
+          },
+          "province": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null until address geocoding exists.",
+            "title": "Province"
+          },
+          "quote_number": {
+            "title": "Quote Number",
+            "type": "string"
+          },
+          "system_option_count": {
+            "title": "System Option Count",
+            "type": "integer"
+          },
+          "total_try": {
+            "description": "Total price including VAT of the first System Option.",
+            "title": "Total Try",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "quote_number",
+          "created_at",
+          "is_sample",
+          "customer_name",
+          "district",
+          "province",
+          "system_option_count",
+          "capacity_kwp",
+          "total_try"
+        ],
+        "title": "QuoteListItem",
+        "type": "object"
+      },
+      "QuoteListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/QuoteListItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "description": "The number of stored Quotes, across all pages.",
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "page_size",
+          "total"
+        ],
+        "title": "QuoteListResponse",
+        "type": "object"
+      },
+      "QuoteReference": {
+        "properties": {
+          "document_url": {
+            "description": "Link to the printable Turkish quote document.",
+            "title": "Document Url",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "quote_number": {
+            "title": "Quote Number",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "quote_number",
+          "document_url"
+        ],
+        "title": "QuoteReference",
+        "type": "object"
+      },
+      "QuoteRequestBody": {
+        "properties": {
+          "consumption": {
+            "$ref": "#/components/schemas/ConsumptionBody"
+          },
+          "contracted_power_kw": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The Site's Contracted Power in kW. It caps every System Option's panel count and inverter AC power. When absent, the Subscriber Group's default is used and the Quote records that it was defaulted.",
+            "title": "Contracted Power Kw"
+          },
+          "customer": {
+            "$ref": "#/components/schemas/CustomerBody"
+          },
+          "exchange_rate_override": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExchangeRateOverrideBody"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Rate to price with instead of TCMB's, for the currency the Catalog and pricing data are priced in (USD in the placeholder data). When given, TCMB is not called and the Quote records that the rate was overridden."
+          },
+          "roof": {
+            "$ref": "#/components/schemas/RoofBody"
+          },
+          "site": {
+            "$ref": "#/components/schemas/SiteBody"
+          },
+          "subscriber_group": {
+            "description": "Only `residential` is supported.",
+            "title": "Subscriber Group",
+            "type": "string"
+          }
+        },
+        "required": [
+          "customer",
+          "site",
+          "roof",
+          "consumption",
+          "subscriber_group"
+        ],
+        "title": "QuoteRequestBody",
+        "type": "object"
+      },
+      "QuoteResponse": {
+        "properties": {
+          "assumptions": {
+            "$ref": "#/components/schemas/AssumptionsResponse"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "customer": {
+            "$ref": "#/components/schemas/SubmittedCustomer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_sample": {
+            "description": "Whether this is a synthetic sample Quote.",
+            "title": "Is Sample",
+            "type": "boolean"
+          },
+          "narrative": {
+            "$ref": "#/components/schemas/NarrativeResponse"
+          },
+          "quote_date": {
+            "format": "date",
+            "title": "Quote Date",
+            "type": "string"
+          },
+          "quote_number": {
+            "description": "Readable identifier, `SQ-<year>-<6-digit sequence>`.",
+            "title": "Quote Number",
+            "type": "string"
+          },
+          "system_options": {
+            "items": {
+              "$ref": "#/components/schemas/SystemOptionResponse"
+            },
+            "title": "System Options",
+            "type": "array"
+          },
+          "valid_until": {
+            "description": "The last day the quoted price holds.",
+            "format": "date",
+            "title": "Valid Until",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "quote_number",
+          "created_at",
+          "is_sample",
+          "customer",
+          "quote_date",
+          "valid_until",
+          "system_options",
+          "narrative",
+          "assumptions"
+        ],
+        "title": "Quote",
+        "type": "object"
+      },
+      "RoofBody": {
+        "properties": {
+          "azimuth_deg": {
+            "anyOf": [
+              {
+                "exclusiveMaximum": 360.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Compass bearing (180 = south). Required for pitched roofs. A flat roof does not need it and does not use it (panels face south); a value given is recorded as submitted.",
+            "title": "Azimuth Deg"
+          },
+          "roof_type": {
+            "$ref": "#/components/schemas/RoofType"
+          },
+          "tilt_deg": {
+            "anyOf": [
+              {
+                "maximum": 90.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Required for pitched roofs. A flat roof does not need it and does not use it (panels sit at the Installer's tilt); a value given is recorded as submitted.",
+            "title": "Tilt Deg"
+          },
+          "usable_area_m2": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Usable Area M2"
+          }
+        },
+        "required": [
+          "roof_type",
+          "usable_area_m2"
+        ],
+        "title": "RoofBody",
+        "type": "object"
+      },
+      "RoofType": {
+        "enum": [
+          "pitched",
+          "flat"
+        ],
+        "title": "RoofType",
+        "type": "string"
+      },
+      "SavingsResponse": {
+        "description": "What a System Option saves the Customer, in today's lira.\n\n`payback_period_years` is null, with `payback_beyond_lifetime` true, when the total price\nincluding VAT is not recovered within the lifetime. `npv_try` is the Net Present Value at the\nreal Discount Rate of the Assumptions (negative when the option earns less than that rate).\n`irr` is the Internal Rate of Return as a ratio (0.152 is 15.2%); it is null in the same case\nas the Payback Period, when the total price is not recovered within the lifetime. The\nPayback Period stays the headline figure and is undiscounted.",
+        "properties": {
+          "cash_flow": {
+            "items": {
+              "$ref": "#/components/schemas/CashFlowRow"
+            },
+            "title": "Cash Flow",
+            "type": "array"
+          },
+          "first_year_annual_savings_try": {
+            "title": "First Year Annual Savings Try",
+            "type": "integer"
+          },
+          "irr": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Internal Rate of Return per year as a ratio; null when the price is not recovered.",
+            "title": "Irr"
+          },
+          "lifetime_savings_try": {
+            "description": "Total net savings, after the inverter replacement.",
+            "title": "Lifetime Savings Try",
+            "type": "integer"
+          },
+          "npv_try": {
+            "description": "Net Present Value in whole lira at the real Discount Rate, after the price.",
+            "title": "Npv Try",
+            "type": "integer"
+          },
+          "payback_beyond_lifetime": {
+            "title": "Payback Beyond Lifetime",
+            "type": "boolean"
+          },
+          "payback_period_years": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payback Period Years"
+          }
+        },
+        "required": [
+          "first_year_annual_savings_try",
+          "payback_period_years",
+          "payback_beyond_lifetime",
+          "npv_try",
+          "irr",
+          "lifetime_savings_try",
+          "cash_flow"
+        ],
+        "title": "SavingsResponse",
+        "type": "object"
+      },
+      "SiteBody": {
+        "properties": {
+          "address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Required without coordinates. A complete coordinate pair takes precedence.",
+            "title": "Address"
+          },
+          "latitude": {
+            "anyOf": [
+              {
+                "maximum": 90.0,
+                "minimum": -90.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latitude"
+          },
+          "longitude": {
+            "anyOf": [
+              {
+                "maximum": 180.0,
+                "minimum": -180.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Longitude"
+          }
+        },
+        "title": "SiteBody",
+        "type": "object"
+      },
+      "SizingStrategy": {
+        "enum": [
+          "consumption_matched",
+          "roof_max"
+        ],
+        "title": "SizingStrategy",
+        "type": "string"
+      },
+      "SubmittedConsumption": {
+        "properties": {
+          "monthly_bill_try": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monthly Bill Try"
+          },
+          "monthly_consumption_kwh": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monthly Consumption Kwh"
+          }
+        },
+        "required": [
+          "monthly_consumption_kwh"
+        ],
+        "title": "SubmittedConsumption",
+        "type": "object"
+      },
+      "SubmittedCustomer": {
+        "properties": {
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          }
+        },
+        "required": [
+          "name",
+          "phone",
+          "email"
+        ],
+        "title": "SubmittedCustomer",
+        "type": "object"
+      },
+      "SubmittedRequest": {
+        "description": "The submitted inputs at full precision, exactly as given.",
+        "properties": {
+          "consumption": {
+            "$ref": "#/components/schemas/SubmittedConsumption"
+          },
+          "contracted_power_kw": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contracted Power Kw"
+          },
+          "customer": {
+            "$ref": "#/components/schemas/SubmittedCustomer"
+          },
+          "roof": {
+            "$ref": "#/components/schemas/SubmittedRoof"
+          },
+          "site": {
+            "$ref": "#/components/schemas/SubmittedSite"
+          },
+          "subscriber_group": {
+            "$ref": "#/components/schemas/SubscriberGroup"
+          }
+        },
+        "required": [
+          "customer",
+          "site",
+          "roof",
+          "consumption",
+          "subscriber_group",
+          "contracted_power_kw"
+        ],
+        "title": "SubmittedRequest",
+        "type": "object"
+      },
+      "SubmittedRoof": {
+        "properties": {
+          "azimuth_deg": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Azimuth Deg"
+          },
+          "roof_type": {
+            "$ref": "#/components/schemas/RoofType"
+          },
+          "tilt_deg": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tilt Deg"
+          },
+          "usable_area_m2": {
+            "title": "Usable Area M2",
+            "type": "number"
+          }
+        },
+        "required": [
+          "roof_type",
+          "usable_area_m2",
+          "azimuth_deg",
+          "tilt_deg"
+        ],
+        "title": "SubmittedRoof",
+        "type": "object"
+      },
+      "SubmittedSite": {
+        "properties": {
+          "address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address"
+          },
+          "latitude": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latitude"
+          },
+          "longitude": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Longitude"
+          }
+        },
+        "required": [
+          "latitude",
+          "longitude"
+        ],
+        "title": "SubmittedSite",
+        "type": "object"
+      },
+      "SubscriberGroup": {
+        "description": "Only residential is priced for now; the enum is where commercial would be added.",
+        "enum": [
+          "residential"
+        ],
+        "title": "SubscriberGroup",
+        "type": "string"
+      },
+      "SystemOptionResponse": {
+        "properties": {
+          "annual_production_kwh": {
+            "title": "Annual Production Kwh",
+            "type": "integer"
+          },
+          "binding_limit": {
+            "$ref": "#/components/schemas/BindingLimit"
+          },
+          "capacity_kwp": {
+            "title": "Capacity Kwp",
+            "type": "number"
+          },
+          "inverter": {
+            "$ref": "#/components/schemas/InverterSummary"
+          },
+          "monthly_production_kwh": {
+            "items": {
+              "$ref": "#/components/schemas/MonthlyProduction"
+            },
+            "title": "Monthly Production Kwh",
+            "type": "array"
+          },
+          "netted_share": {
+            "description": "Share of year 1's production that offsets the bill month by month (Monthly Netting); the rest is exported. A decimal between 0 and 1.",
+            "title": "Netted Share",
+            "type": "number"
+          },
+          "panel": {
+            "$ref": "#/components/schemas/PanelSummary"
+          },
+          "panel_count": {
+            "title": "Panel Count",
+            "type": "integer"
+          },
+          "price": {
+            "$ref": "#/components/schemas/PriceResponse"
+          },
+          "savings": {
+            "$ref": "#/components/schemas/SavingsResponse"
+          },
+          "strategy": {
+            "$ref": "#/components/schemas/SizingStrategy"
+          }
+        },
+        "required": [
+          "strategy",
+          "panel",
+          "panel_count",
+          "capacity_kwp",
+          "binding_limit",
+          "annual_production_kwh",
+          "monthly_production_kwh",
+          "netted_share",
+          "inverter",
+          "price",
+          "savings"
+        ],
+        "title": "SystemOptionResponse",
+        "type": "object"
+      },
+      "TariffResponse": {
+        "description": "The residential Retail Tariff the savings were calculated with (ADR 0002, ADR 0005): the\nTariff Tiers are applied per month, a month's threshold being `tier_threshold_kwh_per_day`\ntimes the month's days. Every figure is a decimal string at full precision.",
+        "properties": {
+          "export_price_try_per_kwh": {
+            "title": "Export Price Try Per Kwh",
+            "type": "string"
+          },
+          "high_tariff_try_per_kwh": {
+            "title": "High Tariff Try Per Kwh",
+            "type": "string"
+          },
+          "low_tariff_try_per_kwh": {
+            "title": "Low Tariff Try Per Kwh",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "tier_threshold_kwh_per_day": {
+            "title": "Tier Threshold Kwh Per Day",
+            "type": "string"
+          },
+          "valid_from": {
+            "format": "date",
+            "title": "Valid From",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tier_threshold_kwh_per_day",
+          "low_tariff_try_per_kwh",
+          "high_tariff_try_per_kwh",
+          "export_price_try_per_kwh",
+          "valid_from",
+          "source"
+        ],
+        "title": "TariffResponse",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "sunquote",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/assistant/messages": {
+      "post": {
+        "description": "Turn the Sales Rep's Turkish message into a Quote and explain it in Turkish.\n\nEach client IP may send 20 messages an hour (configurable); past that the answer is `429`\nwith a `Retry-After` header, whatever the body holds.\n\nGemini reads the conversation and calls the `create_quote` tool, which runs the same quote\ncreation as `POST /quotes` (Address geocoding, PVGIS, TCMB, Narrative, storage) and stores\nthe Quote. The reply explains the Quote; every figure in it is filled from the Quote, never\nwritten by the model. The response gives the Quote's id, Quote Number and document link.\nThe model never sets Coordinates: the Address is always geocoded.\n\nWhen something a Quote needs is missing, the assistant asks for all of it in one Turkish\nquestion (`reply`) and lists the fields in `missing_fields`; answer in a further message and\nthe Quote is created once everything is there. When Quote creation fails (Address not found,\ninvalid value, no viable system, unsupported Subscriber Group, a service unavailable), the\nreply explains in Turkish what to change. A reply without a Quote may hold digits only as\nthe Sales Rep wrote them; if the model breaks that twice, a fixed Turkish reply is used. If\nthe three calls or the time budget run out without a Quote, the reply asks to restate the\ninformation (200, no Quote).\n\nThe server keeps no conversation state: send the whole conversation every time (1 to 20\nmessages of at most 2000 characters, the last one from the `user`). At most one Quote is\ncreated per request, and the model is called at most three times within a total time\nbudget, which covers the model calls and the tools together. If the model's reply after the\nQuote breaks the placeholder rules, or the model fails after the Quote was created, the\nreply is a fixed Turkish confirmation with the Quote Number, each option's capacity and\ntotal price, and the document link.\n\n**Privacy.** The Sales Rep's messages are sent to Gemini and may include the Customer's name\nand Address. Gemini's free tier may use submitted content for training. Do not send what\nmust stay private.\n\nWithout a Gemini key (`SUNQUOTE_GEMINI_API_KEY`) this endpoint answers 503 \"assistant not\nconfigured\" and the rest of the API works as usual. When the model is unavailable and no\nQuote exists yet it answers 503 \"assistant unavailable\". When the day's global Gemini\nbudget is spent (ADR 0007) and no Quote exists yet it answers 503 with type\n`urn:sunquote:problem:assistant-budget-exhausted`; the budget resets at 00:00\nEurope/Istanbul. After a Quote was created, a spent budget gives the fixed confirmation.",
+        "operationId": "post_assistant_messages_assistant_messages_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssistantRequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Request validation failed"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Assistant not configured / Assistant unavailable / Assistant budget exhausted"
+          }
+        },
+        "summary": "Create a Quote from a Turkish chat message",
+        "tags": [
+          "assistant"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Liveness and readiness check",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/quotes": {
+      "get": {
+        "description": "One page of Quotes with the figures of their first System Option.",
+        "operationId": "list_quotes_quotes_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuoteListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Request validation failed"
+          }
+        },
+        "summary": "List stored Quotes, newest first",
+        "tags": [
+          "quotes"
+        ]
+      },
+      "post": {
+        "description": "Size a system for the Customer's Site and return the Quote.\n\nEach client IP may create 10 Quotes an hour (configurable); past that the answer is `429`\nwith a `Retry-After` header, whatever the body holds.\n\nGive the Site Address or both Coordinates. Coordinates take precedence when both are\ngiven. An Address lookup records the resolved match in the Quote's Assumptions.\n\nThe Quote holds a Consumption-Matched System Option and, when its panel count differs, a\nRoof-Max one after it. Neither is marked as recommended. Both are capped by the Contracted\nPower (given, or the Subscriber Group's default: the cap uses the largest Catalog inverter\nwithin it) and each has its first-year production, its\ninverter (AC power at most the Contracted Power) and its price in TRY (Installation Cost,\nSale Price, VAT and total, whole lira). Prices in a foreign currency (USD in the placeholder\ndata) are converted with TCMB's forex selling rate of the last business day before today,\nunless `exchange_rate_override` is given.\n\nEach option also carries its own first-year Annual Savings, Payback Period, lifetime savings\nand yearly cash flow, from the residential tariff (marginal Tariff Tiers, applied per\nmonth). Escalation rates are real, so all of these are in today's lira.\n\nThe Quote also carries a `narrative`: the prose of its document (greeting, summary, a\ncomparison of the two options, next steps) with every figure filled from the Quote. When a\nNarrative writer is configured it writes the text and the source is `llm`; with none, or\nwhen it fails, times out or breaks the rules, the fixed Turkish text is used and the\nsource is `fallback`. The Narrative never makes the request fail.\n\nThe Quote is stored with a Quote Number and a valid-until date and never changes afterwards.\nA failed request stores nothing.",
+        "operationId": "create_quote_quotes_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuoteRequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuoteResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Request validation failed / Unsupported Subscriber Group / No viable system / No compatible inverter / Location not supported / Address not found"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Upstream service unavailable"
+          }
+        },
+        "summary": "Create a Quote",
+        "tags": [
+          "quotes"
+        ]
+      }
+    },
+    "/quotes/{quote_id}": {
+      "get": {
+        "description": "The Quote exactly as it was created.",
+        "operationId": "get_quote_quotes__quote_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "quote_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Quote Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuoteResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Quote not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Request validation failed"
+          }
+        },
+        "summary": "Get a stored Quote",
+        "tags": [
+          "quotes"
+        ]
+      }
+    },
+    "/quotes/{quote_id}/document": {
+      "get": {
+        "description": "A stored Quote as an A4-printable Turkish HTML page, to send or print to PDF.\n\nEvery figure is the Quote's own displayed value. The prose is the Quote's stored Narrative\n(or the fixed Turkish text) and reads the same every time.",
+        "operationId": "get_quote_document_quotes__quote_id__document_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "quote_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Quote Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "text/html": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Quote not found"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "text/html": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Request validation failed"
+          }
+        },
+        "summary": "Get the printable Turkish quote document",
+        "tags": [
+          "quotes"
+        ]
+      }
+    }
+  }
+}
