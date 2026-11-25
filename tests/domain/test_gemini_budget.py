@@ -99,14 +99,27 @@ class BrokenStore:
         raise ConnectionError("redis is down")
 
 
-async def test_an_unreachable_counter_store_lets_the_request_through_and_logs(
+async def test_an_unreachable_counter_store_refuses_the_request_and_logs(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    # Like the rate limiter: abuse protection must not take the demo down. Gemini's own quota
-    # answers still degrade to the fixed text.
-    budget = GeminiBudget(BrokenStore(), FixedClock(), daily_limit=1)
+    # Fail closed (ADR 0007): the free quota must never be exhausted by the demo, and a budget
+    # that cannot be checked cannot be known to hold. The Narrative falls back, the Assistant
+    # answers its budget-exhausted 503.
+    budget = GeminiBudget(BrokenStore(), FixedClock(), daily_limit=5)
 
-    with caplog.at_level(logging.WARNING):
+    with caplog.at_level(logging.WARNING), pytest.raises(GeminiBudgetExhaustedError) as caught:
         await budget.spend()
 
+    assert caught.value.counter_unavailable is True
+    assert "could not be checked" in str(caught.value)
     assert "budget" in caplog.text.lower()
+
+
+async def test_a_spent_budget_is_not_reported_as_unverifiable() -> None:
+    budget, _ = make_budget(limit=1)
+    await budget.spend()
+
+    with pytest.raises(GeminiBudgetExhaustedError) as caught:
+        await budget.spend()
+
+    assert caught.value.counter_unavailable is False
