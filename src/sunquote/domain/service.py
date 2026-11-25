@@ -5,11 +5,12 @@ import logging
 from dataclasses import replace
 from datetime import date, datetime
 
-from sunquote.domain.errors import NarrativeUnavailableError
+from sunquote.domain.errors import GeminiBudgetExhaustedError, NarrativeUnavailableError
 from sunquote.domain.model import QuoteRequest
 from sunquote.domain.money import Currency, ExchangeRate, ExchangeRateOverride
 from sunquote.domain.narrative import (
     NO_NARRATIVE,
+    FallbackReason,
     NarrativeDraft,
     NarrativeRecord,
     NarrativeSource,
@@ -48,6 +49,11 @@ async def generate_narrative(
     try:
         async with asyncio.timeout(budget_seconds):
             draft = await _validated_draft(writer, quote)
+    except GeminiBudgetExhaustedError as error:
+        logger.warning("Narrative not written, using the fixed text: %s", error)
+        return replace(
+            NO_NARRATIVE, generated_at=generated_at, fallback_reason=FallbackReason.BUDGET_SPENT
+        )
     except (NarrativeUnavailableError, TimeoutError) as error:
         logger.warning("Narrative unavailable, using the fixed text: %s", error)
         draft = None

@@ -180,6 +180,19 @@ placeholder, an unknown placeholder or a missing section is rejected and request
 a second rejected draft, the Quote still succeeds: it uses the fixed Turkish text and records
 `narrative.source: "fallback"`. The key never appears in logs or error messages.
 
+**Daily budget.** Every Gemini request, from the Narrative (both attempts) and the Assistant,
+draws from one global budget of `SUNQUOTE_GEMINI_DAILY_REQUEST_BUDGET` requests a day (default
+400), so the free quota is never exhausted ([ADR 0007](docs/adr/0007-public-demo-without-login.md)).
+The day runs from 00:00 to 24:00 Europe/Istanbul. When it is spent, a Quote records
+`narrative.source: "fallback"` with `narrative.fallback_reason: "budget_spent"` and no request
+reaches Gemini; the Assistant answers `503` with the problem type
+`urn:sunquote:problem:assistant-budget-exhausted` until the day ends. The default is 80% of an
+assumed 500 requests per day on the free tier. That figure is a placeholder: Google's
+[rate limits page](https://ai.google.dev/gemini-api/docs/rate-limits) (checked 2026-11-25) lists
+no daily request limit for `gemini-3.5-flash-lite` and points to the limits AI Studio shows for
+each project, so set the variable to 80% of the number shown there. The counter is kept in
+Redis, otherwise in Postgres, like the rate limits below.
+
 ### Run the Narrative eval
 
 Set `SUNQUOTE_GEMINI_API_KEY` in `.env` or the shell and run from the repository root:

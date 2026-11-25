@@ -44,7 +44,7 @@ from sunquote.domain.model import (
     SubscriberGroup,
 )
 from sunquote.domain.money import Currency, ExchangeRate, ExchangeRateOverride, Money
-from sunquote.domain.narrative import NarrativeSource
+from sunquote.domain.narrative import FallbackReason, NarrativeSource
 from sunquote.domain.ports import QuotePage, StoredQuote
 from sunquote.domain.pricing import SystemPrice
 from sunquote.domain.production import SpecificYieldInputs
@@ -478,6 +478,12 @@ class NarrativeResponse(BaseModel):
         description="`llm` when a writer's validated text is shown, `fallback` for the fixed text."
     )
     model: str | None = Field(description="The model that wrote the text; null for `fallback`.")
+    fallback_reason: FallbackReason | None = Field(
+        description=(
+            "Why the fixed text is shown, when the cause is recorded: `budget_spent` when the "
+            "day's Gemini budget was spent. Null for `llm` and for other causes."
+        )
+    )
     generated_at: dt.datetime | None = Field(
         description="When the Narrative step ran; null for Quotes stored before it existed."
     )
@@ -672,6 +678,7 @@ def _narrative_response(stored: StoredQuote) -> NarrativeResponse:
         next_steps=filled.next_steps,
         source=record.source,
         model=record.model,
+        fallback_reason=record.fallback_reason,
         generated_at=record.generated_at,
     )
 

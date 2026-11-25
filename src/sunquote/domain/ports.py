@@ -67,7 +67,7 @@ class Clock(Protocol):
 class CounterStore(Protocol):
     """Shared counters that expire, for limits that hold across serverless instances.
 
-    The per-IP rate limits use it, and the daily Gemini budget will too. A counter is a named
+    The per-IP rate limits and the daily Gemini budget use it. A counter is a named
     integer that starts at zero and disappears `ttl_seconds` after it was created.
     """
 
@@ -94,7 +94,8 @@ class NarrativeWriter(Protocol):
         """A draft for the Quote `context` describes.
 
         On a retry, `previous_violations` are what was wrong with the previous attempt. Any
-        failure is raised as `NarrativeUnavailableError`.
+        failure is raised as `NarrativeUnavailableError`, except a spent daily budget, which is
+        `GeminiBudgetExhaustedError`.
         """
         ...
 
@@ -121,7 +122,8 @@ class ConversationModel(Protocol):
         `messages` is the conversation so far, ending with the Sales Rep's message. `exchanges`
         are the tool calls made since then with their results, oldest first, and
         `rejected_reply` is a text answer the assistant refused and the reason, to be corrected.
-        Any failure is raised as `ConversationUnavailableError`.
+        Any failure is raised as `ConversationUnavailableError`, except a spent daily budget,
+        which is `GeminiBudgetExhaustedError`.
         """
         ...
 
