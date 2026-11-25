@@ -181,7 +181,7 @@ SCENARIOS = (
         19,
         "west-no-export",
         area_m2="30",
-        monthly_bill_try="1750",
+        monthly_bill_try="1800",
         azimuth_deg="270",
         contracted_power_kw="3.5",
         yield_multiplier="0.9",

@@ -67,7 +67,7 @@ The all-in price per kWh the Customer pays for grid electricity, taxes and fees 
 _Avoid_: electricity price, rate
 
 **Tariff Tier**:
-A marginal band of the Retail Tariff. Each month, consumption up to the Subscriber Group's threshold for that month (a daily allowance times the month's days) is priced at the low tier; only the part above it is priced at the high tier.
+A marginal band of the Retail Tariff. Each month, consumption up to the Subscriber Group's threshold for that month (the daily allowance, 8 kWh, times the month's days in a 365-day year: 248 kWh in January, 224 in February, 240 in April) is priced at the low tier; only the part above it is priced at the high tier. A flat consumption is priced month by month, and a Monthly Bill converts to kWh by inverting that annual cost.
 _Avoid_: kademe, step
 
 ### System and production

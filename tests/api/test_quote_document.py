@@ -187,7 +187,7 @@ def test_the_assumptions_section_states_what_the_quote_was_calculated_with(
     expected = [
         places(rate["rate"], 4),
         "23.11.2026",  # the Exchange Rate's date
-        turkish.format_int(int(tariff["tier_threshold_kwh_per_year"])),
+        f"günlük {turkish.format_decimal(Decimal(str(tariff['tier_threshold_kwh_per_day'])))} kWh",
         turkish.format_try_per_kwh(Decimal(str(tariff["low_tariff_try_per_kwh"]))),
         turkish.format_try_per_kwh(Decimal(str(tariff["high_tariff_try_per_kwh"]))),
         turkish.format_try_per_kwh(Decimal(str(tariff["export_price_try_per_kwh"]))),

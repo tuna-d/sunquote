@@ -67,9 +67,7 @@ def build_narrative_context(quote: Quote) -> NarrativeContext:
         ),
         roof_type=recorded.roof_type,
         orientation=_orientation(recorded.roof_type, recorded.effective_azimuth_deg),
-        annual_consumption_above_tier_threshold=(
-            recorded.annual_consumption_kwh > recorded.tariff.tier_threshold_kwh_per_year
-        ),
+        annual_consumption_above_tier_threshold=recorded.high_tier_consumption_kwh > 0,
         comparison=comparison,
         available_placeholders=tuple(
             sorted(

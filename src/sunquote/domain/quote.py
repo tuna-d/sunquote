@@ -73,8 +73,8 @@ class QuoteAssumptions:
     """Everything the Quote was calculated with, so it can be reproduced later.
 
     `inverters` is the whole list the inverter choice was made from. The annual consumption and
-    its split across the Tariff Tiers (ADR 0002) are recorded, not one chosen tier. The
-    financial assumptions hold real escalation rates (ADR 0003).
+    its split across the Tariff Tiers (ADR 0002, applied per month by ADR 0005) are recorded, not
+    one chosen tier. The financial assumptions hold real escalation rates (ADR 0003).
     """
 
     submitted_request: QuoteRequest

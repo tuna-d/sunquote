@@ -276,7 +276,7 @@ Gemini calls per turn. Check your project's free-tier limits before running both
 
 The TOML files in [`src/sunquote/data/`](src/sunquote/data) contain placeholder inputs
 for the Catalog (panel and inverter specifications and unit prices), Residential Tariff
-(tiers, Export Price, Self-Consumption Ratio and default Contracted Power), and
+(the daily allowance of the monthly Tariff Tiers, Export Price, Self-Consumption Ratio and default Contracted Power), and
 pricing, engineering and financial Assumptions (installation costs, Margin, VAT, Roof
 coverage, system loss and escalation rates). Every price entry declares its own currency
 (`price_currency` for Catalog items, `currency` for the pricing Assumptions); the Quote
