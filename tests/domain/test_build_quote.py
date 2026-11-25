@@ -186,16 +186,16 @@ def test_same_inputs_give_an_identical_quote() -> None:
 def test_option_savings_follow_from_production_consumption_and_tariff() -> None:
     savings = build().system_options[0].savings
 
-    assert savings.first_year_annual_savings == Money(Decimal("22800"), Currency.TRY)
+    assert savings.first_year_annual_savings == Money(Decimal("22960"), Currency.TRY)
     assert len(savings.cash_flow) == 25
     # The 31,200 TRY replacement (inverter incl. 20% VAT, equipment escalation 0) falls in year 12.
     year_twelve = savings.cash_flow[11]
     assert year_twelve.inverter_replacement == Money(Decimal("31200"), Currency.TRY)
     assert year_twelve.net_savings.amount < 0
-    assert savings.payback_years == pytest.approx(Decimal("6.6577903846"), abs=Decimal("1e-9"))
+    assert savings.payback_years == pytest.approx(Decimal("6.6132055794"), abs=Decimal("1e-9"))
     assert savings.payback_beyond_lifetime is False
     assert savings.lifetime_savings.amount == pytest.approx(
-        Decimal("665405.54059"), abs=Decimal("1e-4")
+        Decimal("670530.38855"), abs=Decimal("1e-4")
     )
 
 
@@ -214,8 +214,8 @@ def test_quote_records_the_consumption_tier_split_and_the_tariff_and_financial_a
     recorded = build().assumptions
 
     assert recorded.annual_consumption_kwh == Decimal("6000")
-    assert recorded.low_tier_consumption_kwh == Decimal("3000")
-    assert recorded.high_tier_consumption_kwh == Decimal("3000")
+    assert recorded.low_tier_consumption_kwh == Decimal("2920")
+    assert recorded.high_tier_consumption_kwh == Decimal("3080")
     assert recorded.tariff == make_tariff()
     assert recorded.financial == make_financial_assumptions()
 
@@ -223,9 +223,9 @@ def test_quote_records_the_consumption_tier_split_and_the_tariff_and_financial_a
 def test_the_roof_max_option_gets_its_own_savings_from_its_own_price_and_production() -> None:
     matched, roof_max = build().system_options  # 4.0 kWp and 8.0 kWp
 
-    # 12,000 kWh produced: the whole 6,000 kWh bill is saved (24,000), 6,000 kWh export at 2.
-    assert roof_max.savings.first_year_annual_savings == Money(Decimal("36000"), Currency.TRY)
-    assert matched.savings.first_year_annual_savings == Money(Decimal("22800"), Currency.TRY)
+    # 12,000 kWh produced: the whole 6,000 kWh bill is saved (24,160), 6,000 kWh export at 2.
+    assert roof_max.savings.first_year_annual_savings == Money(Decimal("36160"), Currency.TRY)
+    assert matched.savings.first_year_annual_savings == Money(Decimal("22960"), Currency.TRY)
     # The replacement is the 8 kW inverter (USD 1,100 x 40 x 1.2 VAT), not the 3.5 kW one.
     assert roof_max.savings.cash_flow[11].inverter_replacement == Money(
         Decimal("52800"), Currency.TRY
@@ -235,18 +235,23 @@ def test_the_roof_max_option_gets_its_own_savings_from_its_own_price_and_product
 @pytest.mark.parametrize(
     ("bill_try", "annual_cost_try", "annual_kwh", "monthly_kwh"),
     [
+        # With a 10 kWh/day allowance the monthly thresholds are February 280, April, June,
+        # September and November 300, the other seven months 310 kWh, so the bill breakpoints
+        # are 8,400 (3,360 kWh), 9,025 (3,600 kWh) and 9,387.50 TRY (3,720 kWh) a year.
+        # At or below the first breakpoint everything is low tier: 8,400 / 2.50.
         ("700", "8400", "3360", "280"),
-        ("750", "9000", "3600", "300"),
-        ("1000", "12000", "4400", "366.67"),
-        ("2000", "24000", "7600", "633.33"),
+        # Between 3,360 and 3,600 kWh a kWh costs (11 x 2.50 + 3.75) / 12:
+        # 3,360 + 600 / (31.25 / 12).
+        ("750", "9000", "3590.4", "299.2"),
+        # Above 3,720 kWh every kWh costs 3.75: 3,720 + (12,000 - 9,387.50) / 3.75.
+        ("1000", "12000", "4416.67", "368.06"),
+        ("2000", "24000", "7616.67", "634.72"),
     ],
 )
 def test_monthly_bill_converts_through_the_marginal_tariff_tiers(
     bill_try: str, annual_cost_try: str, annual_kwh: str, monthly_kwh: str
 ) -> None:
-    tariff = make_tariff(
-        threshold_kwh_per_year="3600", low_try_per_kwh="2.50", high_try_per_kwh="3.75"
-    )
+    tariff = make_tariff(daily_allowance_kwh="10", low_try_per_kwh="2.50", high_try_per_kwh="3.75")
     quote = build_quote(
         request=replace(
             make_request(), consumption=Consumption(monthly_bill_try=Decimal(bill_try))
@@ -262,9 +267,11 @@ def test_monthly_bill_converts_through_the_marginal_tariff_tiers(
     )
 
     recorded = quote.assumptions
-    assert recorded.annual_consumption_kwh == Decimal(annual_kwh)
-    assert tariff.annual_cost(recorded.annual_consumption_kwh) == Money(
-        Decimal(annual_cost_try), Currency.TRY
+    assert recorded.annual_consumption_kwh == pytest.approx(
+        Decimal(annual_kwh), abs=Decimal("0.01")
+    )
+    assert tariff.annual_cost(recorded.annual_consumption_kwh).amount == pytest.approx(
+        Decimal(annual_cost_try), abs=Decimal("1e-20")
     )
     assert recorded.consumption_derived_from_bill
     assert recorded.submitted_request.consumption.monthly_bill_try == Decimal(bill_try)
@@ -272,4 +279,6 @@ def test_monthly_bill_converts_through_the_marginal_tariff_tiers(
     assert recorded.derived_monthly_consumption_kwh.quantize(Decimal("0.01")) == Decimal(
         monthly_kwh
     )
-    assert 12 * recorded.derived_monthly_consumption_kwh == Decimal(annual_kwh)
+    assert 12 * recorded.derived_monthly_consumption_kwh == pytest.approx(
+        recorded.annual_consumption_kwh, abs=Decimal("1e-20")
+    )

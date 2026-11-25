@@ -56,7 +56,7 @@ def build(
     monthly_consumption_kwh: str = "500",
     azimuth_deg: str = "180",
     roof_type: RoofType = RoofType.PITCHED,
-    threshold_kwh_per_year: str = "3000",
+    daily_allowance_kwh: str = "8",
 ) -> Quote:
     return build_quote(
         request=make_request(
@@ -67,7 +67,7 @@ def build(
         ),
         specific_yield=make_specific_yield(),
         reference_data=make_reference_data(
-            tariff=make_tariff(threshold_kwh_per_year=threshold_kwh_per_year)
+            tariff=make_tariff(daily_allowance_kwh=daily_allowance_kwh)
         ),
         exchange_rate=make_exchange_rate(),
         quote_date=QUOTE_DATE,
@@ -198,14 +198,15 @@ def test_a_flat_roof_is_flat_whatever_azimuth_was_given() -> None:
 
 
 @pytest.mark.parametrize(
-    ("threshold_kwh_per_year", "above"),
-    [("5999", True), ("6000", False), ("6001", False)],
+    ("daily_allowance_kwh", "above"),
+    [("8", True), ("17.85", True), ("17.86", False), ("20", False)],
 )
 def test_the_context_says_whether_consumption_is_above_the_tier_threshold(
-    threshold_kwh_per_year: str, above: bool
+    daily_allowance_kwh: str, above: bool
 ) -> None:
-    # 500 kWh a month is 6,000 kWh a year; consumption up to the threshold is all low tier.
-    quote = build(monthly_consumption_kwh="500", threshold_kwh_per_year=threshold_kwh_per_year)
+    # 500 kWh a month is above February's threshold below 17.857 kWh/day (28 days), the lowest
+    # of the year; at or above the allowance every month is all low tier.
+    quote = build(monthly_consumption_kwh="500", daily_allowance_kwh=daily_allowance_kwh)
 
     assert build_narrative_context(quote).annual_consumption_above_tier_threshold is above
 

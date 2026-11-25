@@ -9,6 +9,7 @@ from sunquote.api.dependencies import AppDependencies
 from sunquote.config import Settings
 from sunquote.domain.conversation import DEFAULT_ASSISTANT_BUDGET_SECONDS
 from sunquote.domain.ports import ConversationModel, NarrativeWriter
+from sunquote.domain.rate_limit import FixedWindowRateLimiter
 from sunquote.domain.reference_data import ReferenceData
 from sunquote.domain.service import QuoteService
 from tests.factories import make_reference_data
@@ -62,7 +63,7 @@ def client_factory(
     """Builds clients on the fake collaborators; a test overrides only the clock or the
     reference data it is about. A Narrative writer is optional: without one every Quote
     records `fallback`. So is the assistant's conversation model: without one the assistant
-    answers 503."""
+    answers 503. So is the rate limiter: without one nothing is limited."""
     with ExitStack() as stack:
 
         def make(
@@ -73,6 +74,8 @@ def client_factory(
             narrative_budget_seconds: float = 15.0,
             conversation_model: ConversationModel | None = None,
             assistant_budget_seconds: float = DEFAULT_ASSISTANT_BUDGET_SECONDS,
+            settings: Settings | None = None,
+            rate_limiter: FixedWindowRateLimiter | None = None,
         ) -> TestClient:
             service = QuoteService(
                 quote_repository=quote_repository,
@@ -85,12 +88,13 @@ def client_factory(
                 narrative_budget_seconds=narrative_budget_seconds,
             )
             app = create_app(
-                settings=Settings(),
+                settings=settings or Settings(),
                 dependencies=AppDependencies(
                     quote_service=service,
                     quote_repository=quote_repository,
                     conversation_model=conversation_model,
                     assistant_budget_seconds=assistant_budget_seconds,
+                    rate_limiter=rate_limiter,
                 ),
             )
             return stack.enter_context(TestClient(app))

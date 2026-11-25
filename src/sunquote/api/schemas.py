@@ -413,10 +413,11 @@ class SystemOptionResponse(BaseModel):
 
 
 class TariffResponse(BaseModel):
-    """The residential Retail Tariff the savings were calculated with (ADR 0002). Every figure
-    is a decimal string at full precision."""
+    """The residential Retail Tariff the savings were calculated with (ADR 0002, ADR 0005): the
+    Tariff Tiers are applied per month, a month's threshold being `tier_threshold_kwh_per_day`
+    times the month's days. Every figure is a decimal string at full precision."""
 
-    tier_threshold_kwh_per_year: Decimal
+    tier_threshold_kwh_per_day: Decimal
     low_tariff_try_per_kwh: Decimal
     high_tariff_try_per_kwh: Decimal
     export_price_try_per_kwh: Decimal
@@ -560,7 +561,7 @@ def _savings_response(savings: SavingsAnalysis) -> SavingsResponse:
 
 def _tariff_response(tariff: ResidentialTariff) -> TariffResponse:
     return TariffResponse(
-        tier_threshold_kwh_per_year=tariff.tier_threshold_kwh_per_year,
+        tier_threshold_kwh_per_day=tariff.tier_threshold_kwh_per_day,
         low_tariff_try_per_kwh=tariff.low_tariff_try_per_kwh,
         high_tariff_try_per_kwh=tariff.high_tariff_try_per_kwh,
         export_price_try_per_kwh=tariff.export_price_try_per_kwh,

@@ -9,8 +9,9 @@
 #   estimate - a judgment value with no primary source; replace when real data arrives
 #
 # The tariff changes quarterly: `valid_from` below is the date the EPDK table that the Retail
-# Tariff comes from took effect. Tariff Tiers are marginal bands (docs/adr/0002): annual
-# consumption up to the threshold is priced at the low tier, only the part above it at the high.
+# Tariff comes from took effect. Tariff Tiers are marginal bands (docs/adr/0002) applied per
+# month (docs/adr/0005): a month's consumption up to the daily allowance x the month's days is
+# priced at the low tier, only the part above it at the high.
 
 [meta]
 placeholder = true
@@ -20,10 +21,10 @@ description = "Placeholder residential tariff: derived from the EPDK table of 20
 valid_from = 2026-04-04
 source = "EPDK electricity tariff table valid from 2026-04-04 (AG tek terim, mesken; Kurul Karari 14461), https://www.epdk.gov.tr/Detay/DownloadDocument?id=pI+XZjfJIU0=; taxes verified 2026-11-25: BTV 5% on the energy charge only (Law 2464 Art. 37 and 38(b)), KDV 10% on residential electricity (Decision 2007/13033 list II item 34, CBK 5249 of 2022-03-01, rate 10% since CBK 7346 of 2023-07-10)"
 
-[tier_threshold_kwh_per_year]
-value = 2920
-kind = "derived"
-source = "docs/research/placeholder-market-data.md section 3: 8 kWh/day x 365 days, the EPDK mesken band boundary"
+[tier_threshold_kwh_per_day]
+value = 8
+kind = "direct"
+source = "EPDK electricity tariff table valid from 2026-04-04: the low price applies up to a billing-period average of 8 kWh/day (docs/research/placeholder-market-data.md F3); a month's threshold is 8 x its days in a 365-day year (docs/adr/0005)"
 date = 2026-04-04
 
 [low_tariff_try_per_kwh]
