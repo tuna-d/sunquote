@@ -24,6 +24,9 @@ Three findings touch the design of spec #1. The repo owner decided them on 2026-
 - Madde 26 takes effect on 1 May 2026 (Madde 26 of the amendment, item (a)). That date has passed.
 - Consequence: the Self-Consumption Ratio is a *monthly* match, which is high (see section 3). If netting were hourly the
   ratio would be far lower and the "ratio" approach would be weak. It is not hourly for residential, so the spec holds.
+  *(Status: the fixed ratio was superseded by Monthly Netting computed month by month; the Netted Share is now a result,
+  not an input. See [ADR 0005](../adr/0005-monthly-netting-replaces-self-consumption-ratio.md). The reasoning here still
+  explains why monthly netting makes the match high.)*
 - Caveat: the amendment text was read through a fetch tool and was partly garbled; see "Verification gaps" below. **Verified in section 9** against the full Resmî Gazete text.
 - Source: <https://www.resmigazete.gov.tr/eskiler/2026/04/20260402-4.htm> (Resmî Gazete 2026-04-02, no. 33212).
 
@@ -180,7 +183,7 @@ Notes:
 | **High all-in Retail Tariff** | **4.86** | TRY/kWh | (1.05 x 1.895808 + 2.4249) x 1.10 = 4.8570 | 2026-04-04 | Derived |
 | Export Price | 2.92 | TRY/kWh | YEKDEM solar price 292.49 kr/kWh, EPIAS, effective 2026-11-01; **unverified for new residential plants** | 2026-11-01 | Estimate |
 | Export Price valid-from | 2026-11-01 | date | same | 2026-11-01 | Estimate |
-| Self-Consumption Ratio | 0.85 | share | monthly netting (F1); derivation below | 2026-11-24 | Derived |
+| Self-Consumption Ratio (superseded by Monthly Netting, [ADR 0005](../adr/0005-monthly-netting-replaces-self-consumption-ratio.md); no longer a data input) | 0.85 | share | monthly netting (F1); derivation below | 2026-11-24 | Derived |
 
 EPDK table (Direct): the file "4 Nisan 2026 Tarihinden Itibaren Gecerli Vergiler Haric Elektrik Tarifeleri", downloaded from the
 EPDK site linked on <https://gensed.org/4-nisan-2026dan-itibaren-uygulanacak-elektrik-tarifeleri-yayimlandi/> via
