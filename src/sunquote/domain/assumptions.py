@@ -83,18 +83,22 @@ class FinancialAssumptions:
     """What the yearly cash flow is built from.
 
     Both escalation rates are real, inflation-adjusted rates (ADR 0003), so every lifetime
-    figure is in today's lira. `inverter_replacement_year` counts from 1 and may lie beyond the
-    lifetime, in which case no replacement happens.
+    figure is in today's lira. The Discount Rate is a real rate too (ADR 0006): NPV discounts
+    that cash flow. `inverter_replacement_year` counts from 1 and may lie beyond the lifetime,
+    in which case no replacement happens.
     """
 
     tariff_escalation_rate_real: Decimal
     equipment_escalation_rate_real: Decimal
     lifetime_years: int
     inverter_replacement_year: int
+    discount_rate_real: Decimal
 
     def __post_init__(self) -> None:
         if self.tariff_escalation_rate_real <= -1 or self.equipment_escalation_rate_real <= -1:
             raise ValueError("escalation rates must be above -100%")
+        if self.discount_rate_real <= -1:
+            raise ValueError("the discount rate must be above -100%")
         if self.lifetime_years < 1:
             raise ValueError("the lifetime must be at least one year")
         if self.inverter_replacement_year < 1:

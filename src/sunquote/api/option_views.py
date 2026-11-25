@@ -10,7 +10,7 @@ from decimal import Decimal
 from sunquote.api import turkish
 from sunquote.domain import rounding
 from sunquote.domain.ports import StoredQuote
-from sunquote.domain.quote import SystemOption
+from sunquote.domain.quote import QuoteAssumptions, SystemOption
 from sunquote.domain.sizing import BindingLimit, SizingStrategy
 
 STRATEGY_TITLES = {
@@ -55,6 +55,8 @@ class OptionView:
     inverter_model: str
     capacity_kwp: str
     annual_production_kwh: str
+    netted_share: str
+    export_price: str
     months: tuple[MonthView, ...]
     sale_price: str
     vat: str
@@ -63,6 +65,9 @@ class OptionView:
     first_year_savings: str
     payback: str
     payback_beyond_lifetime: bool
+    npv: str
+    irr: str
+    irr_absent: bool
     lifetime_savings: str
     lifetime_years: int
 
@@ -72,13 +77,12 @@ def display_try(amount: Decimal) -> str:
     return turkish.format_try(rounding.round_try(amount))
 
 
-def _option_view(
-    number: int, option: SystemOption, lifetime_years: int, vat_rate: Decimal
-) -> OptionView:
+def _option_view(number: int, option: SystemOption, recorded: QuoteAssumptions) -> OptionView:
     monthly = [rounding.round_kwh(kwh) for kwh in option.monthly_production_kwh]
     peak = max(monthly) or 1
     savings = option.savings
     payback = savings.payback_years
+    irr = savings.irr
     return OptionView(
         number=number,
         strategy_title=STRATEGY_TITLES[option.strategy],
@@ -94,6 +98,8 @@ def _option_view(
         inverter_model=f"{option.inverter.manufacturer} {option.inverter.model}",
         capacity_kwp=turkish.format_decimal(rounding.round_capacity_kwp(option.capacity_kwp)),
         annual_production_kwh=turkish.format_int(rounding.round_kwh(option.annual_production_kwh)),
+        netted_share=turkish.format_percent(savings.netted_share),
+        export_price=turkish.format_try_per_kwh(recorded.tariff.export_price_try_per_kwh),
         months=tuple(
             MonthView(
                 name=name,
@@ -104,15 +110,18 @@ def _option_view(
         ),
         sale_price=display_try(option.price.sale_price.amount),
         vat=display_try(option.price.vat.amount),
-        vat_rate=turkish.format_percent(vat_rate),
+        vat_rate=turkish.format_percent(recorded.pricing.vat_rate),
         total=display_try(option.price.total.amount),
         first_year_savings=display_try(savings.first_year_annual_savings.amount),
         payback=(
             "" if payback is None else turkish.format_decimal(rounding.round_payback_years(payback))
         ),
         payback_beyond_lifetime=savings.payback_beyond_lifetime,
+        npv=display_try(savings.npv.amount),
+        irr="" if irr is None else turkish.format_percent(irr),
+        irr_absent=irr is None,
         lifetime_savings=display_try(savings.lifetime_savings.amount),
-        lifetime_years=lifetime_years,
+        lifetime_years=recorded.financial.lifetime_years,
     )
 
 
@@ -120,6 +129,6 @@ def option_views(stored: StoredQuote) -> tuple[OptionView, ...]:
     """One view per System Option, numbered from 1 like the Narrative's option placeholders."""
     recorded = stored.quote.assumptions
     return tuple(
-        _option_view(number, option, recorded.financial.lifetime_years, recorded.pricing.vat_rate)
+        _option_view(number, option, recorded)
         for number, option in enumerate(stored.quote.system_options, start=1)
     )

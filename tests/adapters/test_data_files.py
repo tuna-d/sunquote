@@ -295,11 +295,10 @@ def test_a_negative_margin_is_rejected(tmp_path: Path) -> None:
 def test_shipped_tariff_matches_the_research_note() -> None:
     tariff = load_residential_tariff(TARIFF_FILE)
 
-    assert tariff.tier_threshold_kwh_per_year == Decimal(2920)
+    assert tariff.tier_threshold_kwh_per_day == Decimal(8)
     assert tariff.low_tariff_try_per_kwh == Decimal("3.24")
     assert tariff.high_tariff_try_per_kwh == Decimal("4.86")
-    assert tariff.export_price_try_per_kwh == Decimal("2.92")
-    assert tariff.self_consumption_ratio == Decimal("0.85")
+    assert tariff.export_price_try_per_kwh == Decimal("1.24")
     assert tariff.valid_from == date(2026, 4, 4)
     assert "EPDK" in tariff.source
 
@@ -310,11 +309,10 @@ def test_every_tariff_value_names_its_source_kind_and_date() -> None:
     assert data["tariff"]["source"].strip()
     assert isinstance(data["tariff"]["valid_from"], date)
     for key in (
-        "tier_threshold_kwh_per_year",
+        "tier_threshold_kwh_per_day",
         "low_tariff_try_per_kwh",
         "high_tariff_try_per_kwh",
         "export_price_try_per_kwh",
-        "self_consumption_ratio",
     ):
         entry = data[key]
         assert entry["source"].strip(), key
@@ -331,12 +329,28 @@ def test_a_tariff_whose_low_tier_costs_more_than_the_high_tier_is_rejected(tmp_p
         load_residential_tariff(file)
 
 
+def test_a_tariff_file_still_holding_the_self_consumption_ratio_is_rejected(
+    tmp_path: Path,
+) -> None:
+    """Monthly Netting replaced the ratio (ADR 0005); an old data file must not slip through."""
+    text = TARIFF_FILE.read_text(encoding="utf-8")
+    old = (
+        '\n[self_consumption_ratio]\nvalue = 0.85\nkind = "derived"\nsource = "old"\n'
+        "date = 2026-11-24\n"
+    )
+    file = tmp_path / "tariff.toml"
+    file.write_text(text + old, encoding="utf-8")
+
+    with pytest.raises(ValidationError, match="self_consumption_ratio"):
+        load_residential_tariff(file)
+
+
 def test_a_tariff_value_without_a_source_is_rejected(tmp_path: Path) -> None:
     text = TARIFF_FILE.read_text(encoding="utf-8")
-    head, _, tail = text.partition("[self_consumption_ratio]")
+    head, _, tail = text.partition("[export_price_try_per_kwh]")
     tail_without_source = re.sub(r"^source = .*$", "", tail, count=1, flags=re.MULTILINE)
     file = tmp_path / "tariff.toml"
-    file.write_text(head + "[self_consumption_ratio]" + tail_without_source, encoding="utf-8")
+    file.write_text(head + "[export_price_try_per_kwh]" + tail_without_source, encoding="utf-8")
 
     with pytest.raises(ValidationError, match="source"):
         load_residential_tariff(file)
@@ -349,6 +363,29 @@ def test_shipped_financial_assumptions_match_the_research_note() -> None:
     assert financial.equipment_escalation_rate_real == Decimal("0")
     assert financial.lifetime_years == 25
     assert financial.inverter_replacement_year == 12
+    assert financial.discount_rate_real == Decimal("0.056")
+
+
+def test_the_discount_rate_is_a_derived_value_with_its_treasury_auction_source() -> None:
+    """Research note section 9.3: a rounded real yield of a CPI-linked Treasury bond auction."""
+    entry = tomllib.loads(ASSUMPTIONS_FILE.read_text(encoding="utf-8"))["discount_rate_real"]
+
+    assert entry["kind"] == "derived"
+    assert entry["date"] == date(2026, 6, 8)
+    assert "TRT080530T27" in entry["source"]
+    assert "Unverified against hmb.gov.tr" in entry["source"]
+
+
+def test_a_discount_rate_is_required(tmp_path: Path) -> None:
+    text = ASSUMPTIONS_FILE.read_text(encoding="utf-8")
+    head, separator, tail = text.partition("[discount_rate_real]")
+    assert separator
+    assert "[" not in tail.split("\n", 1)[-1]  # it is the last entry of the file
+    file = tmp_path / "assumptions.toml"
+    file.write_text(head, encoding="utf-8")
+
+    with pytest.raises(ValidationError, match="discount_rate_real"):
+        load_financial_assumptions(file)
 
 
 def test_every_financial_assumption_names_its_source_kind_and_date() -> None:
@@ -359,6 +396,7 @@ def test_every_financial_assumption_names_its_source_kind_and_date() -> None:
         "equipment_escalation_rate_real",
         "lifetime_years",
         "inverter_replacement_year",
+        "discount_rate_real",
     ):
         entry = data[key]
         assert entry["source"].strip(), key

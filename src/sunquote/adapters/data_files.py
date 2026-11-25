@@ -79,10 +79,6 @@ class _NonNegativePrice(_NonNegative):
     currency: Currency
 
 
-class _Share(_SourcedValue):
-    value: Decimal = Field(ge=0, le=1)
-
-
 class _Rate(_SourcedValue):
     """A yearly rate as a share (0.02 is 2%); it may be negative but not below -100%."""
 
@@ -159,6 +155,7 @@ class _AssumptionsFile(_Strict):
     equipment_escalation_rate_real: _Rate
     lifetime_years: _PositiveYears
     inverter_replacement_year: _PositiveYears
+    discount_rate_real: _Rate
 
 
 class _TariffMeta(_Strict):
@@ -169,11 +166,10 @@ class _TariffMeta(_Strict):
 class _TariffFile(_Strict):
     meta: _Meta
     tariff: _TariffMeta
-    tier_threshold_kwh_per_year: _Positive
+    tier_threshold_kwh_per_day: _Positive
     low_tariff_try_per_kwh: _Positive
     high_tariff_try_per_kwh: _Positive
     export_price_try_per_kwh: _NonNegative
-    self_consumption_ratio: _Share
 
 
 def default_data_dir() -> Path:
@@ -257,17 +253,17 @@ def load_financial_assumptions(path: Path) -> FinancialAssumptions:
         equipment_escalation_rate_real=file.equipment_escalation_rate_real.value,
         lifetime_years=file.lifetime_years.value,
         inverter_replacement_year=file.inverter_replacement_year.value,
+        discount_rate_real=file.discount_rate_real.value,
     )
 
 
 def load_residential_tariff(path: Path) -> ResidentialTariff:
     file = _TariffFile.model_validate(_read(path))
     return ResidentialTariff(
-        tier_threshold_kwh_per_year=file.tier_threshold_kwh_per_year.value,
+        tier_threshold_kwh_per_day=file.tier_threshold_kwh_per_day.value,
         low_tariff_try_per_kwh=file.low_tariff_try_per_kwh.value,
         high_tariff_try_per_kwh=file.high_tariff_try_per_kwh.value,
         export_price_try_per_kwh=file.export_price_try_per_kwh.value,
-        self_consumption_ratio=file.self_consumption_ratio.value,
         valid_from=file.tariff.valid_from,
         source=file.tariff.source,
     )

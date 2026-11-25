@@ -6,10 +6,15 @@ sunquote prepares residential rooftop solar Quotes for Turkish Installers. A Sal
 the Customer, the Site's Address or Coordinates, the Roof and the average Monthly Consumption
 or Monthly Bill. The service sizes up to two System Options (Consumption-Matched and Roof-Max),
 selects the panel and inverter, estimates production, prices the installation, and calculates
-Annual Savings and the Payback Period.
+Annual Savings, the Payback Period (the headline) and the Net Present Value and Internal Rate of
+Return at a real Discount Rate ([ADR 0006](docs/adr/0006-npv-and-irr-with-a-real-discount-rate.md)).
+Savings follow Monthly Netting
+([ADR 0005](docs/adr/0005-monthly-netting-replaces-self-consumption-ratio.md)): each month's
+production is offset against that month's consumption (Netted Energy), the rest is Exported
+Energy sold at the Export Price, and each System Option reports its Netted Share.
 
 Each Quote is stored with its Assumptions and can be opened as a printable Turkish document.
-The bundled Catalog, Tariff and pricing inputs are [placeholder data](#placeholder-data).
+The bundled Catalog, Tariff and pricing inputs are [placeholder data](#placeholder-data-and-how-to-defend-it).
 
 ## Run with Docker Compose
 
@@ -19,18 +24,47 @@ From the repository root, with Docker running:
 docker compose up --build
 ```
 
-No `.env` or API keys are required. Compose starts the API, Postgres and Redis. The API
-applies the Alembic migrations at startup. Run `docker compose ps` in another terminal to
-check that all three services are healthy.
+No `.env` or API keys are required. Compose starts the API, Postgres, Redis and the web app.
+The API applies the Alembic migrations at startup. Run `docker compose ps` in another terminal
+to check that all four services are healthy.
 
-Open [Swagger UI](http://localhost:8000/docs) to try the API, or check
-[service health](http://localhost:8000/health). Set `API_HOST_PORT` in your shell to use
-another host port and use that port in the walkthrough. [`.env.example`](.env.example)
+Open the [web app](http://localhost:3000) for the Quote list, [Swagger UI](http://localhost:8000/docs)
+to try the API, or check [service health](http://localhost:8000/health). Set `API_HOST_PORT` or
+`WEB_HOST_PORT` in your shell to use another host port; use the API port in the walkthrough. [`.env.example`](.env.example)
 lists optional settings, including the published Postgres and Redis ports.
 
 Quote creation needs internet access to the public providers listed under
 [Architecture](#architecture). If a provider is unavailable and Redis has no cached value,
 the API returns a `503` and stores no Quote.
+
+## Run the web app locally
+
+The web app is a Next.js app in [`web/`](web). It lists the stored Quotes in Turkish, shows
+one Quote with its System Options, finance figures and Assumptions, has a form that creates a Quote, and
+hosts the Assistant chat. It needs Node 24 (see
+[`web/.nvmrc`](web/.nvmrc)) and a running API. `docker compose up` starts both; for development
+run them side by side:
+
+```sh
+# 1. The API (and Postgres) on port 8000, from the repository root.
+docker compose up postgres redis -d
+uv sync
+SUNQUOTE_DATABASE_URL=postgresql+asyncpg://sunquote:sunquote@localhost:5432/sunquote   uv run fastapi dev src/sunquote/api/app.py --port 8000
+
+# 2. Optional: fill the list with the sample Quotes (needs internet for the data providers).
+uv run python -m sunquote.demo seed
+
+# 3. The web app on http://localhost:3000.
+cd web
+npm ci
+SUNQUOTE_API_URL=http://localhost:8000 npm run dev
+```
+
+`SUNQUOTE_API_URL` is where the API is (it defaults to `http://localhost:8000`). The browser
+calls `/api/...` on the web app's own origin and Next.js forwards it to the API, so no CORS is
+needed. After an API change, `npm run api:sync` regenerates `web/openapi.json` and the
+TypeScript types; CI fails when they are out of date. See [`web/README.md`](web/README.md)
+for the project layout, the scripts and the design tokens.
 
 ## Create, list and open a Quote
 
@@ -87,6 +121,26 @@ Stored Quotes are immutable. The Quote Number sequence restarts each year, and a
 fails validation, finds no viable system or hits an unavailable upstream does not use up a
 number. API errors use
 RFC 9457 `application/problem+json` with a stable `type`. Unknown Quote IDs return `404`.
+
+## Demo Quotes
+
+Set `SUNQUOTE_DATABASE_URL` to the migrated demo database, then run these commands from the
+repository root:
+
+```sh
+uv run python -m sunquote.demo seed
+uv run python -m sunquote.demo reset
+```
+
+`seed` creates six synthetic sample Quotes for Ankara, İzmir and Antalya through normal
+Quote creation. It uses the configured data and providers. Run it again to fill any missing
+samples while preserving those already stored. Quote list and detail responses identify
+samples with `is_sample`.
+
+`reset` permanently deletes every non-sample Quote in the configured database and prints the
+number deleted. The [Reset demo Quotes workflow](.github/workflows/demo-reset.yml) schedules
+the same command for 03:00 Europe/Istanbul each night and offers a manual run from the Actions
+tab. It uses the `SUNQUOTE_DATABASE_URL` Actions secret and skips with a notice when it is unset.
 
 ## Architecture
 
@@ -159,6 +213,19 @@ placeholder, an unknown placeholder or a missing section is rejected and request
 `SUNQUOTE_NARRATIVE_TIMEOUT_SECONDS`, 15 s), a network error, a blocked or malformed answer, or
 a second rejected draft, the Quote still succeeds: it uses the fixed Turkish text and records
 `narrative.source: "fallback"`. The key never appears in logs or error messages.
+
+**Daily budget.** Every Gemini request, from the Narrative (both attempts) and the Assistant,
+draws from one global budget of `SUNQUOTE_GEMINI_DAILY_REQUEST_BUDGET` requests a day (default
+400), so the free quota is never exhausted ([ADR 0007](docs/adr/0007-public-demo-without-login.md)).
+The day runs from 00:00 to 24:00 Europe/Istanbul. When it is spent, a Quote records
+`narrative.source: "fallback"` with `narrative.fallback_reason: "budget_spent"` and no request
+reaches Gemini; the Assistant answers `503` with the problem type
+`urn:sunquote:problem:assistant-budget-exhausted` until the day ends. The default is 80% of an
+assumed 500 requests per day on the free tier. That figure is a placeholder: Google's
+[rate limits page](https://ai.google.dev/gemini-api/docs/rate-limits) (checked 2026-11-25) lists
+no daily request limit for `gemini-3.5-flash-lite` and points to the limits AI Studio shows for
+each project, so set the variable to 80% of the number shown there. The counter is kept in
+Redis, otherwise in Postgres, like the rate limits below.
 
 ### Run the Narrative eval
 
@@ -272,22 +339,159 @@ including requests within a turn. A call that fails (a rate limit or an outage) 
 twice after one more pause, so a single HTTP 429 does not fail a scenario. The 20 scenarios contain up to 23 turns with at most three
 Gemini calls per turn. Check your project's free-tier limits before running both evals.
 
-## Placeholder data
+## Rate limits
+
+The public demo has no login (ADR 0007), so each client IP may create 10 Quotes
+(`POST /quotes`) and send 20 Assistant messages (`POST /assistant/messages`) per hour. Past
+the limit the API answers `429` with the problem type `urn:sunquote:problem:rate-limited` and a
+`Retry-After` header with the seconds until the hour ends. Read endpoints and `/health` are not
+limited. `SUNQUOTE_RATE_LIMIT_QUOTES_PER_HOUR` and
+`SUNQUOTE_RATE_LIMIT_ASSISTANT_MESSAGES_PER_HOUR` change the limits.
+
+The counters are shared across instances: Redis when `SUNQUOTE_REDIS_URL` is set (the Compose
+default), otherwise the `rate_limit_counters` table in Postgres. If the counters cannot be
+reached, the call goes through and a warning is logged, because the limits protect free quotas
+and must not take the demo down. The client IP is the connection's. Behind Vercel set
+`SUNQUOTE_BEHIND_VERCEL=true` to read it from the `x-vercel-forwarded-for` header instead; the
+header is ignored otherwise, since anyone can send it.
+
+## Placeholder data and how to defend it
 
 The TOML files in [`src/sunquote/data/`](src/sunquote/data) contain placeholder inputs
 for the Catalog (panel and inverter specifications and unit prices), Residential Tariff
-(tiers, Export Price, Self-Consumption Ratio and default Contracted Power), and
+(the daily allowance of the monthly Tariff Tiers, Export Price and default Contracted Power), and
 pricing, engineering and financial Assumptions (installation costs, Margin, VAT, Roof
 coverage, system loss and escalation rates). Every price entry declares its own currency
 (`price_currency` for Catalog items, `currency` for the pricing Assumptions); the Quote
 fetches the TCMB rate for that currency (USD in the placeholder data) and records it. The
 prices in one data set may use TRY and one foreign currency, not two.
 
+Every value in these files carries a `kind`, a `source` and a `date`:
+
+- **direct**: copied from a primary source (a legal text, an EPDK table, a manufacturer datasheet).
+- **derived**: computed from direct figures; the derivation is in the source text.
+- **estimate**: a judgment value with no primary source. Replace it when real data arrives.
+
+The table below lists every input and whether it was **verified** (the primary source was read, with article and date, in
+the [research note](docs/research/placeholder-market-data.md), section 9 for the regulation, taxes, Export Price and
+Discount Rate) or is **unverified**. It was checked on 2026-11-25.
+
+| Input | Kind | Status | Why, or what is missing |
+| --- | --- | --- | --- |
+| Panel power, dimensions, warranty | direct | verified | Trina datasheets (2025, 2026) |
+| Panel degradation, 0.47%/year | derived | verified | arithmetic on the datasheet guarantee; a worst case, not a field value |
+| Panel unit prices (USD 74-76) | estimate | unverified | no distributor price list; InfoLink spot prices plus an uplift |
+| Inverter AC power, datasheet values | direct | verified | Huawei SUN2000-M1 datasheet (2019, distributor copy) |
+| Inverter unit prices (USD 650-1,200) | estimate | unverified | marketplace asking prices, low confidence |
+| Tier threshold, 8 kWh/day | direct | verified | note of the EPDK tariff table valid from 2026-04-04; a month's threshold is 8 x its days |
+| Low and high Retail Tariff (3.24 and 4.86 TRY/kWh) | derived | verified | EPDK table of 2026-04-04 plus BTV and KDV below; changes every quarter |
+| BTV 5% on the energy charge | direct | verified | Law 2464 Art. 37 and 38(b) |
+| KDV 10% on residential electricity | direct | verified | Decision 2007/13033 list II item 34 (CBK 5249, 7346); amendments after 2025-02-17 not checked |
+| Export Price, 1.24 TRY/kWh | derived | partly verified | Law 5346 Annex I item (e) and the EPDK table are verified; that the export-side fee is deducted and that the high tier applies rest on one secondary site. Lower end of 1.24 to 1.90 |
+| Monthly Netting for residential plants | direct | verified | rule copied from the Lisanssız Elektrik Üretim Yönetmeliği Art. 26(20), in force 2026-05-01 |
+| Contracted Power cap and DC/AC limit of 2.0 | direct | verified | limits copied from the same Yönetmelik, Art. 7(10), 28(5) and 17(7); how the model applies them is our own |
+| Default Contracted Power, 10 kW | estimate | unverified | no regulatory default exists; an installer assumption recorded as defaulted on each Quote |
+| DC/AC ratio, min 1.0 and max 1.5 | estimate | unverified | the legal ceiling is 2.0 (verified); 1.5 is a sizing choice |
+| Roof Coverage Ratio, pitched 0.80 | estimate | unverified | setbacks assumed by us |
+| Roof Coverage Ratio, flat 0.50 | derived | unverified | a row-spacing calculation of our own |
+| Flat-roof tilt, 15 degrees | estimate | unverified | an installer's usual choice, not measured |
+| System loss, 14% | direct | verified | PVGIS default |
+| BOS, labour, fixed project cost, Margin | estimate | unverified | no price list; checked only against one market article |
+| VAT on the sale, 20% | direct | verified | Decision 2007/13033 Art. 1(1)(a); PV is in no reduced-rate list. Confirm with an accountant for a real quote |
+| Validity Period, 15 days | derived | unverified | from exchange-rate drift reported by news tickers |
+| Escalation rates (2% tariff, 0% equipment, real) | estimate | unverified | judgment, see [ADR 0003](docs/adr/0003-real-escalation-rates.md) |
+| Lifetime, 25 years | direct | verified | product warranty in the datasheets |
+| Inverter replacement year, 12 | estimate | unverified | warranty plus margin; Huawei warranty not read |
+| Real Discount Rate, 5.6% (`discount_rate_real`) | derived | partly verified | real yield of the CPI-linked Treasury bond auction of 2026-06-08 as reported by Bloomberg HT, rounded; not verified on hmb.gov.tr. It sets the NPV, not the IRR or the Payback Period ([ADR 0006](docs/adr/0006-npv-and-irr-with-a-real-discount-rate.md)) |
+
+Exchange rates (TCMB) and Specific Yield (PVGIS) are fetched when a Quote is made, so they are not in the data files.
+
+### Replace the data
+
+1. Copy the three files from [`src/sunquote/data/`](src/sunquote/data) (`catalog.toml`, `assumptions.toml`, `tariff.toml`)
+   into one directory of your own and edit them. All three must be present. Keep the `kind`, `source` and `date` of every
+   value. The loader still requires `placeholder = true` under `[meta]`, even for real values.
+2. Point `SUNQUOTE_DATA_DIR` at that directory. Locally, set it in `.env` or in the shell, for example
+   `SUNQUOTE_DATA_DIR=/path/to/my-data uv run fastapi dev src/sunquote/api/app.py --port 8102`.
+3. With Docker Compose, mount the directory and pass the variable through a `compose.override.yaml`:
+
+   ```yaml
+   services:
+     api:
+       environment:
+         SUNQUOTE_DATA_DIR: /data
+       volumes:
+         - ./my-data:/data:ro
+   ```
+
+The files are validated when the API starts, so a bad value stops the start instead of producing a wrong Quote. Each Quote
+stores the Assumptions it was calculated with, so Quotes made with the old data stay reproducible after you change the files.
+
 The [market-data research note](docs/research/placeholder-market-data.md) records sources,
-dates, owner decisions and open questions. Set `SUNQUOTE_DATA_DIR` to load your own files.
+dates, owner decisions and open questions.
 See the ADRs on [figures in the Quote document](docs/adr/0001-llm-never-writes-figures.md),
 [marginal Tariff Tiers](docs/adr/0002-marginal-tariff-tiers.md) and
 [real escalation rates](docs/adr/0003-real-escalation-rates.md).
+
+## Deploy
+
+The API runs for free on [Vercel](https://vercel.com) Hobby as a Python function, with
+[Neon](https://neon.com) Postgres and [Upstash](https://upstash.com) Redis. All three have a free
+tier that asks for no credit card; if a signup asks for one, stop and use another provider.
+Docker Compose is unchanged and stays the local way to run everything.
+
+How the repository maps onto Vercel:
+
+- [`api/index.py`](api/index.py) is the function. It exposes the same FastAPI `app` as
+  Compose and defaults two settings for a serverless instance: `SUNQUOTE_DATABASE_CLIENT_POOL=false`
+  (every use opens its own connection through Neon's pooler) and
+  `SUNQUOTE_MIGRATE_ON_STARTUP=false`. Compose keeps its connection pool and its startup migration.
+- [`vercel.json`](vercel.json) sends every path to that function, sets its maximum duration to
+  300 seconds (the Hobby limit) and builds only `main`: pull requests get no API preview.
+- [`.python-version`](.python-version) pins Python 3.13.
+- The [`Migrate production database`](.github/workflows/migrate.yml) workflow runs the
+  Alembic migrations (`python -m sunquote.adapters.postgres.migrate`) on every push to `main`.
+  Without the `SUNQUOTE_DATABASE_URL` secret it skips with a notice.
+
+### Steps for the repo owner
+
+1. **Neon.** Create a project and copy the *pooled* connection string (the host contains
+   `-pooler`). It can be pasted as it is: the app rewrites `postgresql://...?sslmode=require`
+   for the asyncpg driver.
+2. **Upstash.** Create a Redis database and copy its TLS URL, `rediss://default:<password>@<host>:6379`
+   (two `s`).
+3. **GitHub.** Add the Neon string as the repository secret `SUNQUOTE_DATABASE_URL`
+   (Settings → Secrets and variables → Actions). After the first push to `main`, or by running
+   the workflow by hand from the Actions tab, the database is migrated. To migrate from your own
+   machine instead: `SUNQUOTE_DATABASE_URL=<neon string> uv run python -m sunquote.adapters.postgres.migrate`.
+4. **Vercel.** Import the repository as a new project with the repository root (not `web/`) as
+   its root directory, and keep `main` as the production branch. Add the environment variables
+   `SUNQUOTE_DATABASE_URL` and `SUNQUOTE_REDIS_URL`, and optionally the free
+   `SUNQUOTE_GEMINI_API_KEY`. [`.env.example`](.env.example) lists them all.
+5. **Check.** Open `https://<project>.vercel.app/health` and then `/docs`.
+
+Production changes only when `development` is merged into `main`, which is why the migration
+runs on pushes to `main` as well.
+
+To run the function entry point locally without a Vercel account, migrate a database and start it
+with uvicorn on its own port. This applies the same serverless defaults as Vercel:
+
+```sh
+docker compose up -d --wait postgres
+uv run python -m sunquote.adapters.postgres.migrate
+uv run uvicorn api.index:app --port 8103
+```
+
+`vercel dev` (Vercel CLI 48.1.8 or later, after `vercel login`) runs the real Vercel runtime
+against the same files. Open `http://localhost:8103/docs` to try the API.
+
+### Nominatim on a serverless host
+
+Every function instance throttles its own Nominatim requests to one per second, and the Redis
+cache serves repeated Addresses without calling Nominatim at all. The instances share no lock,
+and for demo traffic that is the accepted approach: a cross-instance lock would not be worth its
+complexity at a handful of Quotes per hour. If traffic ever outgrows it, point
+`SUNQUOTE_NOMINATIM_BASE_URL` at your own instance.
 
 ## Tests and CI
 
@@ -323,6 +527,50 @@ request. The [manual integration workflow](.github/workflows/integration.yml) ru
 real Gemini test inside it skips there, since the workflow sets no key. Run it locally with
 `SUNQUOTE_GEMINI_API_KEY` set to include it.
 
+## How this was built
+
+sunquote was built with AI agents under a written rulebook. This section says who did what, how a feature went from idea to merged code, how it was reviewed, and which real mistakes were caught along the way. Every claim links to the issue, pull request or commit behind it. Where the record does not show who caught a mistake, the cell says **unconfirmed** and the repo owner has yet to check it.
+
+### Roles
+
+- **Claude does all planning**: grilling sessions, specs, tickets, [GLOSSARY.md](GLOSSARY.md) and the [ADRs](docs/adr). The rule is in [CLAUDE.md](CLAUDE.md) ("Roles: Claude and Codex").
+- **Implementation is split by ticket label** ([triage labels](docs/agents/triage-labels.md)). `ready-for-claude` tickets involve design decisions (domain model, money rules, adapters, the API contract) and are built by Claude subagents. `ready-for-codex` tickets are pure execution against a stated spec and are built by GPT subagents under [AGENTS.md](AGENTS.md). `needs-content` tickets (real price lists, tariffs, API keys, final quote copy) belong to the repo owner, and until the owner supplies them the code runs on clearly marked [placeholder data](#placeholder-data).
+- **The repo owner** decides, and alone merges `development` into `main` ([CLAUDE.md](CLAUDE.md), "Working on tickets").
+
+### From idea to merged code
+
+1. **Grill.** Claude questions the plan until the decisions are explicit. The vocabulary and the first decision came out of the first design session ([commit a11c443](https://github.com/tuna-d/sunquote/commit/a11c443): GLOSSARY and [ADR 0001](docs/adr/0001-llm-never-writes-figures.md)). The phase 1 grilling session produced ADRs 0005 to 0008 ([PR #28](https://github.com/tuna-d/sunquote/pull/28)).
+2. **Spec.** One issue per feature: [#1 Quote engine](https://github.com/tuna-d/sunquote/issues/1), [#2 LLM-written Narrative](https://github.com/tuna-d/sunquote/issues/2), [#3 quote assistant](https://github.com/tuna-d/sunquote/issues/3), and for phase 1 [#29 Web app and live demo](https://github.com/tuna-d/sunquote/issues/29) and [#30 Monthly Netting, Export Price and discounted returns](https://github.com/tuna-d/sunquote/issues/30).
+3. **Tickets.** The spec is split into small issues, each with acceptance criteria and a one-line "Why this label". Spec #1 became tickets [#4 to #16](https://github.com/tuna-d/sunquote/issues/4), spec #2 became [#18 to #20](https://github.com/tuna-d/sunquote/issues/18), spec #3 became [#22 to #24](https://github.com/tuna-d/sunquote/issues/22).
+4. **`/implement-spec`.** Claude acts as orchestrator: it routes each ticket to a subagent working in its own git worktree, merges the results into one integration branch (`spec/<n>-<slug>`) and opens a single pull request per spec: [#17](https://github.com/tuna-d/sunquote/pull/17) (spec #1), [#21](https://github.com/tuna-d/sunquote/pull/21) (spec #2), [#25](https://github.com/tuna-d/sunquote/pull/25) (spec #3). The rules of the run are in [docs/agents/workflow.md](docs/agents/workflow.md).
+
+### Model and effort routing
+
+The rules are in [docs/agents/workflow.md](docs/agents/workflow.md), "Implementing a spec" (rules 4 to 6):
+
+- `ready-for-codex` tickets go to GPT subagents on `gpt-6.2-sol` by default. `gpt-6.2-astra` needs the repo owner's approval.
+- Claude subagents default to Sonnet 5.5, Haiku 5.5 handles light and mechanical work, and Opus needs the repo owner's approval.
+- Every subagent gets an explicit effort from a table, never below `medium`: `high` for domain calculations, money, adapters to external services, the API contract, tooling changes and review subagents; `medium` for the rest. A ticket that failed once is retried at `high`.
+
+### How work is reviewed
+
+1. **Codex self-review.** A Codex subagent cannot start subagents, so it reviews its own diff against the ticket and the architecture rules and fixes what it finds ([AGENTS.md](AGENTS.md), "As an implement-spec subagent"). Tickets labelled `needs-claude-review` skip even that and are left to step 2.
+2. **Claude code review.** After all tickets of a spec land, the orchestrator runs `code-review` once over the integration branch, covering standards and the spec (`medium` at most, never `ultra`) ([workflow.md](docs/agents/workflow.md), rule 8). The fixes land before the spec's pull request is merged; for spec #1 they are the "[code review fixes](https://github.com/tuna-d/sunquote/commit/5e490e8)" merged into [PR #17](https://github.com/tuna-d/sunquote/pull/17).
+3. **CI.** [CI](.github/workflows/ci.yml) runs lint, format check, `mypy` and the default test suite with Postgres and Redis on every push and pull request. The [manual integration workflow](.github/workflows/integration.yml) runs the live-service tests, and the LLM evals run on demand with `pytest -m eval` ([Tests and CI](#tests-and-ci)).
+4. **Owner approval.** The repo owner alone decides whether `development` goes into `main` ([PR #27](https://github.com/tuna-d/sunquote/pull/27) is that release).
+
+### Mistakes caught
+
+| # | What went wrong | Who or what caught it | Fix |
+|---|---|---|---|
+| 1 | The research note's DC/AC maximum of 1.30 left standard small systems without an inverter: a 9-panel 3.96 kWp system fit no inverter (1.32 on 3 kW, 0.99 on 4 kW). | Found while implementing [ticket #7](https://github.com/tuna-d/sunquote/issues/7), per the commit message. **Who exactly: unconfirmed.** | [8c9984e](https://github.com/tuna-d/sunquote/commit/8c9984e): max raised to 1.50, 4 and 6 kW inverters added ([PR #17](https://github.com/tuna-d/sunquote/pull/17) decisions) |
+| 2 | Spec #1 used a single Tariff Tier chosen by annual consumption. A Monthly Bill converted to kWh jumped at the threshold (a higher bill could give a lower consumption) and savings near the threshold were mispriced. | Surfaced after the placeholder market research of [ticket #4](https://github.com/tuna-d/sunquote/issues/4), then recorded as an owner decision ([ticket #9 comment](https://github.com/tuna-d/sunquote/issues/9)). **Who first spotted it: unconfirmed.** | [b44e2b0](https://github.com/tuna-d/sunquote/commit/b44e2b0) and [ADR 0002](docs/adr/0002-marginal-tariff-tiers.md): marginal bands |
+| 3 | A Quote build that failed (no viable system, no compatible inverter) still used up a Quote Number, leaving gaps in the numbering. | Part of the spec #1 code review fixes ([5e490e8](https://github.com/tuna-d/sunquote/commit/5e490e8)). **Whether a reviewer or a test run found it: unconfirmed.** | [2cecba9](https://github.com/tuna-d/sunquote/commit/2cecba9), with API and domain tests; listed in [PR #17](https://github.com/tuna-d/sunquote/pull/17) |
+| 4 | The Contracted Power cap used the Contracted Power itself: with 7 kW and inverters of 6 and 8 kW, the capped Roof-Max system fit no inverter. | Part of the spec #1 code review fixes ([5e490e8](https://github.com/tuna-d/sunquote/commit/5e490e8)). **Who: unconfirmed.** | [0c91bde](https://github.com/tuna-d/sunquote/commit/0c91bde): cap with the largest Catalog inverter within the Contracted Power |
+| 5 | A fixed 85% share of production, derived for a Consumption-Matched system, was credited as offsetting the bill for Roof-Max too, so a system larger than consumption had its Annual Savings overstated. | The phase 1 grilling session ([PR #28](https://github.com/tuna-d/sunquote/pull/28)). **Who in the session: unconfirmed.** | [ADR 0005](docs/adr/0005-monthly-netting-replaces-self-consumption-ratio.md) in [30b3bb3](https://github.com/tuna-d/sunquote/commit/30b3bb3); the calculation itself was built in [ticket #33](https://github.com/tuna-d/sunquote/issues/33) of [spec #30](https://github.com/tuna-d/sunquote/issues/30): Monthly Netting, with the Netted Share as a result, merged as [a06844a](https://github.com/tuna-d/sunquote/commit/a06844a) |
+| 6 | The live extraction eval passed 15 of 20 scenarios, below the 90% bar: the assistant kept asking for fields a Quote does not need (the tilt and azimuth of a flat roof, the Subscriber Group, the roof type of an "eğimli" roof). | The extraction eval run against real Gemini, as stated in [PR #26](https://github.com/tuna-d/sunquote/pull/26) (follow-up to spec #3). | [d85a6cb](https://github.com/tuna-d/sunquote/commit/d85a6cb): prompt and tool description list the fields that are never missing; the eval then passed 19 of 20 |
+| 7 | The README and integration-test example of the assistant used 300 kWh for a 40 m² roof, which has no compatible inverter in the shipped Catalog, so the example would not produce a Quote. | Fixed in the spec #3 review-fix commit [9fd57c1](https://github.com/tuna-d/sunquote/commit/9fd57c1) (the commit message states the cause). **Who or what found it: unconfirmed.** | [9fd57c1](https://github.com/tuna-d/sunquote/commit/9fd57c1): the examples use 500 kWh ([PR #25](https://github.com/tuna-d/sunquote/pull/25)) |
+
 ## Status
 
 All three specs are implemented: the [Quote engine](https://github.com/tuna-d/sunquote/issues/1),
@@ -330,7 +578,7 @@ the [LLM-written Narrative](https://github.com/tuna-d/sunquote/issues/2) and the
 [quote assistant with its extraction eval](https://github.com/tuna-d/sunquote/issues/3). The
 domain vocabulary is in [GLOSSARY.md](GLOSSARY.md) and the design decisions are in
 [docs/adr](docs/adr). The Catalog, Tariff and pricing inputs remain
-[placeholder data](#placeholder-data).
+[placeholder data](#placeholder-data-and-how-to-defend-it).
 
 ---
 

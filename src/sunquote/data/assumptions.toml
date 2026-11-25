@@ -50,8 +50,8 @@ date = 2026-11-24
 [dc_ac_ratio_max]
 value = 1.50
 kind = "estimate"
-source = "docs/research/placeholder-market-data.md section 5 (proposed 1.30), widened to 1.50 so the catalog has no sizing gaps; the regulation allows up to 2.0 and Huawei recommends up to about 2.0 for small units"
-date = 2026-11-24
+source = "docs/research/placeholder-market-data.md section 5 (proposed 1.30), widened to 1.50 so the catalog has no sizing gaps. Legal ceiling verified 2026-11-25: requested mechanical (DC) capacity cannot exceed twice the electrical capacity (Lisanssiz Elektrik Uretim Yonetmeligi Art. 17(7) as amended by RG 33212 of 2026-04-02, plants called after 2019-05-12, wind excepted), i.e. DC/AC up to 2.0; Huawei recommends up to about 2.0 for small units. The 1.50 value stays an estimate"
+date = 2026-11-25
 
 # The Contracted Power assumed when a quote request gives none. It is an installer placeholder,
 # not a regulatory figure: the regulation ties installed capacity to the Site's own Contracted
@@ -59,8 +59,8 @@ date = 2026-11-24
 [default_contracted_power_kw.residential]
 value = 10
 kind = "estimate"
-source = "docs/research/placeholder-market-data.md section 3, F2 (decided 2026-11-24, option A): an installer assumption, recorded on each Quote as defaulted; a real value comes from the Customer's connection agreement"
-date = 2026-11-24
+source = "docs/research/placeholder-market-data.md section 3, F2 (decided 2026-11-24, option A): an installer assumption, recorded on each Quote as defaulted; a real value comes from the Customer's connection agreement. The cap itself is verified 2026-11-25: installed capacity of a plant under Art. 5(1)(c) cannot exceed the contracted power of the linked consumption facility (Lisanssiz Elektrik Uretim Yonetmeligi Art. 7(10), RG 30772 of 2019-05-12; Art. 28(5) as replaced by RG 33212 of 2026-04-02). No regulatory residential default exists"
+date = 2026-11-25
 
 # Pricing. BOS (balance of system: mounting and cabling) is USD, labour and the fixed project
 # cost are TRY. Margin and VAT are shares: 0.25 is 25%.
@@ -94,9 +94,9 @@ date = 2026-11-24
 
 [vat_rate]
 value = 0.20
-kind = "estimate"
-source = "docs/research/placeholder-market-data.md section 4: general KDV rate; applicability to residential PV still to be confirmed (open point 1)"
-date = 2026-11-24
+kind = "direct"
+source = "Verified 2026-11-25: general KDV rate 20% (Decision 2007/13033 Art. 1(1)(a), rate raised from 18% by CBK 7346, effective 2023-07-10). PV modules, inverters and their installation appear in neither list I (1%) nor list II (10%) of the Gelir Idaresi table of the decision (file dated 2025-02-17), so the general rate applies to a residential PV sale. Vendor claims of a 1% rate or an exemption were not supported by any legal text; confirm with a mali musavir before a real quote. Not checked for amendments after 2025-02-17"
+date = 2026-11-25
 
 # How long a Quote's price holds, counted from the quote date (the Validity Period).
 
@@ -132,3 +132,13 @@ value = 12
 kind = "estimate"
 source = "docs/research/placeholder-market-data.md section 6: typical string-inverter warranty of 10 years plus margin; warranty not read from the Huawei datasheet"
 date = 2026-11-24
+
+# The Discount Rate is REAL too (docs/adr/0006): NPV discounts the real cash flow of docs/adr/0003.
+# The riskless real alternative for a household is a CPI-indexed Treasury bond, so the rate is its
+# auction yield, rounded. A higher rate lowers the NPV.
+
+[discount_rate_real]
+value = 0.056
+kind = "derived"
+source = "docs/research/placeholder-market-data.md section 9.3: real compound yield 5.61% at the Treasury auction of the 4-year CPI-linked bond TRT080530T27 (2.63% real coupon), reported 2026-06-08 by Bloomberg HT (https://www.bloomberght.com/hazine-4-yil-vadeli-tufe-endeksli-tahvilde-13-2-milyar-tl-borclandi-3779359), rounded to 5.6%; a 5-year CPI-linked auction earlier in 2026 averaged 5.37% (4.89-5.56%). Unverified against hmb.gov.tr (secondary reporting). Cross-check: the 36% policy rate against the 24.04% 12-month-ahead CPI expectation is about 9.6% real, an upper bound for a short-term deposit"
+date = 2026-06-08

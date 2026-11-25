@@ -1,0 +1,35 @@
+name: Reset demo Quotes
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+      timezone: Europe/Istanbul
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reset:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for a demo database
+        id: database
+        env:
+          SUNQUOTE_DATABASE_URL: ${{ secrets.SUNQUOTE_DATABASE_URL }}
+        run: |
+          if [[ -z "$SUNQUOTE_DATABASE_URL" ]]; then
+            echo '::notice::SUNQUOTE_DATABASE_URL is unset. Skipping demo reset.'
+          else
+            echo 'configured=true' >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.database.outputs.configured == 'true'
+      - uses: astral-sh/setup-uv@v6
+        if: steps.database.outputs.configured == 'true'
+      - name: Delete visitor Quotes
+        if: steps.database.outputs.configured == 'true'
+        env:
+          SUNQUOTE_DATABASE_URL: ${{ secrets.SUNQUOTE_DATABASE_URL }}
+          SUNQUOTE_DATABASE_CLIENT_POOL: 'false'
+        run: uv run --locked --no-dev python -m sunquote.demo reset

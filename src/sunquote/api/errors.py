@@ -19,10 +19,12 @@ from sunquote.domain.errors import (
     AssistantNotConfiguredError,
     ConversationUnavailableError,
     DomainError,
+    GeminiBudgetExhaustedError,
     LocationNotSupportedError,
     NoCompatibleInverterError,
     NoViableSystemError,
     QuoteNotFoundError,
+    RateLimitedError,
     UnsupportedSubscriberGroupError,
     UpstreamUnavailableError,
 )
@@ -51,12 +53,16 @@ LOCATION_NOT_SUPPORTED = ProblemType("location-not-supported", "Location not sup
 ADDRESS_NOT_FOUND = ProblemType("address-not-found", "Address not found", 422)
 QUOTE_NOT_FOUND = ProblemType("quote-not-found", "Quote not found", 404)
 UPSTREAM_UNAVAILABLE = ProblemType("upstream-unavailable", "Upstream service unavailable", 503)
+RATE_LIMITED = ProblemType("rate-limited", "Rate limit reached", 429)
 # Only ever tool errors of the quote assistant, never HTTP responses.
 QUOTE_ALREADY_CREATED = ProblemType("quote-already-created", "A Quote was already created", 409)
 REPLY_REJECTED = ProblemType("reply-rejected", "Reply rejected", 422)
 UNKNOWN_TOOL = ProblemType("unknown-tool", "Unknown tool", 422)
 ASSISTANT_NOT_CONFIGURED = ProblemType("assistant-not-configured", "Assistant not configured", 503)
 ASSISTANT_UNAVAILABLE = ProblemType("assistant-unavailable", "Assistant unavailable", 503)
+ASSISTANT_BUDGET_EXHAUSTED = ProblemType(
+    "assistant-budget-exhausted", "Assistant budget exhausted", 503
+)
 
 PROBLEMS_BY_EXCEPTION: dict[type[DomainError], ProblemType] = {
     UnsupportedSubscriberGroupError: UNSUPPORTED_SUBSCRIBER_GROUP,
@@ -68,6 +74,7 @@ PROBLEMS_BY_EXCEPTION: dict[type[DomainError], ProblemType] = {
     QuoteNotFoundError: QUOTE_NOT_FOUND,
     AssistantNotConfiguredError: ASSISTANT_NOT_CONFIGURED,
     ConversationUnavailableError: ASSISTANT_UNAVAILABLE,
+    GeminiBudgetExhaustedError: ASSISTANT_BUDGET_EXHAUSTED,
 }
 
 
@@ -148,6 +155,13 @@ def error_detail(error: DomainError) -> str:
     return str(error)
 
 
+async def _handle_rate_limited(_: Request, error: Exception) -> JSONResponse:
+    assert isinstance(error, RateLimitedError)
+    response = problem_response(RATE_LIMITED, str(error))
+    response.headers["Retry-After"] = str(error.retry_after_seconds)
+    return response
+
+
 async def _handle_domain_error(_: Request, error: Exception) -> JSONResponse:
     assert isinstance(error, DomainError)
     problem_type = PROBLEMS_BY_EXCEPTION[type(error)]
@@ -156,5 +170,6 @@ async def _handle_domain_error(_: Request, error: Exception) -> JSONResponse:
 
 def register_error_handlers(app: FastAPI) -> None:
     app.add_exception_handler(RequestValidationError, _handle_validation_error)
+    app.add_exception_handler(RateLimitedError, _handle_rate_limited)
     for exception_type in PROBLEMS_BY_EXCEPTION:
         app.add_exception_handler(exception_type, _handle_domain_error)
