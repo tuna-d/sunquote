@@ -4,7 +4,20 @@ The Alembic migrations create the same tables; keep them in step (a repository t
 when they drift apart).
 """
 
-from sqlalchemy import Column, DateTime, Index, Integer, MetaData, String, Table, Text, Uuid, func
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    Index,
+    Integer,
+    MetaData,
+    String,
+    Table,
+    Text,
+    Uuid,
+    false,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 
 metadata = MetaData()
@@ -21,9 +34,16 @@ quotes = Table(
     # Null until address geocoding fills them.
     Column("district", Text, nullable=True),
     Column("province", Text, nullable=True),
+    Column("is_sample", Boolean, nullable=False, server_default=false()),
     Column("quote", JSONB, nullable=False),
 )
 Index("ix_quotes_created_at_quote_number", quotes.c.created_at.desc(), quotes.c.quote_number.desc())
+Index(
+    "uq_quotes_sample_customer_name",
+    quotes.c.customer_name,
+    unique=True,
+    postgresql_where=quotes.c.is_sample,
+)
 
 # The last Quote Number sequence issued in each year. The sequence restarts each year because
 # each year has its own row.

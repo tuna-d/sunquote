@@ -218,8 +218,17 @@ class FakeQuoteRepository:
         return number
 
     async def save(
-        self, quote: Quote, *, district: str | None = None, province: str | None = None
+        self,
+        quote: Quote,
+        *,
+        district: str | None = None,
+        province: str | None = None,
+        is_sample: bool = False,
     ) -> StoredQuote:
+        if is_sample:
+            for stored in self.stored:
+                if stored.is_sample and stored.quote.customer.name == quote.customer.name:
+                    return stored
         self._clock += timedelta(minutes=1)
         stored = StoredQuote(
             id=uuid4(),
@@ -227,6 +236,7 @@ class FakeQuoteRepository:
             quote=quote,
             district=district,
             province=province,
+            is_sample=is_sample,
         )
         self.stored.append(stored)
         return stored

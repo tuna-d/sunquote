@@ -88,6 +88,26 @@ fails validation, finds no viable system or hits an unavailable upstream does no
 number. API errors use
 RFC 9457 `application/problem+json` with a stable `type`. Unknown Quote IDs return `404`.
 
+## Demo Quotes
+
+Set `SUNQUOTE_DATABASE_URL` to the migrated demo database, then run these commands from the
+repository root:
+
+```sh
+uv run python -m sunquote.demo seed
+uv run python -m sunquote.demo reset
+```
+
+`seed` creates six synthetic sample Quotes for Ankara, İzmir and Antalya through normal
+Quote creation. It uses the configured data and providers. Run it again to fill any missing
+samples while preserving those already stored. Quote list and detail responses identify
+samples with `is_sample`.
+
+`reset` permanently deletes every non-sample Quote in the configured database and prints the
+number deleted. The [Reset demo Quotes workflow](.github/workflows/demo-reset.yml) schedules
+the same command for 03:00 Europe/Istanbul each night and offers a manual run from the Actions
+tab. It uses the `SUNQUOTE_DATABASE_URL` Actions secret and skips with a notice when it is unset.
+
 ## Architecture
 
 - [`domain`](src/sunquote/domain) holds the calculation engine and defines ports for the

@@ -115,6 +115,7 @@ class StoredQuote:
     """A Quote as the repository holds it: the immutable Quote plus its identity.
 
     `district` and `province` are optional listing columns supplied by geocoding.
+    `is_sample` marks a synthetic Quote kept by the demo cleanup.
     """
 
     id: UUID
@@ -122,6 +123,7 @@ class StoredQuote:
     quote: Quote
     district: str | None = None
     province: str | None = None
+    is_sample: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -133,8 +135,7 @@ class QuotePage:
 
 
 class QuoteRepository(Protocol):
-    """Stores Quotes and issues their numbers. A stored Quote can never be changed or deleted,
-    so the port has no update or delete."""
+    """Stores immutable Quotes and issues their numbers. Demo cleanup is outside this port."""
 
     async def next_quote_number(self, year: int) -> str:
         """The next free Quote Number of `year` (`SQ-<year>-<6-digit sequence>`).
@@ -145,9 +146,14 @@ class QuoteRepository(Protocol):
         ...
 
     async def save(
-        self, quote: Quote, *, district: str | None = None, province: str | None = None
+        self,
+        quote: Quote,
+        *,
+        district: str | None = None,
+        province: str | None = None,
+        is_sample: bool = False,
     ) -> StoredQuote:
-        """Store `quote` under a new id and return it as stored."""
+        """Store `quote`, or return the existing sample for the same synthetic Customer."""
         ...
 
     async def get(self, quote_id: UUID) -> StoredQuote | None:

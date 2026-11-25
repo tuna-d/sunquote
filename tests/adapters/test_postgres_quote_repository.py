@@ -18,22 +18,37 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 from uuid import uuid4
 
+import httpx
 import pytest
-from sqlalchemy import inspect, select, text
+from alembic import command
+from sqlalchemy import insert, inspect, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
-from sunquote.adapters.postgres.migrate import upgrade_to_head
-from sunquote.adapters.postgres.quote_repository import PostgresQuoteRepository
+from sunquote.adapters.postgres.migrate import alembic_config, upgrade_to_head
+from sunquote.adapters.postgres.quote_repository import PostgresQuoteRepository, quote_to_json
 from sunquote.adapters.postgres.tables import metadata, quotes
+from sunquote.api.app import create_app
+from sunquote.api.dependencies import AppDependencies
+from sunquote.config import Settings
+from sunquote.demo import seed
+from sunquote.domain.model import GeocodingResult, RoofType
 from sunquote.domain.narrative import NarrativeDraft, NarrativeRecord, NarrativeSource
 from sunquote.domain.quote import Quote, build_quote
+from sunquote.domain.service import QuoteService
 from tests.factories import (
     QUOTE_DATE,
+    make_assumptions,
     make_exchange_rate,
     make_reference_data,
     make_request,
     make_specific_yield,
+)
+from tests.fakes import (
+    FakeExchangeRateProvider,
+    FakeGeocoder,
+    FakeSpecificYieldProvider,
+    FixedClock,
 )
 
 pytestmark = pytest.mark.anyio
@@ -111,6 +126,85 @@ async def test_district_and_province_are_stored_when_given(
 
     assert fetched is not None
     assert (fetched.district, fetched.province) == ("Çankaya", "Ankara")
+
+
+async def test_demo_reset_keeps_samples_and_removes_other_quotes(
+    repository: PostgresQuoteRepository,
+) -> None:
+    sample_number = await repository.next_quote_number(2026)
+    visitor_number = await repository.next_quote_number(2026)
+    sample = await repository.save(make_quote(sample_number), is_sample=True)
+    visitor = await repository.save(make_quote(visitor_number))
+
+    assert await repository.delete_non_sample_quotes() == 1
+    assert await repository.delete_non_sample_quotes() == 0
+    assert (await repository.list_newest_first(page=1, page_size=10)).items == (sample,)
+    assert await repository.get(sample.id) == sample
+    assert await repository.get(visitor.id) is None
+    assert await repository.next_quote_number(2026) == "SQ-2026-000003"
+
+
+async def test_demo_seed_creates_six_varied_samples_once(
+    repository: PostgresQuoteRepository,
+) -> None:
+    class DemoGeocoder(FakeGeocoder):
+        async def geocode(self, address: str) -> GeocodingResult:
+            return replace(await super().geocode(address), province=address.split(", ")[-1])
+
+    geocoder = DemoGeocoder()
+    service = QuoteService(
+        quote_repository=repository,
+        geocoder=geocoder,
+        specific_yield_provider=FakeSpecificYieldProvider(),
+        exchange_rate_provider=FakeExchangeRateProvider(),
+        clock=FixedClock(),
+        reference_data=make_reference_data(assumptions=make_assumptions(dc_ac_ratio_max="1.50")),
+    )
+
+    await seed(repository, service)
+    first = await repository.list_newest_first(page=1, page_size=10)
+    await seed(repository, service)
+
+    assert first.total == 6
+    assert all(item.is_sample for item in first.items)
+    assert {item.province for item in first.items} == {"Ankara", "İzmir", "Antalya"}
+    assert {item.quote.assumptions.roof_type for item in first.items} == {
+        RoofType.FLAT,
+        RoofType.PITCHED,
+    }
+    assert {len(item.quote.system_options) for item in first.items} == {1, 2}
+    assert {item.quote.assumptions.consumption_derived_from_bill for item in first.items} == {
+        True,
+        False,
+    }
+    assert await repository.list_newest_first(page=1, page_size=10) == first
+    assert len(geocoder.addresses) == 6
+
+    app = create_app(
+        Settings(), AppDependencies(quote_service=service, quote_repository=repository)
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        items = (await client.get("/quotes")).json()["items"]
+        assert len(items) == 6
+        assert all(item["is_sample"] is True for item in items)
+        response = await client.get(f"/quotes/{first.items[0].id}")
+        assert response.status_code == 200
+        assert response.json()["is_sample"] is True
+
+
+async def test_concurrent_sample_saves_keep_one_immutable_quote(
+    repository: PostgresQuoteRepository,
+) -> None:
+    numbers = [await repository.next_quote_number(2026) for _ in range(2)]
+
+    first, second = await asyncio.gather(
+        *(repository.save(make_quote(number), is_sample=True) for number in numbers)
+    )
+
+    assert first == second
+    assert (await repository.list_newest_first(page=1, page_size=10)).items == (first,)
 
 
 async def test_the_whole_quote_is_in_one_jsonb_column_next_to_the_listing_columns(
@@ -241,6 +335,30 @@ async def test_running_the_migrations_again_changes_nothing(
     await upgrade_to_head(engine)
 
     assert await repository.get(saved.id) == saved
+
+
+async def test_the_sample_migration_preserves_an_older_quote_as_non_sample(
+    repository: PostgresQuoteRepository, engine: AsyncEngine
+) -> None:
+    quote_id = uuid4()
+    quote = make_quote()
+    async with engine.begin() as connection:
+        await connection.run_sync(lambda conn: command.downgrade(alembic_config(conn), "0001"))
+        await connection.execute(
+            insert(quotes).values(
+                id=quote_id,
+                quote_number=quote.quote_number,
+                customer_name=quote.customer.name,
+                quote=quote_to_json(quote),
+            )
+        )
+
+    await upgrade_to_head(engine)
+
+    stored = await repository.get(quote_id)
+    assert stored is not None
+    assert stored.is_sample is False
+    assert stored.quote == quote
 
 
 def narrative_record() -> NarrativeRecord:
