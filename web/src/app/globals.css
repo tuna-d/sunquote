@@ -1,0 +1,348 @@
+/*
+ * Design tokens and base layout: direction 2c, "financial report", Slate sun palette.
+ * The reference mockup is docs/design/2c-slate-sun.html; the tokens are explained in
+ * docs/design/tokens-2c.md. Page tickets add their own component styles as CSS modules next to
+ * the component and use only these variables.
+ */
+
+:root {
+  /* Colour */
+  --desk: #e5eaf0; /* the desk behind the sheet */
+  --paper: #fafcfe; /* the printed sheet */
+  --wash: #edf2f7; /* input fill, total row */
+  --ink: #16212f; /* text, heavy rules, axes, text on gold */
+  --ink-2: #4a5669; /* secondary text, captions */
+  --rule: #d2dae4; /* hairlines (decorative) */
+  --rule-strong: #76869a; /* input underline, outlined controls (3:1+) */
+  --grid: #dae1e9; /* chart gridlines (decorative) */
+  --primary: #284e7e; /* links, selected state, focus ring, Option 1 text */
+  --accent: #064b4e; /* Option 2 text, section numbers */
+  --err: #a7182b; /* errors and error borders */
+  --gold: #f4c400; /* FILL ONLY, always with ink text and an ink border on controls */
+  --series-1: #5a94c8; /* Option 1 chart marks */
+  --series-2: #064b4e; /* Option 2 chart marks */
+
+  /* Type: the font variables come from next/font in layout.tsx. */
+  --serif: var(--font-newsreader), Georgia, serif;
+  --sans: var(--font-hanken), system-ui, sans-serif;
+
+  /* Spacing: an 8 px base. */
+  --space-1: 8px;
+  --space-2: 16px;
+  --space-3: 24px;
+  --space-4: 32px;
+  --space-6: 48px;
+  --space-7: 56px;
+  --space-8: 64px;
+
+  --sheet-width: 960px;
+  --sheet-shadow: 0 1px 0 var(--rule), 0 18px 40px -22px rgba(22, 33, 47, 0.34);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--desk);
+  color: var(--ink);
+  font: 400 17px/1.55 var(--serif);
+  font-variant-numeric: lining-nums tabular-nums;
+  font-optical-sizing: auto;
+}
+
+::placeholder {
+  color: var(--ink-2);
+  opacity: 1;
+}
+
+a {
+  color: var(--primary);
+}
+
+:focus-visible {
+  outline: 3px solid var(--primary);
+  outline-offset: 3px;
+}
+
+/* Visually hidden, still read by screen readers. */
+.sr {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.skip {
+  position: absolute;
+  left: 8px;
+  top: -48px;
+  z-index: 9;
+  padding: 8px 12px;
+  background: var(--primary);
+  color: var(--paper);
+  font: 600 14px var(--sans);
+}
+
+.skip:focus {
+  top: 8px;
+}
+
+/* Masthead */
+.mast {
+  max-width: var(--sheet-width);
+  margin: 0 auto;
+  padding: 20px 24px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.mark {
+  font: 500 italic 26px/1 var(--serif);
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+/* The solar-gold highlighter: a fill behind ink text, never gold text. */
+.mark span {
+  margin-left: 2px;
+  padding: 0 0.16em 0 0.12em;
+  background: var(--gold);
+  color: var(--ink);
+}
+
+.mast-nav {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.mast-nav a,
+.mast-nav span {
+  padding: 6px 0;
+  border-bottom: 2px solid transparent;
+  font: 600 12px var(--sans);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  text-decoration: none;
+}
+
+.mast-nav a[aria-current="page"] {
+  color: var(--ink);
+  border-bottom-color: var(--ink);
+}
+
+.mast-nav a:hover {
+  color: var(--primary);
+}
+
+.mast-nav span[aria-disabled="true"] {
+  cursor: not-allowed;
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+
+/* The sheet: the printed page on the desk. */
+.sheet {
+  max-width: var(--sheet-width);
+  margin: 20px auto 48px;
+  padding: 64px 80px 56px;
+  background: var(--paper);
+  box-shadow: var(--sheet-shadow);
+}
+
+main {
+  display: block;
+  padding: 0 0;
+}
+
+/* Typography */
+.kick {
+  margin: 0 0 12px;
+  font: 600 12px var(--sans);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+.kick.accent {
+  color: var(--accent);
+}
+
+.kick.primary {
+  color: var(--primary);
+}
+
+h1 {
+  margin: 0 0 8px;
+  font: 500 44px/1.1 var(--serif);
+  letter-spacing: -0.015em;
+  font-variation-settings: "opsz" 72;
+}
+
+h2 {
+  margin: 0 0 6px;
+  font: 500 28px/1.2 var(--serif);
+  letter-spacing: -0.01em;
+  font-variation-settings: "opsz" 48;
+}
+
+h3 {
+  margin: 0 0 8px;
+  font: 600 12px var(--sans);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--primary);
+}
+
+.sub {
+  margin: 0;
+  font: italic 400 21px/1.35 var(--serif);
+  color: var(--ink-2);
+}
+
+.lede {
+  max-width: 34em;
+  margin: 36px 0 0;
+  font: 400 22px/1.5 var(--serif);
+  font-variation-settings: "opsz" 24;
+}
+
+/* Letterhead: title block, then a 3 px double rule. */
+.letter {
+  display: grid;
+  grid-template-columns: 1fr 250px;
+  gap: var(--space-6);
+  padding-bottom: 28px;
+  border-bottom: 3px double var(--ink);
+}
+
+.meta {
+  margin: 0;
+  align-self: end;
+}
+
+.meta div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.meta dt {
+  padding-top: 4px;
+  font: 600 11px var(--sans);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+.meta dd {
+  margin: 0;
+  font-size: 16px;
+}
+
+/* Buttons: gold fill, ink text, 2 px ink border. */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 22px;
+  border: 2px solid var(--ink);
+  border-radius: 0;
+  background: var(--gold);
+  color: var(--ink);
+  font: 600 14px var(--sans);
+  letter-spacing: 0.04em;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.btn:hover {
+  background: var(--paper);
+}
+
+.btn.ghost {
+  background: var(--paper);
+}
+
+.btn.ghost:hover {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+/* Report tables: a 1 px ink rule above and below, hairlines between rows. */
+table.t {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+table.t caption {
+  padding-bottom: 8px;
+  text-align: left;
+  font: italic 400 15px/1.4 var(--serif);
+  color: var(--ink-2);
+}
+
+table.t th,
+table.t td {
+  padding: 9px 0;
+  border-bottom: 1px solid var(--rule);
+  text-align: right;
+  font-size: 17px;
+}
+
+table.t th:first-child,
+table.t td:first-child {
+  text-align: left;
+}
+
+table.t thead th {
+  border-bottom: 1px solid var(--ink);
+  font: 600 11px var(--sans);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+table.t tbody th {
+  font-weight: 400;
+  color: var(--ink-2);
+}
+
+table.t tbody tr:last-child th,
+table.t tbody tr:last-child td {
+  border-bottom: 1px solid var(--ink);
+}
+
+@media (max-width: 800px) {
+  .sheet {
+    padding: 36px 22px;
+  }
+
+  h1 {
+    font-size: 32px;
+  }
+
+  .letter {
+    grid-template-columns: 1fr;
+  }
+}

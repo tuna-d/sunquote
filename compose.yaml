@@ -55,5 +55,25 @@ services:
       retries: 5
       start_period: 5s
 
+  web:
+    build:
+      context: ./web
+      args:
+        # Next bakes its `/api/*` rewrite in at build time; inside Compose the API is `api:8000`.
+        SUNQUOTE_API_URL: http://api:8000
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      # Host port is configurable: `WEB_HOST_PORT=3100 docker compose up`.
+      - "${WEB_HOST_PORT:-3000}:3000"
+    healthcheck:
+      # `/` redirects to `/quotes`, which renders (with an error state) even when the API is down.
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
 volumes:
   postgres-data:
