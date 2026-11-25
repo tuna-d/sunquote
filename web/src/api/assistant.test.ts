@@ -61,6 +61,17 @@ describe("sendAssistantMessages", () => {
     });
   });
 
+  it("maps a 429 without a problem body to rate-limited too", async () => {
+    const { client } = clientAnswering(
+      () => new Response("slow down", { status: 429, headers: { "Retry-After": "60" } }),
+    );
+    expect(await sendAssistantMessages(messages, client)).toEqual({
+      ok: false,
+      kind: "rate-limited",
+      retryAfterSeconds: 60,
+    });
+  });
+
   it("maps an unknown failure to error and a dead network to network", async () => {
     const failing = clientAnswering(() => new Response("boom", { status: 500 }));
     expect(await sendAssistantMessages(messages, failing.client)).toEqual({
