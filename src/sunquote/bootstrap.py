@@ -23,6 +23,7 @@ from sunquote.adapters.data_files import (
 from sunquote.adapters.gemini import GeminiNarrativeWriter
 from sunquote.adapters.gemini_conversation import GeminiConversationModel
 from sunquote.adapters.nominatim import NominatimGeocoder
+from sunquote.adapters.postgres.counter_store import PostgresCounterStore
 from sunquote.adapters.postgres.migrate import upgrade_to_head
 from sunquote.adapters.postgres.quote_repository import PostgresQuoteRepository, create_engine
 from sunquote.adapters.pvgis import PvgisSpecificYieldProvider
@@ -31,17 +32,20 @@ from sunquote.adapters.redis_cache import (
     CachedGeocoder,
     CachedSpecificYieldProvider,
 )
+from sunquote.adapters.redis_counter_store import RedisCounterStore
 from sunquote.adapters.tcmb import TcmbExchangeRateProvider
 from sunquote.api.dependencies import AppDependencies
 from sunquote.config import Settings
 from sunquote.domain.ports import (
     ConversationModel,
+    CounterStore,
     ExchangeRateProvider,
     Geocoder,
     NarrativeWriter,
     QuoteRepository,
     SpecificYieldProvider,
 )
+from sunquote.domain.rate_limit import FixedWindowRateLimiter
 from sunquote.domain.reference_data import ReferenceData
 from sunquote.domain.service import QuoteService
 
@@ -53,6 +57,7 @@ def build_dependencies(
     quote_repository: QuoteRepository | None = None,
     narrative_writer: NarrativeWriter | None = None,
     conversation_model: ConversationModel | None = None,
+    counter_store: CounterStore | None = None,
 ) -> AppDependencies:
     """Load the data files and wire the adapters. Makes no network call itself.
 
@@ -61,7 +66,10 @@ def build_dependencies(
     migration runs). `narrative_writer` writes the Quotes' Narrative; with none, the Gemini
     writer is wired when `SUNQUOTE_GEMINI_API_KEY` is set, and otherwise every Quote records
     `fallback` and shows the fixed text. `conversation_model` is the quote assistant's LLM, wired
-    the same way; with none, the assistant endpoint answers 503.
+    the same way; with none, the assistant endpoint answers 503. `counter_store` holds the rate
+    limit counters: with none they live in Redis when `SUNQUOTE_REDIS_URL` is set, otherwise in
+    Postgres. When the repository is replaced and there is no counter store either, nothing is
+    limited (there is nowhere shared to count).
     """
     data_dir = settings.data_dir or default_data_dir()
     reference_data = ReferenceData(
@@ -113,6 +121,8 @@ def build_dependencies(
             socket_timeout=0.25,
             retry=Retry(NoBackoff(), 0),
         )
+        if counter_store is None:
+            counter_store = RedisCounterStore(redis)
         geocoder = CachedGeocoder(geocoder, redis)
         specific_yield_provider = CachedSpecificYieldProvider(specific_yield_provider, redis)
         exchange_rate_provider = CachedExchangeRateProvider(exchange_rate_provider, redis)
@@ -122,15 +132,18 @@ def build_dependencies(
         engine = create_engine(settings.database_url)
         quote_repository = PostgresQuoteRepository(engine)
         closers = (*closers, engine.dispose)
+        if counter_store is None:
+            counter_store = PostgresCounterStore(engine)
         if settings.migrate_on_startup:
             startup = (partial(upgrade_to_head, engine),)
 
+    clock = SystemClock()
     service = QuoteService(
         quote_repository=quote_repository,
         geocoder=geocoder,
         specific_yield_provider=specific_yield_provider,
         exchange_rate_provider=exchange_rate_provider,
-        clock=SystemClock(),
+        clock=clock,
         reference_data=reference_data,
         narrative_writer=narrative_writer,
         narrative_budget_seconds=settings.narrative_timeout_seconds,
@@ -140,6 +153,9 @@ def build_dependencies(
         quote_repository=quote_repository,
         conversation_model=conversation_model,
         assistant_budget_seconds=settings.assistant_timeout_seconds,
+        rate_limiter=(
+            FixedWindowRateLimiter(counter_store, clock) if counter_store is not None else None
+        ),
         startup=startup,
         closers=closers,
     )
