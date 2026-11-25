@@ -10,10 +10,15 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
+from redis.asyncio.connection import Connection, SSLConnection
+from sqlalchemy.ext.asyncio import AsyncEngine
+from sqlalchemy.pool import AsyncAdaptedQueuePool, NullPool
 
 from sunquote.adapters.clock import SystemClock
 from sunquote.adapters.gemini import GeminiNarrativeWriter
 from sunquote.adapters.gemini_conversation import GeminiConversationModel
+from sunquote.adapters.postgres.quote_repository import PostgresQuoteRepository
+from sunquote.adapters.redis_cache import CachedGeocoder
 from sunquote.api.app import create_app
 from sunquote.bootstrap import build_dependencies
 from sunquote.config import Settings
@@ -363,3 +368,49 @@ def test_the_assistant_creates_a_quote_through_the_wired_app_with_recorded_gemin
     assert len(gemini_requests) == 3
     assert stored["narrative"]["source"] == "llm"
     assert gemini_requests[0].headers["x-goog-api-key"] == "key-123"
+
+
+def _wired_engine(settings: Settings) -> AsyncEngine:
+    dependencies = build_dependencies(settings)
+    repository = dependencies.quote_repository
+    assert isinstance(repository, PostgresQuoteRepository)
+    return repository._engine
+
+
+def test_the_real_wiring_keeps_a_connection_pool_unless_serverless_turns_it_off() -> None:
+    assert isinstance(_wired_engine(Settings()).pool, AsyncAdaptedQueuePool)
+    assert isinstance(_wired_engine(Settings(database_client_pool=False)).pool, NullPool)
+
+
+def test_an_upstash_url_over_tls_is_cached_through_a_tls_connection() -> None:
+    settings = Settings(redis_url="rediss://default:token@eu1-demo-12345.upstash.io:6379")
+
+    dependencies = build_dependencies(settings, quote_repository=FakeQuoteRepository())
+
+    geocoder = dependencies.quote_service._geocoder
+    assert isinstance(geocoder, CachedGeocoder)
+    pool = geocoder._redis.connection_pool
+    assert pool.connection_class is SSLConnection
+    assert pool.connection_kwargs["host"] == "eu1-demo-12345.upstash.io"
+    assert pool.connection_kwargs["password"] == "token"
+
+
+def test_a_plain_redis_url_stays_unencrypted() -> None:
+    settings = Settings(redis_url="redis://redis:6379/0")
+
+    dependencies = build_dependencies(settings, quote_repository=FakeQuoteRepository())
+
+    geocoder = dependencies.quote_service._geocoder
+    assert isinstance(geocoder, CachedGeocoder)
+    assert geocoder._redis.connection_pool.connection_class is Connection
+
+
+def test_the_cache_timeout_comes_from_the_settings() -> None:
+    settings = Settings(redis_url="rediss://default:token@host:6379", redis_timeout_seconds=1.5)
+
+    dependencies = build_dependencies(settings, quote_repository=FakeQuoteRepository())
+
+    geocoder = dependencies.quote_service._geocoder
+    assert isinstance(geocoder, CachedGeocoder)
+    kwargs = geocoder._redis.connection_pool.connection_kwargs
+    assert (kwargs["socket_connect_timeout"], kwargs["socket_timeout"]) == (1.5, 1.5)

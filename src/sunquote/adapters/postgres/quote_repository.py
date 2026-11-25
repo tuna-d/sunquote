@@ -7,7 +7,9 @@ from uuid import UUID, uuid4
 from pydantic import TypeAdapter
 from sqlalchemy import RowMapping, func, insert, select
 from sqlalchemy.dialects.postgresql import insert as postgres_insert
+from sqlalchemy.engine import URL, make_url
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from sunquote.adapters.postgres.tables import quote_number_counters, quotes
 from sunquote.domain.ports import QuotePage, StoredQuote
@@ -29,9 +31,43 @@ def quote_from_json(document: dict[str, Any]) -> Quote:
     return _QUOTE_JSON.validate_python(document)
 
 
-def create_engine(database_url: str) -> AsyncEngine:
-    """An async engine. It connects lazily, so building it needs no running database."""
-    return create_async_engine(database_url, pool_pre_ping=True)
+def async_database_url(database_url: str) -> URL:
+    """The URL in the form the asyncpg driver reads.
+
+    A Postgres host (Neon, for one) shows its connection string as
+    `postgresql://...?sslmode=require&channel_binding=require`. asyncpg takes `ssl` instead of
+    `sslmode` and has no `channel_binding` option, so the string is rewritten here and can be
+    pasted into `SUNQUOTE_DATABASE_URL` as it is.
+    """
+    url = make_url(database_url).set(drivername="postgresql+asyncpg")
+    query = dict(url.query)
+    sslmode = query.pop("sslmode", None)
+    query.pop("channel_binding", None)
+    if sslmode is not None:
+        query.setdefault("ssl", sslmode if isinstance(sslmode, str) else sslmode[0])
+    return url.set(query=query)
+
+
+def create_engine(database_url: str, *, client_pool: bool = True) -> AsyncEngine:
+    """An async engine. It connects lazily, so building it needs no running database.
+
+    With `client_pool` off (serverless), every use opens its own connection and closes it
+    afterwards: an instance that is frozen between requests must not hold connections that
+    the server drops, and the host's own pooler (Neon's PgBouncer) does the pooling. That
+    pooler hands each transaction to any server connection, so prepared statements are off
+    too: one prepared on a connection would be missing on the next.
+    """
+    url = async_database_url(database_url)
+    if client_pool:
+        return create_async_engine(url, pool_pre_ping=True)
+    return create_async_engine(
+        url.update_query_dict({"prepared_statement_cache_size": "0"}),
+        poolclass=NullPool,
+        connect_args={
+            "statement_cache_size": 0,
+            "prepared_statement_name_func": lambda: f"__asyncpg_{uuid4()}__",
+        },
+    )
 
 
 class PostgresQuoteRepository:
