@@ -7,15 +7,13 @@ Istanbul and the time comes from the `Clock` port.
 """
 
 import logging
-from datetime import timedelta, timezone
+from datetime import timedelta
 
 from sunquote.domain.errors import GeminiBudgetExhaustedError
-from sunquote.domain.ports import Clock, CounterStore
+from sunquote.domain.ports import ISTANBUL, Clock, CounterStore
 
 logger = logging.getLogger(__name__)
 
-# Turkey has been on UTC+3 all year since 2016, as in `adapters.clock`.
-ISTANBUL = timezone(timedelta(hours=3), name="TRT")
 _DAY = timedelta(days=1)
 # A counter outlives its day by this margin, which covers clock skew between instances.
 _TTL_MARGIN_SECONDS = 3600
