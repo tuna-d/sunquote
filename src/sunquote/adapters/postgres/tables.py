@@ -33,3 +33,15 @@ quote_number_counters = Table(
     Column("year", Integer, primary_key=True, autoincrement=False),
     Column("last_sequence", Integer, nullable=False),
 )
+
+# Counters behind the rate limits (`CounterStore`), used when there is no Redis. A counter is
+# dead once `expires_at` has passed; the store resets it on its next increment and sweeps dead
+# rows when it starts a new one.
+rate_limit_counters = Table(
+    "rate_limit_counters",
+    metadata,
+    Column("key", Text, primary_key=True),
+    Column("count", Integer, nullable=False),
+    Column("expires_at", DateTime(timezone=True), nullable=False),
+)
+Index("ix_rate_limit_counters_expires_at", rate_limit_counters.c.expires_at)
