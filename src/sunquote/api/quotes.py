@@ -85,8 +85,8 @@ async def create_quote(
     unless `exchange_rate_override` is given.
 
     Each option also carries its own first-year Annual Savings, Payback Period, lifetime savings
-    and yearly cash flow, from the residential tariff (marginal Tariff Tiers). Escalation rates
-    are real, so all of these are in today's lira.
+    and yearly cash flow, from the residential tariff (marginal Tariff Tiers, applied per
+    month). Escalation rates are real, so all of these are in today's lira.
 
     The Quote also carries a `narrative`: the prose of its document (greeting, summary, a
     comparison of the two options, next steps) with every figure filled from the Quote. When a

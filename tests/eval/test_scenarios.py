@@ -15,8 +15,8 @@ def test_narrative_scenarios_cover_quote_outcomes() -> None:
     assert {quote.assumptions.consumption_derived_from_bill for quote in quotes} == {False, True}
 
     assumptions = [quote.assumptions for quote in quotes]
-    assert any(a.annual_consumption_kwh < a.tariff.tier_threshold_kwh_per_year for a in assumptions)
-    assert any(a.annual_consumption_kwh > a.tariff.tier_threshold_kwh_per_year for a in assumptions)
+    assert any(a.high_tier_consumption_kwh == 0 for a in assumptions)
+    assert any(a.high_tier_consumption_kwh > 0 for a in assumptions)
     assert len(quotes) == len({quote.quote_number for quote in quotes}) == 20
     assert len({scenario.name for scenario in SCENARIOS}) == len(quotes)
     assert len({build_narrative_context(quote) for quote in quotes}) == len(quotes)

@@ -222,7 +222,7 @@ def test_savings_come_from_the_shipped_tariff_and_financial_assumptions(
     assert first_year["export_income_try"] == 2553
     assert savings["first_year_annual_savings_try"] == 23598  # 23,597.79
     assumptions = quote["assumptions"]
-    assert assumptions["tariff"]["tier_threshold_kwh_per_year"] == "2920"
+    assert assumptions["tariff"]["tier_threshold_kwh_per_day"] == "8"
     assert assumptions["tariff"]["valid_from"] == "2026-04-04"
     assert assumptions["low_tier_consumption_kwh"] == 2920
     assert assumptions["high_tier_consumption_kwh"] == 3080

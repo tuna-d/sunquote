@@ -70,8 +70,10 @@ def with_change(path: str, value: Any) -> dict[str, Any]:
 
 
 def test_creates_the_same_system_options_from_a_bill_as_from_kwh(client: TestClient) -> None:
-    # Test tariff: 3,000 kWh at 3 TRY plus 3,000 kWh at 5 TRY costs 2,000 TRY/month.
-    response = client.post("/quotes", json=with_change("consumption", {"monthly_bill_try": 2000}))
+    # Test tariff: 500 kWh a month is above every monthly threshold, so the bill is
+    # (12 x 2,500 - 2 x 2,920) / 12 = 2,013.33... TRY (the digits a decimal string can hold).
+    bill = "2013.333333333333333333333333333"
+    response = client.post("/quotes", json=with_change("consumption", {"monthly_bill_try": bill}))
     direct = client.post("/quotes", json=valid_body())
 
     assert response.status_code == 201
@@ -79,11 +81,13 @@ def test_creates_the_same_system_options_from_a_bill_as_from_kwh(client: TestCli
     assert quote["system_options"] == direct.json()["system_options"]
     assumptions = quote["assumptions"]
     assert assumptions["consumption_derived_from_bill"] is True
-    assert assumptions["derived_monthly_consumption_kwh"] == "500"
+    assert Decimal(assumptions["derived_monthly_consumption_kwh"]) == pytest.approx(
+        Decimal(500), abs=Decimal("1e-20")
+    )
     assert assumptions["annual_consumption_kwh"] == 6000
     assert assumptions["submitted_request"]["consumption"] == {
         "monthly_consumption_kwh": None,
-        "monthly_bill_try": "2000",
+        "monthly_bill_try": bill,
     }
 
 
@@ -318,7 +322,7 @@ def test_money_rates_ratios_and_tariff_prices_are_decimal_strings_without_a_floa
 
     assert assumptions["exchange_rate"]["rate"] == "41.234567890123456789"
     assert assumptions["tariff"] == {
-        "tier_threshold_kwh_per_year": "3000",
+        "tier_threshold_kwh_per_day": "8",
         "low_tariff_try_per_kwh": "3",
         "high_tariff_try_per_kwh": "5",
         "export_price_try_per_kwh": "2",
@@ -741,16 +745,16 @@ def test_each_option_carries_first_year_savings_payback_and_lifetime_savings(
     matched, roof_max = client.post("/quotes", json=valid_body()).json()["system_options"]
 
     savings = matched["savings"]
-    assert savings["first_year_annual_savings_try"] == 22800
-    assert savings["payback_period_years"] == 6.7  # 6.6578, shown with one decimal
+    assert savings["first_year_annual_savings_try"] == 22960
+    assert savings["payback_period_years"] == 6.6  # 6.6132, shown with one decimal
     assert savings["payback_beyond_lifetime"] is False
-    assert savings["lifetime_savings_try"] == 665406  # 665,405.54, net of the replacement
+    assert savings["lifetime_savings_try"] == 670530  # 670,530.39, net of the replacement
     # The Roof-Max option has its own savings: 12,000 kWh produced, the whole 6,000 kWh bill
-    # saved (24,000) plus 6,000 kWh exported at 2 (12,000), and a 52,800 TRY inverter replacement.
+    # saved (24,160) plus 6,000 kWh exported at 2 (12,000), and a 52,800 TRY inverter replacement.
     roof_max_savings = roof_max["savings"]
-    assert roof_max_savings["first_year_annual_savings_try"] == 36000
-    assert roof_max_savings["payback_period_years"] == 7.3  # 7.2745
-    assert roof_max_savings["lifetime_savings_try"] == 1052169  # 1,052,168.94
+    assert roof_max_savings["first_year_annual_savings_try"] == 36160
+    assert roof_max_savings["payback_period_years"] == 7.2  # 7.2439
+    assert roof_max_savings["lifetime_savings_try"] == 1057294  # 1,057,293.79
     assert roof_max_savings["cash_flow"][11]["inverter_replacement_try"] == 52800
 
 
@@ -764,18 +768,18 @@ def test_the_yearly_cash_flow_is_returned_in_whole_lira_and_kwh(client: TestClie
         "production_kwh": 6000,
         "self_consumed_kwh": 4800,
         "exported_kwh": 1200,
-        "self_consumption_savings_try": 20400,
+        "self_consumption_savings_try": 20560,
         "export_income_try": 2400,
-        "annual_savings_try": 22800,
+        "annual_savings_try": 22960,
         "inverter_replacement_try": 0,
-        "net_savings_try": 22800,
-        "cumulative_net_savings_try": 22800,
+        "net_savings_try": 22960,
+        "cumulative_net_savings_try": 22960,
     }
-    # Year 12 carries the 31,200 TRY inverter replacement: 27,228.35 - 31,200 = -3,971.65.
+    # Year 12 carries the 31,200 TRY inverter replacement: 27,427.29 - 31,200 = -3,772.71.
     year_twelve = cash_flow[11]
     assert year_twelve["inverter_replacement_try"] == 31200
-    assert year_twelve["net_savings_try"] == -3972
-    assert year_twelve["cumulative_net_savings_try"] == 268242
+    assert year_twelve["net_savings_try"] == -3773
+    assert year_twelve["cumulative_net_savings_try"] == 270388
 
 
 def test_a_payback_beyond_the_lifetime_has_no_period_and_says_so(client: TestClient) -> None:
@@ -795,10 +799,10 @@ def test_assumptions_record_consumption_split_tariff_and_financial_inputs(
     assumptions = client.post("/quotes", json=valid_body()).json()["assumptions"]
 
     assert assumptions["annual_consumption_kwh"] == 6000
-    assert assumptions["low_tier_consumption_kwh"] == 3000
-    assert assumptions["high_tier_consumption_kwh"] == 3000
+    assert assumptions["low_tier_consumption_kwh"] == 2920
+    assert assumptions["high_tier_consumption_kwh"] == 3080
     assert assumptions["tariff"] == {
-        "tier_threshold_kwh_per_year": "3000",
+        "tier_threshold_kwh_per_day": "8",
         "low_tariff_try_per_kwh": "3",
         "high_tariff_try_per_kwh": "5",
         "export_price_try_per_kwh": "2",
