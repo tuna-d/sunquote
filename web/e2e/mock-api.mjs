@@ -2,13 +2,19 @@
 // smoke test makes with the same shapes as the real API (see src/api/schema.d.ts):
 //   POST /quotes        201 with the new Quote's id, or an application/problem+json 422
 //   GET  /quotes        the list, newest first
-//   GET  /quotes/{id}   404 problem (the detail page's own data is the detail ticket's to mock)
-// Figures are fixed placeholders: the mock computes nothing, like the web app itself.
+//   GET  /quotes/{id}   the full QuoteResponse of a Quote the mock created, else a 404 problem
+// Figures are fixed placeholders: the mock computes nothing, like the web app itself. The Quote
+// body is the detail page's Vitest fixture (type-checked against src/api/schema.d.ts there), which
+// Node loads as TypeScript by stripping its types.
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 
+import { quote as quoteFixture } from "../test/quoteFixture.ts";
+
 const port = Number(process.env.E2E_API_PORT ?? 8210);
 const quotes = [];
+/** The full QuoteResponse of every Quote created, by id. */
+const stored = new Map();
 
 function send(response, status, body, headers = {}) {
   response.writeHead(status, { "content-type": "application/json", ...headers });
@@ -51,11 +57,24 @@ const server = createServer(async (request, response) => {
       return problem(response, "address-not-found", 422, "Address not found");
     }
     const sequence = quotes.length + 1;
+    const id = randomUUID();
+    const quoteNumber = `SQ-2026-${String(sequence).padStart(6, "0")}`;
+    const createdAt = new Date().toISOString();
+    stored.set(
+      id,
+      quoteFixture({
+        id,
+        quote_number: quoteNumber,
+        created_at: createdAt,
+        is_sample: false,
+        customer: { name: body.customer.name, phone: null, email: null },
+      }),
+    );
     const quote = {
-      id: randomUUID(),
-      quote_number: `SQ-2026-${String(sequence).padStart(6, "0")}`,
+      id,
+      quote_number: quoteNumber,
       customer_name: body.customer.name,
-      created_at: new Date().toISOString(),
+      created_at: createdAt,
       province: "Ankara",
       district: "Çankaya",
       system_option_count: 2,
@@ -75,6 +94,10 @@ const server = createServer(async (request, response) => {
   }
 
   if (request.method === "GET" && url.pathname.startsWith("/quotes/")) {
+    const found = stored.get(url.pathname.slice("/quotes/".length));
+    if (found !== undefined) {
+      return send(response, 200, found);
+    }
     return problem(response, "quote-not-found", 404, "Quote not found");
   }
 

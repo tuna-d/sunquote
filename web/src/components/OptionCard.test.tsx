@@ -25,6 +25,18 @@ describe("OptionCard", () => {
     expect(within(card).getByText(`5,9 yıl`)).toBeInTheDocument();
   });
 
+  it("leads with the Payback Period as the headline figure, the price after it", () => {
+    const card = renderCard();
+
+    const headline = within(card).getByRole("heading", { name: /Seçenek 1/ }).nextElementSibling;
+    expect(headline).toHaveTextContent("5,9 yıl");
+    expect(headline).toHaveAttribute("data-headline");
+    expect(within(card).getByText("Geri ödeme süresi")).toBeInTheDocument();
+    const price = within(card).getByText("264.655 TL");
+    expect(headline!.compareDocumentPosition(price) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(headline).not.toContainElement(price);
+  });
+
   it("names the sizing strategy of the option", () => {
     expect(within(renderCard()).getByText(/Tüketime göre/)).toBeInTheDocument();
   });
@@ -79,7 +91,10 @@ describe("OptionCard", () => {
 
     const card = renderCard(never);
 
-    expect(within(card).getByText("25 yıl içinde geri ödenmiyor")).toBeInTheDocument();
+    const headline = within(card).getByRole("heading", { name: /Seçenek 1/ }).nextElementSibling;
+    expect(headline).toHaveTextContent("25 yıl içinde geri ödenmiyor");
+    expect(headline).toHaveAttribute("data-headline");
+    expect(within(card).getAllByText("25 yıl içinde geri ödenmiyor")).toHaveLength(1);
     expect(within(card).queryByText(/yıl$/)).not.toBeInTheDocument();
   });
 });

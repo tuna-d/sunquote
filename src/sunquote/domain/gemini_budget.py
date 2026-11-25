@@ -7,15 +7,13 @@ Istanbul and the time comes from the `Clock` port.
 """
 
 import logging
-from datetime import timedelta, timezone
+from datetime import timedelta
 
 from sunquote.domain.errors import GeminiBudgetExhaustedError
-from sunquote.domain.ports import Clock, CounterStore
+from sunquote.domain.ports import ISTANBUL, Clock, CounterStore
 
 logger = logging.getLogger(__name__)
 
-# Turkey has been on UTC+3 all year since 2016, as in `adapters.clock`.
-ISTANBUL = timezone(timedelta(hours=3), name="TRT")
 _DAY = timedelta(days=1)
 # A counter outlives its day by this margin, which covers clock skew between instances.
 _TTL_MARGIN_SECONDS = 3600
@@ -42,9 +40,10 @@ class GeminiBudget:
     async def spend(self) -> None:
         """Draw one request from today's budget, or raise `GeminiBudgetExhaustedError`.
 
-        When the counters cannot be reached the request goes through and the failure is logged:
-        abuse protection must not take the demo down with it, and Gemini's own quota still
-        answers with an error the callers already handle.
+        The budget fails closed: when the counters cannot be reached the request is refused too
+        (the failure is logged), because the free Gemini quota must never be exhausted by the
+        demo and an unchecked budget cannot be known to hold. The callers already degrade on
+        `GeminiBudgetExhaustedError` (a fixed Narrative, the Assistant's 503).
         """
         now = self._clock.now().astimezone(ISTANBUL)
         day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -55,7 +54,7 @@ class GeminiBudget:
                 ttl_seconds=int(seconds_left) + _TTL_MARGIN_SECONDS,
             )
         except Exception:
-            logger.warning("Gemini budget check failed; letting the request through", exc_info=True)
-            return
+            logger.warning("Gemini budget check failed; refusing the request", exc_info=True)
+            raise GeminiBudgetExhaustedError(self._daily_limit, counter_unavailable=True) from None
         if count > self._daily_limit:
             raise GeminiBudgetExhaustedError(self._daily_limit)

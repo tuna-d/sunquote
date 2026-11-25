@@ -2,7 +2,7 @@
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Protocol
 from uuid import UUID
@@ -52,6 +52,11 @@ class ExchangeRateProvider(Protocol):
         source cannot give an answer.
         """
         ...
+
+
+# Turkey has been on UTC+3 all year since 2016. A fixed offset avoids a tz database. The quote date
+# and the Gemini budget's day both run on it.
+ISTANBUL = timezone(timedelta(hours=3), name="TRT")
 
 
 class Clock(Protocol):

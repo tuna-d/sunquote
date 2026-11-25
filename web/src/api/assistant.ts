@@ -1,5 +1,5 @@
 import { type ApiClient, createApiClient } from "./client";
-import { describeProblem } from "./problem";
+import { PROBLEM_TYPES, parseRetryAfter, problemFrom } from "./problem";
 import type { AssistantResponse } from "./types";
 
 export interface ChatMessage {
@@ -23,11 +23,11 @@ export type AssistantResult =
   | { ok: true; response: AssistantResponse }
   | { ok: false; kind: AssistantFailure; retryAfterSeconds?: number };
 
-const KIND_BY_SLUG: Record<string, AssistantFailure> = {
-  "assistant-not-configured": "not-configured",
-  "assistant-unavailable": "unavailable",
-  "assistant-budget-exhausted": "budget-exhausted",
-  "validation-error": "invalid",
+const KIND_BY_TYPE: Record<string, AssistantFailure> = {
+  [PROBLEM_TYPES.assistantNotConfigured]: "not-configured",
+  [PROBLEM_TYPES.assistantUnavailable]: "unavailable",
+  [PROBLEM_TYPES.assistantBudgetExhausted]: "budget-exhausted",
+  [PROBLEM_TYPES.validation]: "invalid",
 };
 
 /** Sends the whole conversation. Never throws: the chat renders the failure. */
@@ -40,13 +40,15 @@ export async function sendAssistantMessages(
     if (data !== undefined && response.ok) {
       return { ok: true, response: data };
     }
-    const problem = describeProblem(response, error);
-    if (problem.status === 429 || problem.slug === "rate-limited") {
-      return problem.retryAfterSeconds === null
+    const problem = problemFrom(error, response);
+    // A 429 is a rate limit even when a proxy answered it without a problem body.
+    if (response.status === 429 || problem?.type === PROBLEM_TYPES.rateLimited) {
+      const retryAfterSeconds = parseRetryAfter(response.headers.get("Retry-After"));
+      return retryAfterSeconds === null
         ? { ok: false, kind: "rate-limited" }
-        : { ok: false, kind: "rate-limited", retryAfterSeconds: problem.retryAfterSeconds };
+        : { ok: false, kind: "rate-limited", retryAfterSeconds };
     }
-    return { ok: false, kind: (problem.slug && KIND_BY_SLUG[problem.slug]) || "error" };
+    return { ok: false, kind: (problem && KIND_BY_TYPE[problem.type]) || "error" };
   } catch {
     return { ok: false, kind: "network" };
   }

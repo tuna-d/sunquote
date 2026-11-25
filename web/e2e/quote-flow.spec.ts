@@ -2,9 +2,8 @@ import { expect, type Page, test } from "@playwright/test";
 
 // The smoke test: a Sales Rep opens the form from the masthead, creates a Quote, lands on its
 // page and finds it in the list. The API is `e2e/mock-api.mjs`.
-//
-// The mock answers `GET /quotes/{id}` with a 404 problem, so the first test only checks that the
-// browser reaches the Quote's route; what the detail page shows is the detail ticket's own test.
+// The mock answers `GET /quotes/{id}` with the full Quote it created, so the first test also
+// reads the detail page; an id it does not know must come back as a real HTTP 404.
 
 const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 
@@ -44,6 +43,10 @@ test("creates a Quote through the form, lands on its page and finds it in the li
   await page.getByRole("button", { name: /Teklifi oluştur/ }).click();
 
   await expect(page).toHaveURL(new RegExp(`/quotes/${UUID}$`));
+  await expect(page.getByRole("heading", { level: 1, name: customer })).toBeVisible();
+  await expect(page.getByText(/SQ-2026-\d{6}/).first()).toBeVisible();
+  await expect(page.getByRole("article", { name: /Seçenek 1/ })).toContainText("264.655");
+  await expect(page.getByRole("article", { name: /Seçenek 2/ })).toBeVisible();
 
   await nav.getByRole("link", { name: "Teklifler" }).click();
   await expect(page).toHaveURL(/\/quotes$/);
@@ -63,4 +66,12 @@ test("explains a problem the API answers with, on the field it belongs to", asyn
   await expect(address).toHaveAttribute("aria-invalid", "true");
   await expect(page.locator("form").getByRole("alert")).toContainText("Adres bulunamadı");
   await expect(page).toHaveURL(/\/quotes\/new$/);
+});
+
+test("answers HTTP 404 for a Quote id the API does not know", async ({ page }) => {
+  for (const id of ["11111111-2222-3333-4444-555555555555", "abc"]) {
+    const response = await page.goto(`/quotes/${id}`);
+    expect(response?.status()).toBe(404);
+    await expect(page.getByRole("heading", { level: 1, name: "Teklif bulunamadı" })).toBeVisible();
+  }
 });

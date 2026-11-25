@@ -48,7 +48,10 @@ build time as well, because the `/api/:path*` rewrite in `next.config.ts` is bak
   render a pure view (`QuoteListView`). The view is what the tests render.
 - **Quote detail page.** `src/app/quotes/[id]/page.tsx` loads one Quote (`src/api/quote.ts`, which
   tells `not-found` from `unavailable` and `error`) and renders `QuoteDetailView`. An unknown id goes
-  to `not-found.tsx` (`QuoteNotFound`). The rows that describe a System Option live in one list,
+  to `not-found.tsx` (`QuoteNotFound`) and answers a real HTTP 404, but only because nothing streams
+  before `notFound()` runs: **no `loading.tsx` may sit above `quotes/[id]`**, or Next starts the
+  response as 200 first. That is why the list's `loading.tsx` lives in the `(list)` route group next
+  to its page and the detail page has none (the e2e test checks the status). The rows that describe a System Option live in one list,
   `src/lib/optionRows.ts`: the option card (`OptionCard`) and Tablo 1 both read it, so a figure added
   there (Netted Share, NPV and IRR in #50) appears in both. Chart data is shaped in `src/lib/charts.ts`;
   the Recharts components (`ProductionChart`, `CumulativeSavingsChart`) are client components
