@@ -4,6 +4,7 @@ import {
   formatCapacityKwp,
   formatKwh,
   formatPaybackYears,
+  formatResultShare,
   formatShare,
   formatTry,
 } from "./format";
@@ -79,7 +80,7 @@ const financeRows: OptionRow[] = [
   {
     id: "netted-share",
     label: "Faturadan düşen üretim",
-    value: (option) => formatShare(option.netted_share),
+    value: (option) => formatResultShare(option.netted_share),
   },
   {
     id: "npv",
@@ -89,7 +90,7 @@ const financeRows: OptionRow[] = [
   {
     id: "irr",
     label: "İç verim oranı",
-    value: ({ savings: { irr } }) => (irr === null ? "Hesaplanamıyor" : formatShare(irr)),
+    value: ({ savings: { irr } }) => (irr === null ? "Hesaplanamıyor" : formatResultShare(irr)),
   },
 ];
 

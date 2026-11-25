@@ -73,7 +73,7 @@ describe("OptionCard", () => {
     system.savings = { ...system.savings, irr: 0 };
     const card = within(renderCard(system));
 
-    expect(card.getByText("%0")).toBeInTheDocument();
+    expect(card.getByText("%0,0")).toBeInTheDocument();
   });
 
   it("numbers the second option and shows its own figures", () => {

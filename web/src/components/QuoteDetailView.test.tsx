@@ -80,9 +80,9 @@ describe("QuoteDetailView System Options", () => {
     expect(cells(/Toplam \(KDV dahil\)/)).toEqual(["264.655 TL", "459.614 TL"]);
     expect(cells(/KDV \(%20\)/)).toEqual(["44.109 TL", "76.602 TL"]);
     expect(cells(/Geri ödeme süresi/)).toEqual(["5,9 yıl", "7,6 yıl"]);
-    expect(cells(/Faturadan düşen üretim/)).toEqual(["%92,5", "%64"]);
+    expect(cells(/Faturadan düşen üretim/)).toEqual(["%92,5", "%64,0"]);
     expect(cells(/Net bugünkü değer/)).toEqual(["384.984 TL", "520.000 TL"]);
-    expect(cells(/İç verim oranı/)).toEqual(["%17,1", "%15"]);
+    expect(cells(/İç verim oranı/)).toEqual(["%17,1", "%15,0"]);
   });
 });
 

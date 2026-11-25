@@ -8,6 +8,7 @@ import {
   formatMoney,
   formatPaybackYears,
   formatRate,
+  formatResultShare,
   formatShare,
   formatSite,
   formatTryPerKwh,
@@ -112,6 +113,15 @@ describe("formatShare", () => {
     expect(formatShare("0.0047")).toBe("%0,47");
     expect(formatShare("0.056")).toBe("%5,6");
     expect(formatShare("0")).toBe("%0");
+  });
+});
+
+describe("formatResultShare", () => {
+  it("always shows one decimal, so results compared side by side line up", () => {
+    expect(formatResultShare("0.925")).toBe("%92,5");
+    expect(formatResultShare("0.640")).toBe("%64,0");
+    expect(formatResultShare("0.15")).toBe("%15,0");
+    expect(formatResultShare("0")).toBe("%0,0");
   });
 });
 

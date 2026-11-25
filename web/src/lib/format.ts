@@ -51,6 +51,11 @@ export function formatCreatedAt(createdAt: string): string {
 
 const upToTwoDecimals = new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 2 });
 const percentFormat = new Intl.NumberFormat("tr-TR", { style: "percent", maximumFractionDigits: 2 });
+const resultPercentFormat = new Intl.NumberFormat("tr-TR", {
+  style: "percent",
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1,
+});
 const oneDecimal = new Intl.NumberFormat("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const rateFormat = new Intl.NumberFormat("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 4 });
 const coordinateFormat = new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 4 });
@@ -78,6 +83,11 @@ export function formatPaybackYears(years: number): string {
 /** A share the API sends as a number or decimal string, as a percentage: `%25`. */
 export function formatShare(share: number | string): string {
   return percentFormat.format(Number(share));
+}
+
+/** A result share shown next to another option's (Netted Share, IRR): always one decimal, `%64,0`. */
+export function formatResultShare(share: number | string): string {
+  return resultPercentFormat.format(Number(share));
 }
 
 const CURRENCY_SYMBOLS = { TRY: "TL", USD: "$", EUR: "€" } as const;
