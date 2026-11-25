@@ -27,6 +27,7 @@ from sunquote.adapters.gemini_transport import (
     post_generate_content,
 )
 from sunquote.domain.errors import NarrativeUnavailableError
+from sunquote.domain.gemini_budget import GeminiBudget
 from sunquote.domain.narrative import (
     COMPARISON_FIELD,
     LENGTH_LIMITS,
@@ -51,6 +52,18 @@ from sunquote.domain.placeholders import (
 # submitted content to improve Google's products, which is why only the anonymised context is
 # sent. Re-check before changing it: free-tier availability changes between models and dates.
 DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite"
+
+# Requests per day (RPD) of the default model's free tier, the base of the daily budget (ADR 0007).
+# PLACEHOLDER, not a published figure: Google's rate-limits page
+# (https://ai.google.dev/gemini-api/docs/rate-limits, checked 2026-11-25) says free-tier limits
+# vary by model and project and are shown only in AI Studio
+# (https://aistudio.google.com/rate-limit), and it lists no RPD for `gemini-3.5-flash-lite`.
+# 500 is a deliberately low estimate (earlier Flash-Lite models were documented at 1,000 RPD on
+# the free tier). The repo owner should replace it with the number AI Studio shows for the
+# project, or set SUNQUOTE_GEMINI_DAILY_REQUEST_BUDGET directly.
+GEMINI_FREE_TIER_REQUESTS_PER_DAY = 500
+# The demo spends at most 80% of the free tier a day and leaves the rest as headroom.
+DEFAULT_GEMINI_DAILY_REQUEST_BUDGET = GEMINI_FREE_TIER_REQUESTS_PER_DAY * 80 // 100
 
 # Placeholder names and units in the prompt come from the shared vocabulary, never from a copy.
 _OPTION_EXAMPLE = option_placeholder(1, OPTION_PLACEHOLDERS[0])
@@ -186,12 +199,14 @@ class GeminiNarrativeWriter:
         model: str,
         base_url: str = DEFAULT_GEMINI_BASE_URL,
         timeout_seconds: float,
+        budget: GeminiBudget | None = None,
     ) -> None:
         self._client = client
         self._api_key = api_key
         self._model = model
         self._endpoint = generate_content_endpoint(base_url, model)
         self._timeout_seconds = timeout_seconds
+        self._budget = budget
 
     def __repr__(self) -> str:
         return f"GeminiNarrativeWriter(model={self._model!r})"
@@ -215,6 +230,7 @@ class GeminiNarrativeWriter:
             body=body,
             timeout_seconds=self._timeout_seconds,
             fail=NarrativeUnavailableError,
+            budget=self._budget,
         )
 
 

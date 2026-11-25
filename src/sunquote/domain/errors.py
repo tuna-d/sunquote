@@ -72,6 +72,21 @@ class AssistantNotConfiguredError(DomainError):
         super().__init__("the assistant needs a Gemini API key (SUNQUOTE_GEMINI_API_KEY)")
 
 
+class GeminiBudgetExhaustedError(DomainError):
+    """The day's global Gemini request budget is spent (ADR 0007); no request went out.
+
+    Quote creation catches it and records a `fallback` Narrative with the reason. The quote
+    assistant lets it through when no Quote exists yet, and the API answers 503.
+    """
+
+    def __init__(self, daily_limit: int) -> None:
+        self.daily_limit = daily_limit
+        super().__init__(
+            f"the daily Gemini budget of {daily_limit} requests is spent; "
+            "it resets at 00:00 Europe/Istanbul"
+        )
+
+
 class UpstreamUnavailableError(DomainError):
     """An external service (PVGIS, ...) could not be reached or gave no usable answer.
 

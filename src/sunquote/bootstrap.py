@@ -36,6 +36,7 @@ from sunquote.adapters.redis_counter_store import RedisCounterStore
 from sunquote.adapters.tcmb import TcmbExchangeRateProvider
 from sunquote.api.dependencies import AppDependencies
 from sunquote.config import Settings
+from sunquote.domain.gemini_budget import GeminiBudget
 from sunquote.domain.ports import (
     ConversationModel,
     CounterStore,
@@ -69,7 +70,8 @@ def build_dependencies(
     the same way; with none, the assistant endpoint answers 503. `counter_store` holds the rate
     limit counters: with none they live in Redis when `SUNQUOTE_REDIS_URL` is set, otherwise in
     Postgres. When the repository is replaced and there is no counter store either, nothing is
-    limited (there is nowhere shared to count).
+    limited (there is nowhere shared to count), and neither is Gemini: the daily budget needs the
+    same store.
     """
     data_dir = settings.data_dir or default_data_dir()
     reference_data = ReferenceData(
@@ -96,22 +98,6 @@ def build_dependencies(
         base_url=settings.tcmb_base_url,
         timeout_seconds=settings.tcmb_timeout_seconds,
     )
-    if narrative_writer is None and settings.gemini_api_key is not None:
-        narrative_writer = GeminiNarrativeWriter(
-            client=http_client,
-            api_key=settings.gemini_api_key.get_secret_value(),
-            model=settings.gemini_model,
-            base_url=settings.gemini_base_url,
-            timeout_seconds=settings.gemini_timeout_seconds,
-        )
-    if conversation_model is None and settings.gemini_api_key is not None:
-        conversation_model = GeminiConversationModel(
-            client=http_client,
-            api_key=settings.gemini_api_key.get_secret_value(),
-            model=settings.gemini_model,
-            base_url=settings.gemini_base_url,
-            timeout_seconds=settings.gemini_timeout_seconds,
-        )
     startup: tuple[Callable[[], Awaitable[None]], ...] = ()
     closers: tuple[Callable[[], Awaitable[None]], ...] = (http_client.aclose,)
     if settings.redis_url:
@@ -138,6 +124,31 @@ def build_dependencies(
             startup = (partial(upgrade_to_head, engine),)
 
     clock = SystemClock()
+    # One budget for every Gemini request; without a shared counter store there is nowhere to
+    # count, so nothing is budgeted (as with the rate limits).
+    gemini_budget = (
+        GeminiBudget(counter_store, clock, daily_limit=settings.gemini_daily_request_budget)
+        if counter_store is not None
+        else None
+    )
+    if narrative_writer is None and settings.gemini_api_key is not None:
+        narrative_writer = GeminiNarrativeWriter(
+            client=http_client,
+            api_key=settings.gemini_api_key.get_secret_value(),
+            model=settings.gemini_model,
+            base_url=settings.gemini_base_url,
+            timeout_seconds=settings.gemini_timeout_seconds,
+            budget=gemini_budget,
+        )
+    if conversation_model is None and settings.gemini_api_key is not None:
+        conversation_model = GeminiConversationModel(
+            client=http_client,
+            api_key=settings.gemini_api_key.get_secret_value(),
+            model=settings.gemini_model,
+            base_url=settings.gemini_base_url,
+            timeout_seconds=settings.gemini_timeout_seconds,
+            budget=gemini_budget,
+        )
     service = QuoteService(
         quote_repository=quote_repository,
         geocoder=geocoder,

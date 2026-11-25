@@ -145,3 +145,14 @@ def test_the_redis_timeout_defaults_to_a_quarter_second_and_must_be_positive(
     monkeypatch.setenv("SUNQUOTE_REDIS_TIMEOUT_SECONDS", "0")
     with pytest.raises(ValidationError):
         Settings()
+
+
+def test_the_daily_gemini_budget_is_configurable_and_at_least_one_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SUNQUOTE_GEMINI_DAILY_REQUEST_BUDGET", "120")
+    assert Settings().gemini_daily_request_budget == 120
+
+    monkeypatch.setenv("SUNQUOTE_GEMINI_DAILY_REQUEST_BUDGET", "0")
+    with pytest.raises(ValidationError):
+        Settings()
