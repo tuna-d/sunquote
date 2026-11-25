@@ -123,3 +123,25 @@ def test_the_assistant_time_budget_defaults_to_thirty_seconds_and_must_be_positi
     monkeypatch.setenv("SUNQUOTE_ASSISTANT_TIMEOUT_SECONDS", "0")
     with pytest.raises(ValidationError):
         Settings()
+
+
+def test_the_database_keeps_a_client_pool_by_default_and_can_drop_it_for_serverless(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert Settings().database_client_pool is True
+
+    monkeypatch.setenv("SUNQUOTE_DATABASE_CLIENT_POOL", "false")
+    assert Settings().database_client_pool is False
+
+
+def test_the_redis_timeout_defaults_to_a_quarter_second_and_must_be_positive(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert Settings().redis_timeout_seconds == 0.25
+
+    monkeypatch.setenv("SUNQUOTE_REDIS_TIMEOUT_SECONDS", "1.5")
+    assert Settings().redis_timeout_seconds == 1.5
+
+    monkeypatch.setenv("SUNQUOTE_REDIS_TIMEOUT_SECONDS", "0")
+    with pytest.raises(ValidationError):
+        Settings()
