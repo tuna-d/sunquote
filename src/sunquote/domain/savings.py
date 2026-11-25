@@ -1,10 +1,12 @@
 """Annual Savings under Monthly Netting, the yearly cash flow and the Payback Period of one
-System Option (ADR 0005).
+System Option (ADR 0005), and its Net Present Value and Internal Rate of Return (ADR 0006).
 
-Everything is TRY in today's lira: the escalation rates are real (ADR 0003), and the Payback
-Period is undiscounted. Nothing here rounds; rounding is the display policy.
+Everything is TRY in today's lira: the escalation rates are real (ADR 0003), the Discount Rate
+is real too, and the Payback Period is undiscounted. Nothing here rounds; rounding is the
+display policy.
 """
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 
@@ -14,6 +16,12 @@ from sunquote.domain.money import Currency, Money
 from sunquote.domain.tariff import MONTHS_PER_YEAR, ResidentialTariff
 
 _ZERO_TRY = Money(Decimal(0), Currency.TRY)
+
+# The IRR is found by bisection until the bracket is this narrow; the bracket is widened by
+# doubling its upper end, up to _IRR_SEARCH_LIMIT (100,000% a year), beyond which there is no IRR
+# worth reporting.
+_IRR_TOLERANCE = Decimal("0.0001")
+_IRR_SEARCH_LIMIT = Decimal(1000)
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,6 +53,10 @@ class SavingsAnalysis:
     recovered within the lifetime. `inverter_replaced_within_lifetime` says whether the cash
     flow contains an inverter replacement, which it does only when the replacement year is
     within the lifetime.
+
+    `npv` is the Net Present Value at the real Discount Rate and `irr` the Internal Rate of
+    Return (a share per year, 0.12 is 12%); both are unrounded. `irr` is None exactly when the
+    total price is not recovered within the lifetime, the case of `payback_beyond_lifetime`.
     """
 
     cash_flow: tuple[YearlyCashFlow, ...]
@@ -54,6 +66,8 @@ class SavingsAnalysis:
     payback_years: Decimal | None
     payback_beyond_lifetime: bool
     inverter_replaced_within_lifetime: bool
+    npv: Money
+    irr: Decimal | None
 
 
 def analyze_savings(
@@ -77,6 +91,10 @@ def analyze_savings(
     (1 + equipment escalation)^(year - 1) and is subtracted from that year's net savings.
     Payback is (n - 1) + remaining / net savings of the first year n whose cumulative net
     savings reach `total_price_incl_vat`.
+
+    NPV = -total price + sum over the lifetime of net savings(n) / (1 + r)^n, with r the real
+    Discount Rate. The IRR is the r at which that NPV is zero, found by bisection to 0.0001;
+    it is absent when the NPV at r = 0 is negative (the price is not recovered).
     """
     if len(year1_monthly_production_kwh) != MONTHS_PER_YEAR:
         raise ValueError("savings need exactly 12 monthly production values")
@@ -150,6 +168,7 @@ def analyze_savings(
             )
         )
 
+    yearly_net_savings = [row.net_savings.amount for row in rows]
     return SavingsAnalysis(
         cash_flow=tuple(rows),
         first_year_annual_savings=rows[0].annual_savings,
@@ -160,7 +179,53 @@ def analyze_savings(
         inverter_replaced_within_lifetime=(
             financial.inverter_replacement_year <= financial.lifetime_years
         ),
+        npv=Money(
+            _net_present_value(
+                yearly_net_savings, total_price.amount, financial.discount_rate_real
+            ),
+            Currency.TRY,
+        ),
+        irr=_internal_rate_of_return(yearly_net_savings, total_price.amount),
     )
+
+
+def _net_present_value(
+    net_savings: Sequence[Decimal], total_price_try: Decimal, rate: Decimal
+) -> Decimal:
+    """-price at year 0 plus each year's net savings discounted by (1 + rate)^year."""
+    return -total_price_try + sum(
+        (amount / (1 + rate) ** year for year, amount in enumerate(net_savings, start=1)),
+        start=Decimal(0),
+    )
+
+
+def _internal_rate_of_return(
+    net_savings: Sequence[Decimal], total_price_try: Decimal
+) -> Decimal | None:
+    """The rate at which the NPV is zero, to `_IRR_TOLERANCE`; None when it is negative at 0.
+
+    The NPV falls as the rate rises, so the root is bracketed by [0, upper] where the NPV is
+    non-negative at 0 and negative at `upper`, and the bracket is halved until it is narrow.
+    """
+    npv_at_zero = _net_present_value(net_savings, total_price_try, Decimal(0))
+    if npv_at_zero < 0:
+        return None
+    if npv_at_zero == 0:
+        return Decimal(0)
+    lower = Decimal(0)
+    upper = Decimal(1)
+    while _net_present_value(net_savings, total_price_try, upper) > 0:
+        lower = upper
+        upper *= 2
+        if upper > _IRR_SEARCH_LIMIT:
+            return None
+    while upper - lower > _IRR_TOLERANCE:
+        middle = (lower + upper) / 2
+        if _net_present_value(net_savings, total_price_try, middle) > 0:
+            lower = middle
+        else:
+            upper = middle
+    return (lower + upper) / 2
 
 
 def _in_try(money: Money) -> Money:

@@ -65,6 +65,9 @@ class OptionView:
     first_year_savings: str
     payback: str
     payback_beyond_lifetime: bool
+    npv: str
+    irr: str
+    irr_absent: bool
     lifetime_savings: str
     lifetime_years: int
 
@@ -79,6 +82,7 @@ def _option_view(number: int, option: SystemOption, recorded: QuoteAssumptions) 
     peak = max(monthly) or 1
     savings = option.savings
     payback = savings.payback_years
+    irr = savings.irr
     return OptionView(
         number=number,
         strategy_title=STRATEGY_TITLES[option.strategy],
@@ -113,6 +117,9 @@ def _option_view(number: int, option: SystemOption, recorded: QuoteAssumptions) 
             "" if payback is None else turkish.format_decimal(rounding.round_payback_years(payback))
         ),
         payback_beyond_lifetime=savings.payback_beyond_lifetime,
+        npv=display_try(savings.npv.amount),
+        irr="" if irr is None else turkish.format_percent(irr),
+        irr_absent=irr is None,
         lifetime_savings=display_try(savings.lifetime_savings.amount),
         lifetime_years=recorded.financial.lifetime_years,
     )

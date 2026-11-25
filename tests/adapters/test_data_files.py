@@ -363,6 +363,29 @@ def test_shipped_financial_assumptions_match_the_research_note() -> None:
     assert financial.equipment_escalation_rate_real == Decimal("0")
     assert financial.lifetime_years == 25
     assert financial.inverter_replacement_year == 12
+    assert financial.discount_rate_real == Decimal("0.056")
+
+
+def test_the_discount_rate_is_a_derived_value_with_its_treasury_auction_source() -> None:
+    """Research note section 9.3: a rounded real yield of a CPI-linked Treasury bond auction."""
+    entry = tomllib.loads(ASSUMPTIONS_FILE.read_text(encoding="utf-8"))["discount_rate_real"]
+
+    assert entry["kind"] == "derived"
+    assert entry["date"] == date(2026, 6, 8)
+    assert "TRT080530T27" in entry["source"]
+    assert "Unverified against hmb.gov.tr" in entry["source"]
+
+
+def test_a_discount_rate_is_required(tmp_path: Path) -> None:
+    text = ASSUMPTIONS_FILE.read_text(encoding="utf-8")
+    head, separator, tail = text.partition("[discount_rate_real]")
+    assert separator
+    assert "[" not in tail.split("\n", 1)[-1]  # it is the last entry of the file
+    file = tmp_path / "assumptions.toml"
+    file.write_text(head, encoding="utf-8")
+
+    with pytest.raises(ValidationError, match="discount_rate_real"):
+        load_financial_assumptions(file)
 
 
 def test_every_financial_assumption_names_its_source_kind_and_date() -> None:
@@ -373,6 +396,7 @@ def test_every_financial_assumption_names_its_source_kind_and_date() -> None:
         "equipment_escalation_rate_real",
         "lifetime_years",
         "inverter_replacement_year",
+        "discount_rate_real",
     ):
         entry = data[key]
         assert entry["source"].strip(), key

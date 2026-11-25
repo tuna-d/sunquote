@@ -155,6 +155,7 @@ class _AssumptionsFile(_Strict):
     equipment_escalation_rate_real: _Rate
     lifetime_years: _PositiveYears
     inverter_replacement_year: _PositiveYears
+    discount_rate_real: _Rate
 
 
 class _TariffMeta(_Strict):
@@ -252,6 +253,7 @@ def load_financial_assumptions(path: Path) -> FinancialAssumptions:
         equipment_escalation_rate_real=file.equipment_escalation_rate_real.value,
         lifetime_years=file.lifetime_years.value,
         inverter_replacement_year=file.inverter_replacement_year.value,
+        discount_rate_real=file.discount_rate_real.value,
     )
 
 

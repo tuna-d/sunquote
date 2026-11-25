@@ -387,12 +387,24 @@ class SavingsResponse(BaseModel):
     """What a System Option saves the Customer, in today's lira.
 
     `payback_period_years` is null, with `payback_beyond_lifetime` true, when the total price
-    including VAT is not recovered within the lifetime.
+    including VAT is not recovered within the lifetime. `npv_try` is the Net Present Value at the
+    real Discount Rate of the Assumptions (negative when the option earns less than that rate).
+    `irr` is the Internal Rate of Return as a ratio (0.152 is 15.2%); it is null in the same case
+    as the Payback Period, when the total price is not recovered within the lifetime. The
+    Payback Period stays the headline figure and is undiscounted.
     """
 
     first_year_annual_savings_try: int
     payback_period_years: JsonNumber | None
     payback_beyond_lifetime: bool
+    npv_try: int = Field(
+        description="Net Present Value in whole lira at the real Discount Rate, after the price."
+    )
+    irr: JsonNumber | None = Field(
+        description=(
+            "Internal Rate of Return per year as a ratio; null when the price is not recovered."
+        )
+    )
     lifetime_savings_try: int = Field(
         description="Total net savings, after the inverter replacement."
     )
@@ -432,13 +444,14 @@ class TariffResponse(BaseModel):
 
 
 class FinancialResponse(BaseModel):
-    """Both escalation rates are real (inflation-adjusted): all figures are in today's lira.
-    The rates are decimal strings (0.02 is 2%)."""
+    """Both escalation rates and the Discount Rate are real (inflation-adjusted): all figures
+    are in today's lira. The rates are decimal strings (0.02 is 2%)."""
 
     tariff_escalation_rate_real: Decimal
     equipment_escalation_rate_real: Decimal
     lifetime_years: int
     inverter_replacement_year: int
+    discount_rate_real: Decimal
 
 
 class AssumptionsResponse(BaseModel):
@@ -566,6 +579,8 @@ def _savings_response(savings: SavingsAnalysis) -> SavingsResponse:
         first_year_annual_savings_try=_whole_lira(savings.first_year_annual_savings),
         payback_period_years=None if payback is None else rounding.round_payback_years(payback),
         payback_beyond_lifetime=savings.payback_beyond_lifetime,
+        npv_try=_whole_lira(savings.npv),
+        irr=None if savings.irr is None else rounding.round_share(savings.irr),
         lifetime_savings_try=_whole_lira(savings.lifetime_savings),
         cash_flow=[_cash_flow_row(row) for row in savings.cash_flow],
     )
@@ -588,6 +603,7 @@ def _financial_response(financial: FinancialAssumptions) -> FinancialResponse:
         equipment_escalation_rate_real=financial.equipment_escalation_rate_real,
         lifetime_years=financial.lifetime_years,
         inverter_replacement_year=financial.inverter_replacement_year,
+        discount_rate_real=financial.discount_rate_real,
     )
 
 

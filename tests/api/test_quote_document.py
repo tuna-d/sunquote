@@ -217,6 +217,57 @@ def test_the_document_says_what_share_comes_off_the_bill_and_the_price_of_the_re
     assert "Öz tüketim" not in page
 
 
+def test_the_document_shows_npv_and_irr_next_to_the_payback_period(client: TestClient) -> None:
+    page = document(client, create(client))
+
+    # 210,530.83 TRY and 15.17% (Consumption-Matched), 294,306.01 TRY and 13.40% (Roof-Max), at
+    # the test Discount Rate of 5% (see tests/api/test_quotes.py).
+    for text in (
+        "Net bugünkü değer",
+        "İç verim oranı",
+        "210.531 TL",
+        "294.306 TL",
+        "%15,2",
+        "%13,4",
+    ):
+        assert text in page, text
+    assert page.index("Geri ödeme süresi") < page.index("Net bugünkü değer")
+    assert page.index("Net bugünkü değer") < page.index("İç verim oranı")
+
+
+def test_the_document_explains_npv_and_irr_in_one_line_with_the_discount_rate(
+    client: TestClient,
+) -> None:
+    page = document(client, create(client))
+
+    assert "iskonto oranı" in page
+    assert "%5 reel" in page  # the test Discount Rate
+    assert "Geri ödeme süresi iskontosuzdur" in page  # the headline figure stays undiscounted
+
+
+def test_the_assumptions_section_names_the_discount_rate(client: TestClient) -> None:
+    page = document(client, create(client))
+
+    assert "İskonto oranı" in page
+    assert "%5" in page
+
+
+def test_an_irr_that_does_not_exist_is_said_so_next_to_a_negative_npv(client: TestClient) -> None:
+    body = valid_body()
+    body["exchange_rate_override"] = {"rate": 100000, "date": "2026-11-23"}
+    quote = create(client, body)
+    savings = quote["system_options"][0]["savings"]
+    assert savings["irr"] is None
+    assert savings["npv_try"] < 0
+
+    page = document(client, quote)
+
+    assert "İç verim oranı" in page
+    assert "hesaplanamıyor" in page
+    assert turkish.format_try(savings["npv_try"]) in page
+    assert "None" not in page
+
+
 def test_the_document_says_lifetime_figures_are_in_todays_lira(client: TestClient) -> None:
     page = document(client, create(client))
 
