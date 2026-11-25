@@ -4,3 +4,6 @@ import type { components } from "./schema";
 export type Schemas = components["schemas"];
 export type QuoteListItem = Schemas["QuoteListItem"];
 export type QuoteListResponse = Schemas["QuoteListResponse"];
+export type AssistantResponse = Schemas["AssistantResponse"];
+export type MissingField = Schemas["MissingField"];
+export type QuoteReference = Schemas["QuoteReference"];
