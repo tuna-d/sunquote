@@ -144,3 +144,15 @@ export const MONTH_NAMES = [
   "Kasım",
   "Aralık",
 ] as const;
+
+/** A wait from `Retry-After`, rounded up to the unit it reads best in: `30 dakika`. */
+export function formatWait(seconds: number): string {
+  const whole = Math.max(1, Math.ceil(seconds));
+  if (whole < 60) {
+    return `${whole} saniye`;
+  }
+  if (whole < 3600) {
+    return `${Math.ceil(whole / 60)} dakika`;
+  }
+  return `${Math.ceil(whole / 3600)} saat`;
+}

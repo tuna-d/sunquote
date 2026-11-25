@@ -15,6 +15,7 @@ import {
   formatLocation,
   formatOptionCount,
   formatTry,
+  formatWait,
 } from "./format";
 
 const NBSP = "\u00a0";
@@ -153,5 +154,22 @@ describe("MONTH_LABELS", () => {
     expect(MONTH_LABELS).toHaveLength(12);
     expect(MONTH_LABELS[0]).toBe("Oca");
     expect(MONTH_LABELS[11]).toBe("Ara");
+  });
+});
+
+describe("formatWait", () => {
+  it("rounds a wait up to the unit it reads best in", () => {
+    expect(formatWait(1)).toBe("1 saniye");
+    expect(formatWait(45)).toBe("45 saniye");
+    expect(formatWait(60)).toBe("1 dakika");
+    expect(formatWait(61)).toBe("2 dakika");
+    expect(formatWait(1800)).toBe("30 dakika");
+    expect(formatWait(3599)).toBe("60 dakika");
+    expect(formatWait(3600)).toBe("1 saat");
+    expect(formatWait(5400)).toBe("2 saat");
+  });
+
+  it("treats no wait as a moment", () => {
+    expect(formatWait(0)).toBe("1 saniye");
   });
 });

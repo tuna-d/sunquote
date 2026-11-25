@@ -11,6 +11,7 @@ figure**; `Intl` with `tr-TR` formats only values the API gives raw (`src/lib/fo
 | `npm run dev` | Dev server on port 3000 (`npm run dev -- --port 3101` for another). |
 | `npm run lint` / `npm run typecheck` / `npm test` | ESLint, `tsc --noEmit`, Vitest. |
 | `npm run build` | Production build (downloads the Google fonts, so it needs internet). |
+| `npm run e2e` | The Playwright smoke test (`e2e/`): the web app in dev mode against a mocked API (`e2e/mock-api.mjs`). Needs `npx playwright install chromium` once. `E2E_WEB_PORT` / `E2E_API_PORT` move its two ports (defaults 3210 / 8210). |
 | `npm run api:sync` | Re-export the API's OpenAPI schema to `openapi.json` and regenerate `src/api/schema.d.ts`. Run it after any API schema change and commit both files; the CI web job fails on a diff. |
 
 Set `SUNQUOTE_API_URL` (default `http://localhost:8000`) to point at the API. Next reads it at
@@ -29,9 +30,14 @@ build time as well, because the `/api/:path*` rewrite in `next.config.ts` is bak
   [`docs/design/tokens-2c.md`](../docs/design/tokens-2c.md). Gold is a fill behind ink text,
   never text, a line or a chart series. No component library theme; Radix unstyled primitives
   are fine.
-- **Masthead sections.** `src/lib/navigation.ts` lists them. `Yeni teklif` and `Asistan` are
-  `enabled: false` (shown struck through, not linked) until their routes exist: flip the flag
-  in #45 and #46.
+- **Masthead sections.** `src/lib/navigation.ts` lists them. `Yeni teklif` (#45) and `Asistan` (#46) are both enabled. A section whose route is not built yet
+  is `enabled: false`: shown struck through, not linked.
+- **Shared by the form and the Assistant.** `src/components/demo-banner.tsx` is the public-demo
+  warning: put it above the fields. `src/api/problem.ts` reads `application/problem+json`:
+  `problemFrom(error, response)` on what the typed client returns, `PROBLEM_TYPES` for the
+  `urn:sunquote:problem:*` types and `parseRetryAfter` for a 429's wait (`formatWait` in
+  `src/lib/format.ts` writes it in Turkish). The form's own rules (the API's bounds, the request,
+  the failure messages) are in `src/lib/quote-form.ts`.
 - **API client.** `src/api/client.ts` makes the typed `openapi-fetch` client over the
   generated `src/api/schema.d.ts`. In the browser its base URL is `/api` (the rewrite); on the
   server it is `SUNQUOTE_API_URL`. `src/api/types.ts` names the schemas
@@ -58,5 +64,6 @@ are loaded). Tests sit next to the code (`*.test.ts(x)`). They drive the public 
 render the view and assert what the Sales Rep reads, or call a helper. API loaders are tested
 with a fake `fetch` passed to `createApiClient` (see `src/api/quotes.test.ts`); no test calls
 the network. `next/navigation` is mocked where a component needs the router
-(`MainNav.test.tsx`). The Playwright smoke test (#45) goes in a separate `e2e/` folder and its
-own CI step, marked in `.github/workflows/ci.yml`.
+(`MainNav.test.tsx`). The form's tests (`QuoteForm.test.tsx`) pass a client over a fake `fetch` and mock the router.
+The Playwright smoke test lives in `e2e/` with its own CI step in `.github/workflows/ci.yml`; a
+page ticket that needs another mocked route adds it to `e2e/mock-api.mjs`.
