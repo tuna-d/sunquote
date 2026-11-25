@@ -75,8 +75,8 @@ export function formatPaybackYears(years: number): string {
   return `${oneDecimal.format(years)}${NBSP}yıl`;
 }
 
-/** A share the API sends as a decimal string (`0.25`) as a percentage: `%25`. */
-export function formatShare(share: string): string {
+/** A share the API sends as a number or decimal string, as a percentage: `%25`. */
+export function formatShare(share: number | string): string {
   return percentFormat.format(Number(share));
 }
 

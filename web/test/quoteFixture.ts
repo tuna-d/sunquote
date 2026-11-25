@@ -69,6 +69,7 @@ export function secondOption(): SystemOptionResponse {
     capacity_kwp: 9.68,
     binding_limit: "roof",
     annual_production_kwh: 15851,
+    netted_share: 0.64,
     monthly_production_kwh: MONTHLY_1.map((production_kwh, index) => ({
       month: index + 1,
       production_kwh: Math.round(production_kwh * 1.57),

@@ -69,7 +69,7 @@ describe("QuoteDetailView System Options", () => {
     ]);
   });
 
-  it("compares the options in Tablo 1 down to the VAT and the payback", () => {
+  it("compares the prices and finance figures for both options in Tablo 1", () => {
     show();
 
     const table = screen.getByRole("table", { name: /Tablo 1/ });
@@ -80,6 +80,9 @@ describe("QuoteDetailView System Options", () => {
     expect(cells(/Toplam \(KDV dahil\)/)).toEqual(["264.655 TL", "459.614 TL"]);
     expect(cells(/KDV \(%20\)/)).toEqual(["44.109 TL", "76.602 TL"]);
     expect(cells(/Geri ödeme süresi/)).toEqual(["5,9 yıl", "7,6 yıl"]);
+    expect(cells(/Faturadan düşen üretim/)).toEqual(["%92,5", "%64"]);
+    expect(cells(/Net bugünkü değer/)).toEqual(["384.984 TL", "520.000 TL"]);
+    expect(cells(/İç verim oranı/)).toEqual(["%17,1", "%15"]);
   });
 });
 
@@ -131,6 +134,8 @@ describe("QuoteDetailView Assumptions", () => {
     expect(valueOf("Düşük kademe", b)).toHaveTextContent("3,24 TL/kWh · 2.920 kWh");
     expect(valueOf("Yüksek kademe", b)).toHaveTextContent("4,86 TL/kWh · 7.280 kWh");
     expect(valueOf("İhracat fiyatı", b)).toHaveTextContent("1,24 TL/kWh");
+    expect(valueOf("Kademe sınırı", b)).toHaveTextContent("8 kWh/gün");
+    expect(valueOf("İskonto oranı (reel)", b)).toHaveTextContent("%5,6");
     expect(valueOf("Montaj malzemesi", b)).toHaveTextContent("120 $/kWp");
     expect(valueOf("İşçilik", b)).toHaveTextContent("4.000 TL/kWp");
     expect(valueOf("Sabit proje maliyeti", b)).toHaveTextContent("20.000 TL");

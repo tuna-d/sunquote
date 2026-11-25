@@ -10,8 +10,7 @@ import {
 
 /**
  * The rows that describe a System Option, in one place: the option card and the comparison
- * table both read them, so a figure added here (Netted Share, NPV, IRR: ticket #50) shows up
- * in both with one entry. Every value is the API's own figure, only formatted.
+ * table both read them. Every value is the API's own figure, only formatted.
  */
 
 export type OptionContext = { vatRate: string; lifetimeYears: number };
@@ -76,8 +75,33 @@ const firstYearSavings: OptionRow = {
   value: (option) => formatTry(option.savings.first_year_annual_savings_try),
 };
 
+const financeRows: OptionRow[] = [
+  {
+    id: "netted-share",
+    label: "Faturadan düşen üretim",
+    value: (option) => formatShare(option.netted_share),
+  },
+  {
+    id: "npv",
+    label: "Net bugünkü değer",
+    value: (option) => formatTry(option.savings.npv_try),
+  },
+  {
+    id: "irr",
+    label: "İç verim oranı",
+    value: ({ savings: { irr } }) => (irr === null ? "Hesaplanamıyor" : formatShare(irr)),
+  },
+];
+
 /** The details under the headline figures of an option card. */
-export const CARD_ROWS: OptionRow[] = [capacity, panel, inverter, production, firstYearSavings];
+export const CARD_ROWS: OptionRow[] = [
+  ...financeRows,
+  capacity,
+  panel,
+  inverter,
+  production,
+  firstYearSavings,
+];
 
 /** The comparison table (Tablo 1). `total` and `payback` are styled as the key rows. */
 export const COMPARISON_ROWS: (OptionRow & { emphasis?: boolean })[] = [
@@ -113,5 +137,6 @@ export const COMPARISON_ROWS: (OptionRow & { emphasis?: boolean })[] = [
     label: "Geri ödeme süresi",
     value: (option, context) => paybackText(option, context.lifetimeYears),
   },
+  ...financeRows,
 ];
 

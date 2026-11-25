@@ -29,6 +29,41 @@ describe("OptionCard", () => {
     expect(within(renderCard()).getByText(/Tüketime göre/)).toBeInTheDocument();
   });
 
+  it("shows the Netted Share, NPV and IRR for the option", () => {
+    const card = within(renderCard());
+
+    expect(card.getByText("Faturadan düşen üretim")).toBeInTheDocument();
+    expect(card.getByText("%92,5")).toBeInTheDocument();
+    expect(card.getByText("Net bugünkü değer")).toBeInTheDocument();
+    expect(card.getByText("384.984 TL")).toBeInTheDocument();
+    expect(card.getByText("İç verim oranı")).toBeInTheDocument();
+    expect(card.getByText("%17,1")).toBeInTheDocument();
+  });
+
+  it("shows when IRR is unavailable and still displays a negative NPV", () => {
+    const system = option();
+    system.savings = {
+      ...system.savings,
+      npv_try: -45000,
+      irr: null,
+      payback_period_years: null,
+      payback_beyond_lifetime: true,
+    };
+    const card = within(renderCard(system));
+
+    expect(card.getByText("İç verim oranı")).toBeInTheDocument();
+    expect(card.getByText("Hesaplanamıyor")).toBeInTheDocument();
+    expect(card.getByText("-45.000 TL")).toBeInTheDocument();
+  });
+
+  it("displays a zero IRR as a percentage", () => {
+    const system = option();
+    system.savings = { ...system.savings, irr: 0 };
+    const card = within(renderCard(system));
+
+    expect(card.getByText("%0")).toBeInTheDocument();
+  });
+
   it("numbers the second option and shows its own figures", () => {
     const card = renderCard(secondOption(), 2);
 
