@@ -129,6 +129,7 @@ class QuoteService:
         request: QuoteRequest,
         *,
         exchange_rate_override: ExchangeRateOverride | None = None,
+        is_sample: bool = False,
     ) -> StoredQuote:
         site = request.site
         coordinates = site.coordinates
@@ -176,6 +177,7 @@ class QuoteService:
             quote,
             district=geocoding_result.district if geocoding_result else None,
             province=geocoding_result.province if geocoding_result else None,
+            is_sample=is_sample,
         )
 
     async def _exchange_rate(

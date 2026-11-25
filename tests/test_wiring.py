@@ -219,13 +219,13 @@ def test_savings_come_from_the_shipped_tariff_and_financial_assumptions(
     assert len(savings["cash_flow"]) == 25
     # 3.96 kWp x 1,472.13 = 5,829.63 kWh; 85% self-consumed = 4,955.19 kWh of the 6,000 kWh a
     # year. The grid bill (2,920 kWh at 3.24 + 3,080 kWh at 4.86 = 24,429.60) drops to
-    # 1,044.81 kWh x 3.24 = 3,385.19: 21,044.41 saved. The other 874.45 kWh export at 2.92.
+    # 1,044.81 kWh x 3.24 = 3,385.19: 21,044.41 saved. The other 874.45 kWh export at 1.24.
     first_year = savings["cash_flow"][0]
     assert first_year["self_consumed_kwh"] == 4955
     assert first_year["exported_kwh"] == 874
     assert first_year["self_consumption_savings_try"] == 21044
-    assert first_year["export_income_try"] == 2553
-    assert savings["first_year_annual_savings_try"] == 23598  # 23,597.79
+    assert first_year["export_income_try"] == 1084  # 874.45 x 1.24 = 1,084.32
+    assert savings["first_year_annual_savings_try"] == 22129  # 22,128.73
     assumptions = quote["assumptions"]
     assert assumptions["tariff"]["tier_threshold_kwh_per_day"] == "8"
     assert assumptions["tariff"]["valid_from"] == "2026-04-04"

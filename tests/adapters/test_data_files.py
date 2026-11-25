@@ -298,7 +298,7 @@ def test_shipped_tariff_matches_the_research_note() -> None:
     assert tariff.tier_threshold_kwh_per_day == Decimal(8)
     assert tariff.low_tariff_try_per_kwh == Decimal("3.24")
     assert tariff.high_tariff_try_per_kwh == Decimal("4.86")
-    assert tariff.export_price_try_per_kwh == Decimal("2.92")
+    assert tariff.export_price_try_per_kwh == Decimal("1.24")
     assert tariff.self_consumption_ratio == Decimal("0.85")
     assert tariff.valid_from == date(2026, 4, 4)
     assert "EPDK" in tariff.source

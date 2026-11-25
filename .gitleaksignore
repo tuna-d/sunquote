@@ -1,0 +1,9 @@
+# Synthetic API key used with httpx.MockTransport in the Gemini Narrative tests.
+2d8b9d142c923176bf03592e8f0cb0905ea7b3c2:tests/adapters/test_gemini.py:generic-api-key:36
+ad943a25f43b7a990b1f0d4888f35cc8e7ce7624:tests/adapters/test_gemini.py:generic-api-key:40
+9e9a6ff10596fb19a61e021bf17211e4cbd2cd63:tests/adapters/test_gemini.py:generic-api-key:40
+
+# The same synthetic key used with httpx.MockTransport in the Gemini Conversation Model tests.
+4a10eb2d895113fbc832e512240648811a170082:tests/adapters/test_gemini_conversation.py:generic-api-key:34
+062dcc99bf81418ed0c8c094c736ac3f2751d191:tests/adapters/test_gemini_conversation.py:generic-api-key:36
+9e9a6ff10596fb19a61e021bf17211e4cbd2cd63:tests/adapters/test_gemini_conversation.py:generic-api-key:36
