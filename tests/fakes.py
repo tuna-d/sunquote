@@ -1,7 +1,7 @@
 """In-memory stand-ins shared by tests of the domain and API."""
 
 import asyncio
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
@@ -240,3 +240,19 @@ class FakeQuoteRepository:
         return QuotePage(
             items=tuple(newest_first[start : start + page_size]), total=len(self.stored)
         )
+
+
+class InMemoryCounterStore:
+    """A `CounterStore` in process memory. Test-only: it is not shared across instances."""
+
+    def __init__(self, clock: Callable[[], datetime]) -> None:
+        self._clock = clock
+        self._counters: dict[str, tuple[int, datetime]] = {}
+
+    async def increment(self, key: str, *, ttl_seconds: int) -> int:
+        now = self._clock()
+        count, expires_at = self._counters.get(key, (0, now))
+        if count == 0 or expires_at <= now:
+            count, expires_at = 0, now + timedelta(seconds=ttl_seconds)
+        self._counters[key] = (count + 1, expires_at)
+        return count + 1

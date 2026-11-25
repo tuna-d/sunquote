@@ -169,7 +169,7 @@ class _TariffMeta(_Strict):
 class _TariffFile(_Strict):
     meta: _Meta
     tariff: _TariffMeta
-    tier_threshold_kwh_per_year: _Positive
+    tier_threshold_kwh_per_day: _Positive
     low_tariff_try_per_kwh: _Positive
     high_tariff_try_per_kwh: _Positive
     export_price_try_per_kwh: _NonNegative
@@ -263,7 +263,7 @@ def load_financial_assumptions(path: Path) -> FinancialAssumptions:
 def load_residential_tariff(path: Path) -> ResidentialTariff:
     file = _TariffFile.model_validate(_read(path))
     return ResidentialTariff(
-        tier_threshold_kwh_per_year=file.tier_threshold_kwh_per_year.value,
+        tier_threshold_kwh_per_day=file.tier_threshold_kwh_per_day.value,
         low_tariff_try_per_kwh=file.low_tariff_try_per_kwh.value,
         high_tariff_try_per_kwh=file.high_tariff_try_per_kwh.value,
         export_price_try_per_kwh=file.export_price_try_per_kwh.value,

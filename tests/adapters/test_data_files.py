@@ -295,7 +295,7 @@ def test_a_negative_margin_is_rejected(tmp_path: Path) -> None:
 def test_shipped_tariff_matches_the_research_note() -> None:
     tariff = load_residential_tariff(TARIFF_FILE)
 
-    assert tariff.tier_threshold_kwh_per_year == Decimal(2920)
+    assert tariff.tier_threshold_kwh_per_day == Decimal(8)
     assert tariff.low_tariff_try_per_kwh == Decimal("3.24")
     assert tariff.high_tariff_try_per_kwh == Decimal("4.86")
     assert tariff.export_price_try_per_kwh == Decimal("2.92")
@@ -310,7 +310,7 @@ def test_every_tariff_value_names_its_source_kind_and_date() -> None:
     assert data["tariff"]["source"].strip()
     assert isinstance(data["tariff"]["valid_from"], date)
     for key in (
-        "tier_threshold_kwh_per_year",
+        "tier_threshold_kwh_per_day",
         "low_tariff_try_per_kwh",
         "high_tariff_try_per_kwh",
         "export_price_try_per_kwh",

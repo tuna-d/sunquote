@@ -1,7 +1,5 @@
 """Redis cache contracts. The real Redis tests use SUNQUOTE_TEST_REDIS_URL."""
 
-import os
-from collections.abc import AsyncIterator
 from dataclasses import replace
 from datetime import date, timedelta
 from decimal import Decimal
@@ -12,7 +10,6 @@ from uuid import uuid4
 import httpx
 import pytest
 from redis.asyncio import Redis
-from redis.exceptions import RedisError
 from redis.exceptions import TimeoutError as RedisTimeoutError
 
 from sunquote.adapters.pvgis import PvgisSpecificYieldProvider, pvgis_request
@@ -30,25 +27,6 @@ from tests.factories import make_exchange_rate
 from tests.fakes import FakeExchangeRateProvider, FakeGeocoder, FakeSpecificYieldProvider
 
 pytestmark = pytest.mark.anyio
-
-
-@pytest.fixture
-async def redis_client() -> AsyncIterator[Redis]:
-    url = os.environ.get("SUNQUOTE_TEST_REDIS_URL")
-    required = os.environ.get("CI") == "true"
-    if not url:
-        if required:
-            pytest.fail("SUNQUOTE_TEST_REDIS_URL is not set")
-        pytest.skip("SUNQUOTE_TEST_REDIS_URL is not set")
-
-    async with Redis.from_url(url, socket_connect_timeout=1, socket_timeout=1) as client:
-        try:
-            await client.ping()
-        except (OSError, RedisError) as error:
-            if required:
-                pytest.fail(f"the test Redis is unreachable: {error}")
-            pytest.skip(f"the test Redis is unreachable: {error}")
-        yield client
 
 
 async def test_geocoding_reuses_a_match_for_the_normalised_address(redis_client: Redis) -> None:

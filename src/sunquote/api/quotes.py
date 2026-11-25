@@ -12,11 +12,13 @@ from sunquote.api.errors import (
     NO_COMPATIBLE_INVERTER,
     NO_VIABLE_SYSTEM,
     QUOTE_NOT_FOUND,
+    RATE_LIMITED,
     UNSUPPORTED_SUBSCRIBER_GROUP,
     UPSTREAM_UNAVAILABLE,
     VALIDATION_ERROR,
     problem_responses,
 )
+from sunquote.api.rate_limit import limit_quote_creation
 from sunquote.api.schemas import (
     QuoteListResponse,
     QuoteRequestBody,
@@ -49,8 +51,10 @@ async def get_stored_quote(
     "/quotes",
     status_code=201,
     summary="Create a Quote",
+    dependencies=[Depends(limit_quote_creation)],
     responses=problem_responses(
         VALIDATION_ERROR,
+        RATE_LIMITED,
         UNSUPPORTED_SUBSCRIBER_GROUP,
         NO_VIABLE_SYSTEM,
         NO_COMPATIBLE_INVERTER,
@@ -65,6 +69,9 @@ async def create_quote(
 ) -> QuoteResponse:
     """Size a system for the Customer's Site and return the Quote.
 
+    Each client IP may create 10 Quotes an hour (configurable); past that the answer is `429`
+    with a `Retry-After` header, whatever the body holds.
+
     Give the Site Address or both Coordinates. Coordinates take precedence when both are
     given. An Address lookup records the resolved match in the Quote's Assumptions.
 
@@ -78,8 +85,8 @@ async def create_quote(
     unless `exchange_rate_override` is given.
 
     Each option also carries its own first-year Annual Savings, Payback Period, lifetime savings
-    and yearly cash flow, from the residential tariff (marginal Tariff Tiers). Escalation rates
-    are real, so all of these are in today's lira.
+    and yearly cash flow, from the residential tariff (marginal Tariff Tiers, applied per
+    month). Escalation rates are real, so all of these are in today's lira.
 
     The Quote also carries a `narrative`: the prose of its document (greeting, summary, a
     comparison of the two options, next steps) with every figure filled from the Quote. When a
