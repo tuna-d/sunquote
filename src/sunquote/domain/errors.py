@@ -129,3 +129,17 @@ class LocationNotSupportedError(DomainError):
 
     The message is the source's own explanation, so the Sales Rep can act on it.
     """
+
+
+class RateLimitedError(DomainError):
+    """A client used up its calls for the current window of a rate limit."""
+
+    def __init__(self, policy_name: str, limit: int, window_seconds: int, retry_after_seconds: int):
+        self.policy_name = policy_name
+        self.limit = limit
+        self.window_seconds = window_seconds
+        self.retry_after_seconds = retry_after_seconds
+        super().__init__(
+            f"rate limit reached for {policy_name}: at most {limit} calls per "
+            f"{window_seconds} seconds per client; try again in {retry_after_seconds} seconds"
+        )

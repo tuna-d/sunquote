@@ -272,6 +272,22 @@ including requests within a turn. A call that fails (a rate limit or an outage) 
 twice after one more pause, so a single HTTP 429 does not fail a scenario. The 20 scenarios contain up to 23 turns with at most three
 Gemini calls per turn. Check your project's free-tier limits before running both evals.
 
+## Rate limits
+
+The public demo has no login (ADR 0007), so each client IP may create 10 Quotes
+(`POST /quotes`) and send 20 Assistant messages (`POST /assistant/messages`) per hour. Past
+the limit the API answers `429` with the problem type `urn:sunquote:problem:rate-limited` and a
+`Retry-After` header with the seconds until the hour ends. Read endpoints and `/health` are not
+limited. `SUNQUOTE_RATE_LIMIT_QUOTES_PER_HOUR` and
+`SUNQUOTE_RATE_LIMIT_ASSISTANT_MESSAGES_PER_HOUR` change the limits.
+
+The counters are shared across instances: Redis when `SUNQUOTE_REDIS_URL` is set (the Compose
+default), otherwise the `rate_limit_counters` table in Postgres. If the counters cannot be
+reached, the call goes through and a warning is logged, because the limits protect free quotas
+and must not take the demo down. The client IP is the connection's. Behind Vercel set
+`SUNQUOTE_BEHIND_VERCEL=true` to read it from the `x-vercel-forwarded-for` header instead; the
+header is ignored otherwise, since anyone can send it.
+
 ## Placeholder data
 
 The TOML files in [`src/sunquote/data/`](src/sunquote/data) contain placeholder inputs
