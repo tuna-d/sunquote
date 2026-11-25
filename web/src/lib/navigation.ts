@@ -1,7 +1,7 @@
 /**
  * The masthead's sections. A page ticket flips `enabled` when its route exists; until then the
  * section is shown as unavailable instead of linking to a 404.
- *   - /quotes/new: the Quote form (#45)
+ *   - /quotes/new: the Quote form (#45, enabled)
  *   - /assistant: the Assistant chat (#46)
  */
 export interface NavItem {
@@ -12,7 +12,7 @@ export interface NavItem {
 
 export const NAV_ITEMS: readonly NavItem[] = [
   { href: "/quotes", label: "Teklifler", enabled: true },
-  { href: "/quotes/new", label: "Yeni teklif", enabled: false },
+  { href: "/quotes/new", label: "Yeni teklif", enabled: true },
   { href: "/assistant", label: "Asistan", enabled: false },
 ];
 

@@ -103,5 +103,15 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
-      # The Playwright smoke test (#45) goes here: install the browser, then run it against a
-      # mocked API.
+      # The smoke test (#45): the real web app against a mocked API (web/e2e/mock-api.mjs).
+      - name: Install the Playwright browser
+        run: npx playwright install --with-deps chromium
+      - name: Smoke test
+        run: npm run e2e
+      - name: Upload the Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: web/test-results
+          if-no-files-found: ignore

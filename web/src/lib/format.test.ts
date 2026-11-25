@@ -6,6 +6,7 @@ import {
   formatLocation,
   formatOptionCount,
   formatTry,
+  formatWait,
 } from "./format";
 
 const NBSP = "\u00a0";
@@ -66,5 +67,22 @@ describe("formatCreatedAt", () => {
 
   it("does not depend on the machine's time zone for an offset timestamp", () => {
     expect(formatCreatedAt("2026-06-01T09:05:00+03:00")).toBe("01.06.2026 09:05");
+  });
+});
+
+describe("formatWait", () => {
+  it("rounds a wait up to the unit it reads best in", () => {
+    expect(formatWait(1)).toBe("1 saniye");
+    expect(formatWait(45)).toBe("45 saniye");
+    expect(formatWait(60)).toBe("1 dakika");
+    expect(formatWait(61)).toBe("2 dakika");
+    expect(formatWait(1800)).toBe("30 dakika");
+    expect(formatWait(3599)).toBe("60 dakika");
+    expect(formatWait(3600)).toBe("1 saat");
+    expect(formatWait(5400)).toBe("2 saat");
+  });
+
+  it("treats no wait as a moment", () => {
+    expect(formatWait(0)).toBe("1 saniye");
   });
 });

@@ -13,6 +13,7 @@
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "e2e": "playwright test",
     "api:schema": "cd .. && uv run python scripts/export_openapi.py",
     "api:types": "openapi-typescript openapi.json -o src/api/schema.d.ts",
     "api:sync": "npm run api:schema && npm run api:types"
@@ -24,6 +25,7 @@
     "react-dom": "^19.3.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.1",
     "@testing-library/jest-dom": "^8.0.0",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.13",

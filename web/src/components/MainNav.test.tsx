@@ -21,6 +21,15 @@ describe("MainNav", () => {
     expect(screen.getByRole("link", { name: "Teklifler" })).toHaveAttribute("aria-current", "page");
   });
 
+  it("links to the Quote form and marks it on its own page, not the list", () => {
+    pathname.current = "/quotes/new";
+    render(<MainNav />);
+
+    expect(screen.getByRole("link", { name: "Yeni teklif" })).toHaveAttribute("href", "/quotes/new");
+    expect(screen.getByRole("link", { name: "Yeni teklif" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Teklifler" })).not.toHaveAttribute("aria-current");
+  });
+
   it("names the three sections in order, in a labelled navigation", () => {
     pathname.current = "/quotes";
     render(<MainNav />);

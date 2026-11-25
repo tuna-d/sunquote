@@ -48,3 +48,15 @@ export function formatCreatedAt(createdAt: string): string {
   );
   return `${parts.day}.${parts.month}.${parts.year} ${parts.hour}:${parts.minute}`;
 }
+
+/** A wait from `Retry-After`, rounded up to the unit it reads best in: `30 dakika`. */
+export function formatWait(seconds: number): string {
+  const whole = Math.max(1, Math.ceil(seconds));
+  if (whole < 60) {
+    return `${whole} saniye`;
+  }
+  if (whole < 3600) {
+    return `${Math.ceil(whole / 60)} dakika`;
+  }
+  return `${Math.ceil(whole / 3600)} saat`;
+}
