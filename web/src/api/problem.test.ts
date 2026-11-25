@@ -1,7 +1,48 @@
 import { describe, expect, it } from "vitest";
 
 import { createApiClient } from "./client";
-import { PROBLEM_TYPES, parseRetryAfter, problemFrom } from "./problem";
+import { PROBLEM_TYPES, parseRetryAfter, problemFrom, problemSlug, readProblem } from "./problem";
+
+describe("problemSlug", () => {
+  it("takes the last segment of the problem type URN", () => {
+    expect(problemSlug("urn:sunquote:problem:rate-limited")).toBe("rate-limited");
+    expect(problemSlug(undefined)).toBeNull();
+  });
+});
+
+describe("parseRetryAfter", () => {
+  it("reads whole seconds and ignores anything else", () => {
+    expect(parseRetryAfter("120")).toBe(120);
+    expect(parseRetryAfter(null)).toBeNull();
+    expect(parseRetryAfter("Wed, 21 Oct 2026 07:28:00 GMT")).toBeNull();
+    expect(parseRetryAfter("0")).toBeNull();
+  });
+});
+
+describe("readProblem", () => {
+  it("reads the type, status and Retry-After of a problem response", async () => {
+    const response = new Response(
+      JSON.stringify({ type: "urn:sunquote:problem:rate-limited", detail: "slow down" }),
+      { status: 429, headers: { "content-type": "application/problem+json", "Retry-After": "90" } },
+    );
+    expect(await readProblem(response)).toEqual({
+      slug: "rate-limited",
+      status: 429,
+      detail: "slow down",
+      retryAfterSeconds: 90,
+    });
+  });
+
+  it("copes with a body that is not JSON", async () => {
+    const response = new Response("<html>bad gateway</html>", { status: 502 });
+    expect(await readProblem(response)).toEqual({
+      slug: null,
+      status: 502,
+      detail: null,
+      retryAfterSeconds: null,
+    });
+  });
+});
 
 function problemResponse(body: unknown, status: number, headers: Record<string, string> = {}) {
   return new Response(JSON.stringify(body), {
@@ -74,31 +115,5 @@ describe("problemFrom", () => {
       type: PROBLEM_TYPES.rateLimited,
       retryAfterSeconds: 90,
     });
-  });
-});
-
-describe("parseRetryAfter", () => {
-  it("reads whole seconds", () => {
-    expect(parseRetryAfter("120")).toBe(120);
-    expect(parseRetryAfter(" 7 ")).toBe(7);
-  });
-
-  it("reads an HTTP date as the seconds from now", () => {
-    const now = new Date("2026-11-25T10:00:00Z");
-
-    expect(parseRetryAfter("Wed, 25 Nov 2026 10:05:00 GMT", now)).toBe(300);
-  });
-
-  it("is zero for a date in the past", () => {
-    const now = new Date("2026-11-25T10:00:00Z");
-
-    expect(parseRetryAfter("Wed, 25 Nov 2026 09:00:00 GMT", now)).toBe(0);
-  });
-
-  it("is null when the header is missing or unreadable", () => {
-    expect(parseRetryAfter(null)).toBeNull();
-    expect(parseRetryAfter("")).toBeNull();
-    expect(parseRetryAfter("soon")).toBeNull();
-    expect(parseRetryAfter("-5")).toBeNull();
   });
 });

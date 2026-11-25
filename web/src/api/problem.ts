@@ -1,6 +1,8 @@
 import type { Schemas } from "./types";
 
-/** The `type` URNs of the API's `application/problem+json` responses (src/sunquote/api/errors.py). */
+/** Helpers for the API's `application/problem+json` errors (RFC 9457). */
+
+/** The `type` URNs of the API's problem responses (src/sunquote/api/errors.py). */
 export const PROBLEM_TYPES = {
   validation: "urn:sunquote:problem:validation-error",
   unsupportedSubscriberGroup: "urn:sunquote:problem:unsupported-subscriber-group",
@@ -18,15 +20,59 @@ export const PROBLEM_TYPES = {
 
 export type FieldError = Schemas["FieldError"];
 
-/** A problem the API answered with, plus the wait its `Retry-After` header asks for. */
-export interface ParsedProblem {
+export interface ProblemInfo {
+  /** The last segment of the problem type URN, e.g. `rate-limited`; null when unreadable. */
+  slug: string | null;
+  status: number;
+  detail: string | null;
+  /** Seconds from the `Retry-After` header, when it is a positive whole number. */
+  retryAfterSeconds: number | null;
+}
+
+export function problemSlug(type: string | undefined): string | null {
+  if (!type) {
+    return null;
+  }
+  return type.split(":").pop() || null;
+}
+
+export function parseRetryAfter(value: string | null): number | null {
+  if (value === null || !/^\d+$/.test(value.trim())) {
+    return null;
+  }
+  const seconds = Number(value);
+  return seconds > 0 ? seconds : null;
+}
+
+/** Describes a failed response whose body is already parsed (openapi-fetch's `error`). */
+export function describeProblem(response: Response, body: unknown): ProblemInfo {
+  const fields: { type?: unknown; detail?: unknown } =
+    typeof body === "object" && body !== null ? body : {};
+  return {
+    slug: problemSlug(typeof fields.type === "string" ? fields.type : undefined),
+    status: response.status,
+    detail: typeof fields.detail === "string" ? fields.detail : null,
+    retryAfterSeconds: parseRetryAfter(response.headers.get("Retry-After")),
+  };
+}
+
+/** Reads a failed response. Never throws: a body that is not JSON just gives nulls. */
+export async function readProblem(response: Response): Promise<ProblemInfo> {
+  let body: unknown = null;
+  try {
+    body = await response.json();
+  } catch {
+    // not JSON
+  }
+  return describeProblem(response, body);
+}
+
+/** A problem with its full `type` URN, title and field errors, for a form that maps them. */
+export interface ParsedProblem extends Omit<ProblemInfo, "slug" | "detail"> {
   type: string;
   title: string;
-  status: number;
   detail: string;
   errors: FieldError[];
-  /** Seconds to wait, from `Retry-After` (a 429 carries it); null when absent or unreadable. */
-  retryAfterSeconds: number | null;
 }
 
 /**
@@ -61,24 +107,4 @@ function isFieldError(value: unknown): value is FieldError {
   }
   const { field, message } = value as Record<string, unknown>;
   return typeof field === "string" && typeof message === "string";
-}
-
-/**
- * `Retry-After` as whole seconds from now: it is either a number of seconds or an HTTP date.
- * Null when the header is missing or unreadable.
- */
-export function parseRetryAfter(value: string | null, now: Date = new Date()): number | null {
-  const text = value?.trim();
-  if (!text) {
-    return null;
-  }
-  if (/^\d+$/.test(text)) {
-    return Number(text);
-  }
-  // An HTTP date names its weekday ("Wed, 25 Nov 2026 ..."); `Date.parse` alone accepts "-5".
-  const date = /^[A-Za-z]{3},/.test(text) ? Date.parse(text) : Number.NaN;
-  if (Number.isNaN(date)) {
-    return null;
-  }
-  return Math.max(0, Math.ceil((date - now.getTime()) / 1000));
 }
