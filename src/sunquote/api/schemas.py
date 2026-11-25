@@ -489,6 +489,7 @@ class QuoteResponse(BaseModel):
     id: UUID
     quote_number: str = Field(description="Readable identifier, `SQ-<year>-<6-digit sequence>`.")
     created_at: dt.datetime
+    is_sample: bool = Field(description="Whether this is a synthetic sample Quote.")
     customer: SubmittedCustomer
     quote_date: dt.date
     valid_until: dt.date = Field(description="The last day the quoted price holds.")
@@ -684,6 +685,7 @@ def quote_response(stored: StoredQuote) -> QuoteResponse:
         id=stored.id,
         quote_number=quote.quote_number,
         created_at=stored.created_at,
+        is_sample=stored.is_sample,
         customer=SubmittedCustomer(
             name=quote.customer.name, phone=quote.customer.phone, email=quote.customer.email
         ),
@@ -756,6 +758,7 @@ class QuoteListItem(BaseModel):
     id: UUID
     quote_number: str
     created_at: dt.datetime
+    is_sample: bool = Field(description="Whether this is a synthetic sample Quote.")
     customer_name: str
     district: str | None = Field(description="Null until address geocoding exists.")
     province: str | None = Field(description="Null until address geocoding exists.")
@@ -778,6 +781,7 @@ def _list_item(stored: StoredQuote) -> QuoteListItem:
         id=stored.id,
         quote_number=quote.quote_number,
         created_at=stored.created_at,
+        is_sample=stored.is_sample,
         customer_name=quote.customer.name,
         district=stored.district,
         province=stored.province,
