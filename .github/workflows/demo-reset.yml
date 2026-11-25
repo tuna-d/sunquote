@@ -31,4 +31,5 @@ jobs:
         if: steps.database.outputs.configured == 'true'
         env:
           SUNQUOTE_DATABASE_URL: ${{ secrets.SUNQUOTE_DATABASE_URL }}
+          SUNQUOTE_DATABASE_CLIENT_POOL: 'false'
         run: uv run --locked --no-dev python -m sunquote.demo reset

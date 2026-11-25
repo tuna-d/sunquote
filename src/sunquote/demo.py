@@ -79,7 +79,7 @@ async def seed(repository: PostgresQuoteRepository, service: QuoteService) -> No
 
 
 async def _run(command: str, settings: Settings) -> None:
-    engine = create_engine(settings.database_url)
+    engine = create_engine(settings.database_url, client_pool=settings.database_client_pool)
     try:
         repository = PostgresQuoteRepository(engine)
         if command == "reset":

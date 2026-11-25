@@ -292,6 +292,22 @@ including requests within a turn. A call that fails (a rate limit or an outage) 
 twice after one more pause, so a single HTTP 429 does not fail a scenario. The 20 scenarios contain up to 23 turns with at most three
 Gemini calls per turn. Check your project's free-tier limits before running both evals.
 
+## Rate limits
+
+The public demo has no login (ADR 0007), so each client IP may create 10 Quotes
+(`POST /quotes`) and send 20 Assistant messages (`POST /assistant/messages`) per hour. Past
+the limit the API answers `429` with the problem type `urn:sunquote:problem:rate-limited` and a
+`Retry-After` header with the seconds until the hour ends. Read endpoints and `/health` are not
+limited. `SUNQUOTE_RATE_LIMIT_QUOTES_PER_HOUR` and
+`SUNQUOTE_RATE_LIMIT_ASSISTANT_MESSAGES_PER_HOUR` change the limits.
+
+The counters are shared across instances: Redis when `SUNQUOTE_REDIS_URL` is set (the Compose
+default), otherwise the `rate_limit_counters` table in Postgres. If the counters cannot be
+reached, the call goes through and a warning is logged, because the limits protect free quotas
+and must not take the demo down. The client IP is the connection's. Behind Vercel set
+`SUNQUOTE_BEHIND_VERCEL=true` to read it from the `x-vercel-forwarded-for` header instead; the
+header is ignored otherwise, since anyone can send it.
+
 ## Placeholder data
 
 The TOML files in [`src/sunquote/data/`](src/sunquote/data) contain placeholder inputs
@@ -308,6 +324,66 @@ dates, owner decisions and open questions. Set `SUNQUOTE_DATA_DIR` to load your 
 See the ADRs on [figures in the Quote document](docs/adr/0001-llm-never-writes-figures.md),
 [marginal Tariff Tiers](docs/adr/0002-marginal-tariff-tiers.md) and
 [real escalation rates](docs/adr/0003-real-escalation-rates.md).
+
+## Deploy
+
+The API runs for free on [Vercel](https://vercel.com) Hobby as a Python function, with
+[Neon](https://neon.com) Postgres and [Upstash](https://upstash.com) Redis. All three have a free
+tier that asks for no credit card; if a signup asks for one, stop and use another provider.
+Docker Compose is unchanged and stays the local way to run everything.
+
+How the repository maps onto Vercel:
+
+- [`api/index.py`](api/index.py) is the function. It exposes the same FastAPI `app` as
+  Compose and defaults two settings for a serverless instance: `SUNQUOTE_DATABASE_CLIENT_POOL=false`
+  (every use opens its own connection through Neon's pooler) and
+  `SUNQUOTE_MIGRATE_ON_STARTUP=false`. Compose keeps its connection pool and its startup migration.
+- [`vercel.json`](vercel.json) sends every path to that function, sets its maximum duration to
+  300 seconds (the Hobby limit) and builds only `main`: pull requests get no API preview.
+- [`.python-version`](.python-version) pins Python 3.13.
+- The [`Migrate production database`](.github/workflows/migrate.yml) workflow runs the
+  Alembic migrations (`python -m sunquote.adapters.postgres.migrate`) on every push to `main`.
+  Without the `SUNQUOTE_DATABASE_URL` secret it skips with a notice.
+
+### Steps for the repo owner
+
+1. **Neon.** Create a project and copy the *pooled* connection string (the host contains
+   `-pooler`). It can be pasted as it is: the app rewrites `postgresql://...?sslmode=require`
+   for the asyncpg driver.
+2. **Upstash.** Create a Redis database and copy its TLS URL, `rediss://default:<password>@<host>:6379`
+   (two `s`).
+3. **GitHub.** Add the Neon string as the repository secret `SUNQUOTE_DATABASE_URL`
+   (Settings → Secrets and variables → Actions). After the first push to `main`, or by running
+   the workflow by hand from the Actions tab, the database is migrated. To migrate from your own
+   machine instead: `SUNQUOTE_DATABASE_URL=<neon string> uv run python -m sunquote.adapters.postgres.migrate`.
+4. **Vercel.** Import the repository as a new project with the repository root (not `web/`) as
+   its root directory, and keep `main` as the production branch. Add the environment variables
+   `SUNQUOTE_DATABASE_URL` and `SUNQUOTE_REDIS_URL`, and optionally the free
+   `SUNQUOTE_GEMINI_API_KEY`. [`.env.example`](.env.example) lists them all.
+5. **Check.** Open `https://<project>.vercel.app/health` and then `/docs`.
+
+Production changes only when `development` is merged into `main`, which is why the migration
+runs on pushes to `main` as well.
+
+To run the function entry point locally without a Vercel account, migrate a database and start it
+with uvicorn on its own port. This applies the same serverless defaults as Vercel:
+
+```sh
+docker compose up -d --wait postgres
+uv run python -m sunquote.adapters.postgres.migrate
+uv run uvicorn api.index:app --port 8103
+```
+
+`vercel dev` (Vercel CLI 48.1.8 or later, after `vercel login`) runs the real Vercel runtime
+against the same files. Open `http://localhost:8103/docs` to try the API.
+
+### Nominatim on a serverless host
+
+Every function instance throttles its own Nominatim requests to one per second, and the Redis
+cache serves repeated Addresses without calling Nominatim at all. The instances share no lock,
+and for demo traffic that is the accepted approach: a cross-instance lock would not be worth its
+complexity at a handful of Quotes per hour. If traffic ever outgrows it, point
+`SUNQUOTE_NOMINATIM_BASE_URL` at your own instance.
 
 ## Tests and CI
 

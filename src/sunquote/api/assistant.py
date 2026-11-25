@@ -12,9 +12,11 @@ from sunquote.api.dependencies import AppDependencies, get_quote_service
 from sunquote.api.errors import (
     ASSISTANT_NOT_CONFIGURED,
     ASSISTANT_UNAVAILABLE,
+    RATE_LIMITED,
     VALIDATION_ERROR,
     problem_responses,
 )
+from sunquote.api.rate_limit import limit_assistant_messages
 from sunquote.domain.conversation import ChatMessage, MessageRole, MissingField
 from sunquote.domain.errors import AssistantNotConfiguredError
 from sunquote.domain.service import QuoteService
@@ -75,7 +77,10 @@ class AssistantResponse(BaseModel):
 @router.post(
     "/assistant/messages",
     summary="Create a Quote from a Turkish chat message",
-    responses=problem_responses(VALIDATION_ERROR, ASSISTANT_NOT_CONFIGURED, ASSISTANT_UNAVAILABLE),
+    dependencies=[Depends(limit_assistant_messages)],
+    responses=problem_responses(
+        VALIDATION_ERROR, RATE_LIMITED, ASSISTANT_NOT_CONFIGURED, ASSISTANT_UNAVAILABLE
+    ),
 )
 async def post_assistant_messages(
     body: AssistantRequestBody,
@@ -83,6 +88,9 @@ async def post_assistant_messages(
     service: Annotated[QuoteService, Depends(get_quote_service)],
 ) -> AssistantResponse:
     """Turn the Sales Rep's Turkish message into a Quote and explain it in Turkish.
+
+    Each client IP may send 20 messages an hour (configurable); past that the answer is `429`
+    with a `Retry-After` header, whatever the body holds.
 
     Gemini reads the conversation and calls the `create_quote` tool, which runs the same quote
     creation as `POST /quotes` (Address geocoding, PVGIS, TCMB, Narrative, storage) and stores

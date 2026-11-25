@@ -64,6 +64,22 @@ class Clock(Protocol):
         ...
 
 
+class CounterStore(Protocol):
+    """Shared counters that expire, for limits that hold across serverless instances.
+
+    The per-IP rate limits use it, and the daily Gemini budget will too. A counter is a named
+    integer that starts at zero and disappears `ttl_seconds` after it was created.
+    """
+
+    async def increment(self, key: str, *, ttl_seconds: int) -> int:
+        """Add one to the counter `key` and return its new value, so the first call returns 1.
+
+        A counter that is missing or has expired starts again at 1 and lives `ttl_seconds`.
+        Concurrent calls each get a distinct value.
+        """
+        ...
+
+
 class NarrativeWriter(Protocol):
     """Writes the prose of a Quote (ADR 0001): text with placeholders, never a figure."""
 

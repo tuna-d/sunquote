@@ -11,8 +11,6 @@ temporary schema, so the database's own data is never touched.
 """
 
 import asyncio
-import os
-from collections.abc import AsyncIterator
 from dataclasses import replace
 from datetime import UTC, date, datetime
 from decimal import Decimal
@@ -23,7 +21,7 @@ import pytest
 from alembic import command
 from sqlalchemy import insert, inspect, select, text
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncEngine
 
 from sunquote.adapters.postgres.migrate import alembic_config, upgrade_to_head
 from sunquote.adapters.postgres.quote_repository import PostgresQuoteRepository, quote_to_json
@@ -52,36 +50,6 @@ from tests.fakes import (
 )
 
 pytestmark = pytest.mark.anyio
-
-DATABASE_URL = os.environ.get("SUNQUOTE_TEST_DATABASE_URL")
-
-
-@pytest.fixture
-async def engine() -> AsyncIterator[AsyncEngine]:
-    """An engine whose connections live in a fresh schema, migrated to head and dropped after."""
-    if not DATABASE_URL:
-        pytest.skip("SUNQUOTE_TEST_DATABASE_URL is not set")
-    schema = f"test_{uuid4().hex}"
-    admin = create_async_engine(DATABASE_URL)
-    try:
-        async with admin.begin() as connection:
-            await connection.execute(text(f'CREATE SCHEMA "{schema}"'))
-    except OSError as error:
-        await admin.dispose()
-        if os.environ.get("CI") == "true":
-            pytest.fail(f"the test database is unreachable: {error}")
-        pytest.skip(f"the test database is unreachable: {error}")
-    test_engine = create_async_engine(
-        DATABASE_URL, connect_args={"server_settings": {"search_path": schema}}
-    )
-    try:
-        await upgrade_to_head(test_engine)
-        yield test_engine
-    finally:
-        await test_engine.dispose()
-        async with admin.begin() as connection:
-            await connection.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
-        await admin.dispose()
 
 
 @pytest.fixture

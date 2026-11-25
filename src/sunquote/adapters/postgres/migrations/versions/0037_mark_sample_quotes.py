@@ -1,14 +1,14 @@
 """Mark sample Quotes.
 
 Revision ID: 0037
-Revises: 0001
+Revises: 0002
 """
 
 import sqlalchemy as sa
 from alembic import op
 
 revision = "0037"
-down_revision = "0001"
+down_revision = "0002"
 branch_labels = None
 depends_on = None
 

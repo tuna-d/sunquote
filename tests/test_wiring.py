@@ -10,15 +10,27 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
+from redis.asyncio.connection import Connection, SSLConnection
+from sqlalchemy.ext.asyncio import AsyncEngine
+from sqlalchemy.pool import AsyncAdaptedQueuePool, NullPool
 
 from sunquote.adapters.clock import SystemClock
 from sunquote.adapters.gemini import GeminiNarrativeWriter
 from sunquote.adapters.gemini_conversation import GeminiConversationModel
+from sunquote.adapters.postgres.counter_store import PostgresCounterStore
+from sunquote.adapters.postgres.quote_repository import PostgresQuoteRepository
+from sunquote.adapters.redis_cache import CachedGeocoder
+from sunquote.adapters.redis_counter_store import RedisCounterStore
 from sunquote.api.app import create_app
 from sunquote.bootstrap import build_dependencies
 from sunquote.config import Settings
 from tests.api.test_quotes import valid_body
-from tests.fakes import FakeQuoteRepository, ScriptedConversationModel, ScriptedNarrativeWriter
+from tests.fakes import (
+    FakeQuoteRepository,
+    InMemoryCounterStore,
+    ScriptedConversationModel,
+    ScriptedNarrativeWriter,
+)
 
 RECORDINGS = Path(__file__).parent / "adapters" / "recordings"
 RECORDING = RECORDINGS / "pvgis_pvcalc_ankara.json"
@@ -363,3 +375,82 @@ def test_the_assistant_creates_a_quote_through_the_wired_app_with_recorded_gemin
     assert len(gemini_requests) == 3
     assert stored["narrative"]["source"] == "llm"
     assert gemini_requests[0].headers["x-goog-api-key"] == "key-123"
+
+
+def _wired_engine(settings: Settings) -> AsyncEngine:
+    dependencies = build_dependencies(settings)
+    repository = dependencies.quote_repository
+    assert isinstance(repository, PostgresQuoteRepository)
+    return repository._engine
+
+
+def test_the_real_wiring_keeps_a_connection_pool_unless_serverless_turns_it_off() -> None:
+    assert isinstance(_wired_engine(Settings()).pool, AsyncAdaptedQueuePool)
+    assert isinstance(_wired_engine(Settings(database_client_pool=False)).pool, NullPool)
+
+
+def test_an_upstash_url_over_tls_is_cached_through_a_tls_connection() -> None:
+    settings = Settings(redis_url="rediss://default:token@eu1-demo-12345.upstash.io:6379")
+
+    dependencies = build_dependencies(settings, quote_repository=FakeQuoteRepository())
+
+    geocoder = dependencies.quote_service._geocoder
+    assert isinstance(geocoder, CachedGeocoder)
+    pool = geocoder._redis.connection_pool
+    assert pool.connection_class is SSLConnection
+    assert pool.connection_kwargs["host"] == "eu1-demo-12345.upstash.io"
+    assert pool.connection_kwargs["password"] == "token"
+
+
+def test_a_plain_redis_url_stays_unencrypted() -> None:
+    settings = Settings(redis_url="redis://redis:6379/0")
+
+    dependencies = build_dependencies(settings, quote_repository=FakeQuoteRepository())
+
+    geocoder = dependencies.quote_service._geocoder
+    assert isinstance(geocoder, CachedGeocoder)
+    assert geocoder._redis.connection_pool.connection_class is Connection
+
+
+def test_the_cache_timeout_comes_from_the_settings() -> None:
+    settings = Settings(redis_url="rediss://default:token@host:6379", redis_timeout_seconds=1.5)
+
+    dependencies = build_dependencies(settings, quote_repository=FakeQuoteRepository())
+
+    geocoder = dependencies.quote_service._geocoder
+    assert isinstance(geocoder, CachedGeocoder)
+    kwargs = geocoder._redis.connection_pool.connection_kwargs
+    assert (kwargs["socket_connect_timeout"], kwargs["socket_timeout"]) == (1.5, 1.5)
+
+
+def test_rate_limit_counters_live_in_postgres_without_redis() -> None:
+    dependencies = build_dependencies(Settings(redis_url=None))
+
+    assert dependencies.rate_limiter is not None
+    assert isinstance(dependencies.rate_limiter._store, PostgresCounterStore)
+
+
+def test_rate_limit_counters_live_in_redis_when_a_redis_url_is_set() -> None:
+    dependencies = build_dependencies(Settings(redis_url="redis://127.0.0.1:6379/0"))
+
+    assert dependencies.rate_limiter is not None
+    assert isinstance(dependencies.rate_limiter._store, RedisCounterStore)
+
+
+def test_an_injected_counter_store_wins() -> None:
+    store = InMemoryCounterStore(clock=lambda: datetime.now(UTC))
+
+    dependencies = build_dependencies(
+        Settings(redis_url="redis://127.0.0.1:6379/0"),
+        quote_repository=FakeQuoteRepository(),
+        counter_store=store,
+    )
+
+    assert dependencies.rate_limiter is not None
+    assert dependencies.rate_limiter._store is store
+
+
+def test_without_a_database_or_a_counter_store_nothing_is_limited() -> None:
+    dependencies = build_dependencies(Settings(), quote_repository=FakeQuoteRepository())
+
+    assert dependencies.rate_limiter is None
