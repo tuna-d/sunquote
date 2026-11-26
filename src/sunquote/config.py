@@ -6,7 +6,7 @@ from typing import Literal
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from sunquote.adapters.gemini import DEFAULT_GEMINI_MODEL
+from sunquote.adapters.gemini import DEFAULT_GEMINI_DAILY_REQUEST_BUDGET, DEFAULT_GEMINI_MODEL
 from sunquote.adapters.gemini_transport import DEFAULT_GEMINI_BASE_URL
 from sunquote.domain.conversation import DEFAULT_ASSISTANT_BUDGET_SECONDS
 from sunquote.domain.service import DEFAULT_NARRATIVE_BUDGET_SECONDS
@@ -37,9 +37,26 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://sunquote:sunquote@localhost:5432/sunquote"
     # Apply the Alembic migrations when the app starts.
     migrate_on_startup: bool = True
+    # Keep a pool of open connections in the app. Turn off on serverless hosts (Vercel), where
+    # the database host's own pooler pools: every use then opens and closes its own connection.
+    database_client_pool: bool = True
 
     # Cache external lookups only when a Redis URL is supplied.
+    # `rediss://` (two s) connects over TLS, as Upstash requires.
     redis_url: str | None = None
+    # Connect and read timeout of the cache. Past it the lookup goes to the real service and the
+    # cache is skipped, so a cache too far away to answer in time silently turns itself off.
+    redis_timeout_seconds: float = Field(default=0.25, gt=0)
+
+    # Per client IP and hour, how many Quotes (`POST /quotes`) and Assistant messages
+    # (`POST /assistant/messages`) the public demo accepts (ADR 0007). The counters live in
+    # Redis when `redis_url` is set, otherwise in Postgres.
+    rate_limit_quotes_per_hour: int = Field(default=10, ge=1)
+    rate_limit_assistant_messages_per_hour: int = Field(default=20, ge=1)
+    # The app runs behind Vercel's proxy: the client IP is then the one Vercel forwards in the
+    # `x-vercel-forwarded-for` header. Otherwise the header is ignored, because anyone can send
+    # it, and the IP of the connection is used.
+    behind_vercel: bool = False
 
     nominatim_base_url: str = "https://nominatim.openstreetmap.org"
     nominatim_timeout_seconds: float = Field(default=10.0, gt=0)
@@ -64,6 +81,12 @@ class Settings(BaseSettings):
     # Per-request timeout of the Gemini call; the Narrative budget above bounds both attempts.
     gemini_timeout_seconds: float = Field(default=10.0, gt=0)
     gemini_base_url: str = DEFAULT_GEMINI_BASE_URL
+    # Global Gemini requests per day (00:00 to 24:00 Istanbul) across the Narrative, its retries
+    # and the Assistant (ADR 0007). Past it the Narrative uses its fixed text and the Assistant
+    # answers 503. The default is 80% of the free tier; see
+    # `sunquote.adapters.gemini.GEMINI_FREE_TIER_REQUESTS_PER_DAY`. The count lives in the same
+    # store as the rate limits.
+    gemini_daily_request_budget: int = Field(default=DEFAULT_GEMINI_DAILY_REQUEST_BUDGET, ge=1)
 
     # Total time one assistant request gets for its model calls and the Quote creation between
     # them. Past it, a request that already created a Quote gets the fixed confirmation.

@@ -44,7 +44,7 @@ from sunquote.domain.model import (
     SubscriberGroup,
 )
 from sunquote.domain.money import Currency, ExchangeRate, ExchangeRateOverride, Money
-from sunquote.domain.narrative import NarrativeSource
+from sunquote.domain.narrative import FallbackReason, NarrativeSource
 from sunquote.domain.ports import QuotePage, StoredQuote
 from sunquote.domain.pricing import SystemPrice
 from sunquote.domain.production import SpecificYieldInputs
@@ -373,9 +373,9 @@ class CashFlowRow(BaseModel):
 
     year: int = Field(ge=1)
     production_kwh: int
-    self_consumed_kwh: int
+    netted_kwh: int
     exported_kwh: int
-    self_consumption_savings_try: int
+    netting_savings_try: int
     export_income_try: int
     annual_savings_try: int
     inverter_replacement_try: int
@@ -387,12 +387,24 @@ class SavingsResponse(BaseModel):
     """What a System Option saves the Customer, in today's lira.
 
     `payback_period_years` is null, with `payback_beyond_lifetime` true, when the total price
-    including VAT is not recovered within the lifetime.
+    including VAT is not recovered within the lifetime. `npv_try` is the Net Present Value at the
+    real Discount Rate of the Assumptions (negative when the option earns less than that rate).
+    `irr` is the Internal Rate of Return as a ratio (0.152 is 15.2%); it is null in the same case
+    as the Payback Period, when the total price is not recovered within the lifetime. The
+    Payback Period stays the headline figure and is undiscounted.
     """
 
     first_year_annual_savings_try: int
     payback_period_years: JsonNumber | None
     payback_beyond_lifetime: bool
+    npv_try: int = Field(
+        description="Net Present Value in whole lira at the real Discount Rate, after the price."
+    )
+    irr: JsonNumber | None = Field(
+        description=(
+            "Internal Rate of Return per year as a ratio; null when the price is not recovered."
+        )
+    )
     lifetime_savings_try: int = Field(
         description="Total net savings, after the inverter replacement."
     )
@@ -407,32 +419,39 @@ class SystemOptionResponse(BaseModel):
     binding_limit: BindingLimit
     annual_production_kwh: int
     monthly_production_kwh: list[MonthlyProduction]
+    netted_share: JsonNumber = Field(
+        description=(
+            "Share of year 1's production that offsets the bill month by month (Monthly "
+            "Netting); the rest is exported. A decimal between 0 and 1."
+        )
+    )
     inverter: InverterSummary
     price: PriceResponse
     savings: SavingsResponse
 
 
 class TariffResponse(BaseModel):
-    """The residential Retail Tariff the savings were calculated with (ADR 0002). Every figure
-    is a decimal string at full precision."""
+    """The residential Retail Tariff the savings were calculated with (ADR 0002, ADR 0005): the
+    Tariff Tiers are applied per month, a month's threshold being `tier_threshold_kwh_per_day`
+    times the month's days. Every figure is a decimal string at full precision."""
 
-    tier_threshold_kwh_per_year: Decimal
+    tier_threshold_kwh_per_day: Decimal
     low_tariff_try_per_kwh: Decimal
     high_tariff_try_per_kwh: Decimal
     export_price_try_per_kwh: Decimal
-    self_consumption_ratio: Decimal
     valid_from: dt.date
     source: str
 
 
 class FinancialResponse(BaseModel):
-    """Both escalation rates are real (inflation-adjusted): all figures are in today's lira.
-    The rates are decimal strings (0.02 is 2%)."""
+    """Both escalation rates and the Discount Rate are real (inflation-adjusted): all figures
+    are in today's lira. The rates are decimal strings (0.02 is 2%)."""
 
     tariff_escalation_rate_real: Decimal
     equipment_escalation_rate_real: Decimal
     lifetime_years: int
     inverter_replacement_year: int
+    discount_rate_real: Decimal
 
 
 class AssumptionsResponse(BaseModel):
@@ -477,6 +496,12 @@ class NarrativeResponse(BaseModel):
         description="`llm` when a writer's validated text is shown, `fallback` for the fixed text."
     )
     model: str | None = Field(description="The model that wrote the text; null for `fallback`.")
+    fallback_reason: FallbackReason | None = Field(
+        description=(
+            "Why the fixed text is shown, when the cause is recorded: `budget_spent` when the "
+            "day's Gemini budget was spent. Null for `llm` and for other causes."
+        )
+    )
     generated_at: dt.datetime | None = Field(
         description="When the Narrative step ran; null for Quotes stored before it existed."
     )
@@ -488,6 +513,7 @@ class QuoteResponse(BaseModel):
     id: UUID
     quote_number: str = Field(description="Readable identifier, `SQ-<year>-<6-digit sequence>`.")
     created_at: dt.datetime
+    is_sample: bool = Field(description="Whether this is a synthetic sample Quote.")
     customer: SubmittedCustomer
     quote_date: dt.date
     valid_until: dt.date = Field(description="The last day the quoted price holds.")
@@ -536,9 +562,9 @@ def _cash_flow_row(row: YearlyCashFlow) -> CashFlowRow:
     return CashFlowRow(
         year=row.year,
         production_kwh=rounding.round_kwh(row.production_kwh),
-        self_consumed_kwh=rounding.round_kwh(row.self_consumed_kwh),
+        netted_kwh=rounding.round_kwh(row.netted_kwh),
         exported_kwh=rounding.round_kwh(row.exported_kwh),
-        self_consumption_savings_try=_whole_lira(row.self_consumption_savings),
+        netting_savings_try=_whole_lira(row.netting_savings),
         export_income_try=_whole_lira(row.export_income),
         annual_savings_try=_whole_lira(row.annual_savings),
         inverter_replacement_try=_whole_lira(row.inverter_replacement),
@@ -553,6 +579,8 @@ def _savings_response(savings: SavingsAnalysis) -> SavingsResponse:
         first_year_annual_savings_try=_whole_lira(savings.first_year_annual_savings),
         payback_period_years=None if payback is None else rounding.round_payback_years(payback),
         payback_beyond_lifetime=savings.payback_beyond_lifetime,
+        npv_try=_whole_lira(savings.npv),
+        irr=None if savings.irr is None else rounding.round_share(savings.irr),
         lifetime_savings_try=_whole_lira(savings.lifetime_savings),
         cash_flow=[_cash_flow_row(row) for row in savings.cash_flow],
     )
@@ -560,11 +588,10 @@ def _savings_response(savings: SavingsAnalysis) -> SavingsResponse:
 
 def _tariff_response(tariff: ResidentialTariff) -> TariffResponse:
     return TariffResponse(
-        tier_threshold_kwh_per_year=tariff.tier_threshold_kwh_per_year,
+        tier_threshold_kwh_per_day=tariff.tier_threshold_kwh_per_day,
         low_tariff_try_per_kwh=tariff.low_tariff_try_per_kwh,
         high_tariff_try_per_kwh=tariff.high_tariff_try_per_kwh,
         export_price_try_per_kwh=tariff.export_price_try_per_kwh,
-        self_consumption_ratio=tariff.self_consumption_ratio,
         valid_from=tariff.valid_from,
         source=tariff.source,
     )
@@ -576,6 +603,7 @@ def _financial_response(financial: FinancialAssumptions) -> FinancialResponse:
         equipment_escalation_rate_real=financial.equipment_escalation_rate_real,
         lifetime_years=financial.lifetime_years,
         inverter_replacement_year=financial.inverter_replacement_year,
+        discount_rate_real=financial.discount_rate_real,
     )
 
 
@@ -591,6 +619,7 @@ def _option_response(option: SystemOption) -> SystemOptionResponse:
             MonthlyProduction(month=month, production_kwh=rounding.round_kwh(kwh))
             for month, kwh in enumerate(option.monthly_production_kwh, start=1)
         ],
+        netted_share=rounding.round_share(option.savings.netted_share),
         inverter=_inverter_summary(option.inverter),
         price=_price_response(option.price),
         savings=_savings_response(option.savings),
@@ -670,6 +699,7 @@ def _narrative_response(stored: StoredQuote) -> NarrativeResponse:
         next_steps=filled.next_steps,
         source=record.source,
         model=record.model,
+        fallback_reason=record.fallback_reason,
         generated_at=record.generated_at,
     )
 
@@ -683,6 +713,7 @@ def quote_response(stored: StoredQuote) -> QuoteResponse:
         id=stored.id,
         quote_number=quote.quote_number,
         created_at=stored.created_at,
+        is_sample=stored.is_sample,
         customer=SubmittedCustomer(
             name=quote.customer.name, phone=quote.customer.phone, email=quote.customer.email
         ),
@@ -755,6 +786,7 @@ class QuoteListItem(BaseModel):
     id: UUID
     quote_number: str
     created_at: dt.datetime
+    is_sample: bool = Field(description="Whether this is a synthetic sample Quote.")
     customer_name: str
     district: str | None = Field(description="Null until address geocoding exists.")
     province: str | None = Field(description="Null until address geocoding exists.")
@@ -777,6 +809,7 @@ def _list_item(stored: StoredQuote) -> QuoteListItem:
         id=stored.id,
         quote_number=quote.quote_number,
         created_at=stored.created_at,
+        is_sample=stored.is_sample,
         customer_name=quote.customer.name,
         district=stored.district,
         province=stored.province,

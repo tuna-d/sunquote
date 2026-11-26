@@ -1,6 +1,7 @@
 # Placeholder market data and regulation (research for spec #1, ticket #4)
 
-Research date: 2026-11-24. All values are **placeholders** for the data files of spec #1. They are market averages or
+Research date: 2026-11-24; regulation, taxes, Export Price and Discount Rate re-checked against primary sources on
+2026-11-25 (ticket #32, section 9, which supersedes the earlier statements about them). All values are **placeholders** for the data files of spec #1. They are market averages or
 manufacturer datasheet values, not any company's real prices. No company-specific or personal data is used.
 
 Legend for the **Kind** column:
@@ -23,7 +24,10 @@ Three findings touch the design of spec #1. The repo owner decided them on 2026-
 - Madde 26 takes effect on 1 May 2026 (Madde 26 of the amendment, item (a)). That date has passed.
 - Consequence: the Self-Consumption Ratio is a *monthly* match, which is high (see section 3). If netting were hourly the
   ratio would be far lower and the "ratio" approach would be weak. It is not hourly for residential, so the spec holds.
-- Caveat: the amendment text was read through a fetch tool and was partly garbled; see "Verification gaps" below.
+  *(Status: the fixed ratio was superseded by Monthly Netting computed month by month; the Netted Share is now a result,
+  not an input. See [ADR 0005](../adr/0005-monthly-netting-replaces-self-consumption-ratio.md). The reasoning here still
+  explains why monthly netting makes the match high.)*
+- Caveat: the amendment text was read through a fetch tool and was partly garbled; see "Verification gaps" below. **Verified in section 9** against the full Resmî Gazete text.
 - Source: <https://www.resmigazete.gov.tr/eskiler/2026/04/20260402-4.htm> (Resmî Gazete 2026-04-02, no. 33212).
 
 ### F2. Capacity cap: tied to Contracted Power, no absolute residential kW cap found. (Consistent with spec #1; default is not regulatory.)
@@ -166,7 +170,9 @@ Notes:
 - Proposed per-panel prices: Jinko JKM440N-54HL4-(V) **USD 72**; Trina NEG9RH.25 **USD 76**; Trina NE09RH.05 **USD 74**.
   The differences are illustrative, not sourced.
 
-## 3. Residential tariff and Self-Consumption Ratio
+## 3. Residential tariff
+
+> Status (ticket #33): the fixed ratio proposed in this section (the last table row and the derivation after it) was replaced by Monthly Netting ([ADR 0005](../adr/0005-monthly-netting-replaces-self-consumption-ratio.md)). It is no longer an input; each System Option reports a Netted Share as a result. The derivation is kept as the history of how it was found.
 
 | Value | Proposed | Unit | Source / derivation | Source date | Kind |
 |---|---|---|---|---|---|
@@ -177,7 +183,7 @@ Notes:
 | **High all-in Retail Tariff** | **4.86** | TRY/kWh | (1.05 x 1.895808 + 2.4249) x 1.10 = 4.8570 | 2026-04-04 | Derived |
 | Export Price | 2.92 | TRY/kWh | YEKDEM solar price 292.49 kr/kWh, EPIAS, effective 2026-11-01; **unverified for new residential plants** | 2026-11-01 | Estimate |
 | Export Price valid-from | 2026-11-01 | date | same | 2026-11-01 | Estimate |
-| Self-Consumption Ratio | 0.85 | share | monthly netting (F1); derivation below | 2026-11-24 | Derived |
+| Self-Consumption Ratio (superseded by Monthly Netting, [ADR 0005](../adr/0005-monthly-netting-replaces-self-consumption-ratio.md); no longer a data input) | 0.85 | share | monthly netting (F1); derivation below | 2026-11-24 | Derived |
 
 EPDK table (Direct): the file "4 Nisan 2026 Tarihinden Itibaren Gecerli Vergiler Haric Elektrik Tarifeleri", downloaded from the
 EPDK site linked on <https://gensed.org/4-nisan-2026dan-itibaren-uygulanacak-elektrik-tarifeleri-yayimlandi/> via
@@ -191,7 +197,7 @@ the energy charge only; KDV **10%** for konut (20% for commercial). Formula: pri
 The 5% BTV and the 10% KDV were not confirmed from a legal text; an EPDK page quoted only 0% and 1% BTV rates in another context.
 If KDV were 20%, the all-in prices would be 3.53 and 5.30 TRY/kWh. **Verify before the data file is final.**
 
-**Export Price.** Original Madde 5(2) values surplus energy "YEKDEM kapsaminda". The YEKDEM solar unit price table (EPIAS, via
+**Export Price (superseded by section 9.2: 1.24 TRY/kWh; the 2.92 below does not apply to a new residential plant).** Original Madde 5(2) values surplus energy "YEKDEM kapsaminda". The YEKDEM solar unit price table (EPIAS, via
 <https://enerjiajansi.com.tr/yekdem-fiyatlari/>, 2026-11-02) shows 292.49 kr/kWh from 2026-11-01. A 90%-of-YEKDEM rule capped at the PTF (Presidential
 Decision 11415 of 2026-06-12) applies to plants that have **completed** their 10-year support period, not to a new residential
 plant. Distribution fees on the export side ("Lisanssiz Uretici 1/2", 208.1065 and 65.6008 kr/kWh in the EPDK table) may reduce the
@@ -221,7 +227,7 @@ to 0.96-1.0. The seasonal profile is my illustrative assumption, not a measured 
 | Labour | 4,000 | TRY/kWp | about USD 80/kWp at 50.4 TRY/USD | 2026-11-24 | Estimate |
 | Fixed project cost | 20,000 | TRY | permits, project file, grid application, meter change; about USD 400 | 2026-11-24 | Estimate |
 | Margin | 25% | share | see cross-check | 2026-11-24 | Estimate |
-| VAT rate | 20% | share | general KDV rate for goods and services; confirm applicability to residential PV | 2026-11-24 | Estimate |
+| VAT rate | 20% | share | general KDV rate; verified for a residential PV sale in section 9.1 | 2026-11-25 | Direct |
 
 Cross-check against a 2026 market price. A Turkish industry article gives USD 9,000-10,000 + VAT for an average 10 kW system
 with panels, inverter, cabling and paperwork (hybrid) (<https://uzmanpara.milliyet.com.tr/uzmanpara/elektrik-faturasini-dusurmek-isteyenler-dikkat-gunes-paneli-kurmanin-maliyeti-ne-kadar-7696820>, 2026; unnamed source, low confidence).
@@ -281,8 +287,130 @@ November 2026 TCMB Piyasa Katilimcilari Anketi). USD/TRY 43.99 on 2026-03-05: Bi
 
 ## 8. Remaining open points
 
-1. Confirm the **VAT 20%** for the PV sale.
-2. Confirm the **Export Price** for a new residential plant (YEKDEM price, any veris yonlu dagitim bedeli, and carry-over of unused monthly surplus).
-3. Check the consolidated regulation on mevzuat.gov.tr for F1 and F2.
+1. ~~Confirm the VAT 20% for the PV sale.~~ Done, section 9.1.
+2. ~~Confirm the Export Price for a new residential plant.~~ Done, section 9.2 (open sub-points in 9.6).
+3. ~~Check the regulation for F1 and F2.~~ Done against the Resmî Gazete texts, section 9.1.
 4. Inverter and panel USD prices and BOS/labour/margin are Estimates; the owner may replace them with real price lists
    (`needs-content`).
+
+## 9. Verification: regulation, taxes, Export Price, Discount Rate (ticket #32, 2026-11-25)
+
+**Method.** Primary texts were fetched and read directly: the Resmî Gazete texts of RG 30772 (2019-05-12) and RG 33212
+(2026-04-02), the scanned Presidential Decision 7189 (RG 32177, 2023-05-01, read as page images), the mevzuat.gov.tr
+consolidated PDFs of Law 5346 and Law 2464 (retrieved 2026-11-25), the EPDK tariff workbook of 2026-04-04 and the Gelir
+İdaresi (GİB) KDV rates table (file dated 2025-02-17). "Verified" below means read in one of these. A claim that rests
+only on a trade or news site is marked **unverified** and the site is named. The consolidated Lisanssız Elektrik Üretim
+Yönetmeliği on mevzuat.gov.tr still does not load, so its article numbers are those of the amendment text. The text of
+Presidential Decision 11415 (RG 33279, 2026-06-13) is a scanned image with no text layer and was not read; only its
+title and date were checked on the Resmî Gazete index.
+
+### 9.1 Regulation and taxes
+
+| Item | Finding | Source (article, date) | Status |
+|---|---|---|---|
+| **F1** Monthly Netting | Plants linked to residential (mesken) subscriptions that received a connection call letter on or after 2019-05-12 are netted **monthly**; hourly netting applies to everyone else. | Lisanssız Elektrik Üretim Yönetmeliği Madde 26(20), as replaced by Madde 13 of the amending regulation, RG 33212 of 2026-04-02; in force 2026-05-01 (Madde 26(a) of the amending regulation). Until the market operator's systems existed, Geçici Madde 13 had netting done monthly | **Verified** (full text read) |
+| **F2** Contracted Power cap | Installed capacity of a Madde 5(1)(c) plant cannot exceed the contracted power of the linked consumption facility; the facilities' contracted powers may not sum to less than the installed capacity (otherwise the energy is unpaid). No absolute residential kW cap. | Madde 7(10), RG 30772 of 2019-05-12; Madde 28(5) as replaced, RG 33212 of 2026-04-02 | **Verified**. "Installed capacity" is read as the inverter AC capacity: that is the standard reading, the definitions in the text read do not state it (unverified) |
+| DC/AC limit | Requested mechanical (DC) capacity cannot exceed **twice** the electrical capacity (wind excepted), so DC/AC up to 2.0 is legal. | Madde 17(7) second sentence, as amended by Madde 8 of the amending regulation, RG 33212 | **Verified** |
+| 2x-consumption production cap | Not applied to plants linked to mesken subscriptions. | Madde 26(17) last sentence, RG 33212 | **Verified** |
+| Plant category | A rooftop plant that exports is a Madde 5(1)(c) plant (up to 1 MW). A Madde 5(1)(ç) plant (all production used on site, same meter) that still pushes energy to the grid is **not paid** for it (Madde 26(5)). sunquote quotes (c) plants. | Madde 5(1), RG 30772; Madde 26(5), RG 33212 | **Verified** |
+| **KDV on residential electricity** | **10%** for mesken and agricultural-irrigation subscriber groups (the general rate is 20%). | Decision 2007/13033 Art. 1(1)(c) and list II item 34. The item was added by CBK 5249 (effective 2022-03-01, at 8%); the list II rate became 10% by CBK 7346 (effective 2023-07-10). GİB table, file dated 2025-02-17 | **Verified** to that date. A 2026 secondary guide (gazelektrik.com) still says 10%. Amendments after 2025-02-17 not checked |
+| **BTV** | **5%** of the electricity **sale (energy) price**; the base excludes transmission, distribution and retail-service charges and excludes taxes and funds. (1% applies only to manufacturing-type use.) | Belediye Gelirleri Kanunu 2464 Art. 37 and Art. 38(b) (mevzuat.gov.tr PDF, retrieved 2026-11-25) | **Verified**. That KDV is levied on the sum including BTV (so the formula (1.05 x energy + distribution) x 1.10 is right) is the standard KDV base rule; the KDV Law text was not read (unverified) |
+| Enerji Fonu | Whether a fund charge (0.7-1% of the active energy amount, Law 3096) is still on residential bills was not settled: one secondary source says it was removed with the TRT payı, another still lists it. Not modelled. | none primary | **Unverified** (effect on the all-in tariff under 1%) |
+| **VAT on a residential PV sale** | **20%**, the general rate. PV modules, inverters and installation appear in neither list I (1%) nor list II (10%) of the decision. Installer-blog claims of a 1% rate or an exemption have no legal text behind them in anything read. | Decision 2007/13033 Art. 1(1)(a), 20% since CBK 7346 (effective 2023-07-10); GİB table, file dated 2025-02-17 | **Verified** by absence from the lists. Confirm with a mali müşavir for a real quote; later amendments not checked |
+
+### 9.2 Export Price (what a new residential plant is paid for surplus)
+
+**Legal chain (verified).**
+
+1. Law 5346 Art. 6/A: a self-consuming unlicensed producer that feeds the grid gets the Annex I prices for **10 years**,
+   and the görevli tedarik şirketi (GTŞ) must buy the energy.
+2. Annex I item (e): for unlicensed plants that got a call letter on or after 2019-05-10, the price is "the **retail
+   single-rate active energy charge of the producer's own subscriber group**, as announced by EPDK in TL kuruş/kWh".
+3. Lisanssız Yönetmelik Madde 26(4), (6)(a), (7)(b): the GTŞ buys the surplus left after netting for 10 years from
+   connection and pays production x price to the producer by the fifth business day of the month after.
+4. The EPDK tariff table valid from 2026-04-04 (Kurul Kararı 14461) gives mesken AG tek terim active energy of
+   **49.4065 kr/kWh (up to 8 kWh/day) and 189.5808 kr/kWh (above)**, and a note: for the export-direction distribution
+   fee, plants under Annex I item (e) pay **Lisanssız Üretici 2 = 65.6008 kr/kWh**; other unlicensed producers pay
+   Üretici 1 = 208.1065 kr/kWh.
+
+**What does not apply.** The YEKDEM unit price of Presidential Decision 7189 (RG 32177, 2023-05-01; solar 106.00 kr/kWh
+base, floor 4.95 and ceiling 6.05 US cent/kWh, monthly update by its Annex 2; reported at 292.49 kr/kWh from 2026-11-01 by
+enerjiajansi.com.tr quoting EPİAŞ, **unverified**) is for YEK-Belgeli plants. The 2.92 TRY/kWh of the first research
+note came from that table, so it was too high for a new residential plant by a factor of about 2.4. Decision 11415
+(RG 33279, 2026-06-13: 90% of the YEKDEM price, capped at the hourly PTF) is for plants **after** their 10-year period.
+The domestic-equipment bonus (79.49 kr/kWh for 5 years from 2026-11-01, enerjiajansi.com.tr, unverified) needs certified
+domestic components; the catalog uses imported Trina and Huawei, so it is not assumed.
+
+**Range and chosen value.**
+
+| Reading | kr/kWh | TRY/kWh | Status |
+|---|---|---|---|
+| High-tier energy charge, no fee deducted | 189.58 | 1.90 | upper end |
+| High-tier energy charge less the Üretici 2 fee (**chosen, lower end**) | 123.98 | **1.24** | components verified; "price less fee" and "high tier" from gesatlasi.com.tr, **unverified** |
+| Low-tier energy charge less the Üretici 2 fee | 49.41 - 65.60 | negative | not credible; no source treats it so |
+| YEKDEM 7189 solar price | 292.49 | 2.92 | does not apply |
+
+The data file takes the lower end, **1.24 TRY/kWh**, dated 2026-04-04 (the EPDK table it is read from; the price moves
+with every EPDK table, so it must be refreshed with the tariff). Two things remain unverified and matter: that the fee is
+deducted from the payment, and that the high tier is the one used for mesken (a consumer with no net consumption in the
+month would otherwise sit in the low tier). Both come from a single secondary site that cites the EPDK table; the EPDK
+note itself only says which distribution tariff applies.
+
+**Surplus treatment (verified).** Madde 26 as amended has no carry-over (devir) of unused surplus to a later month or
+year; the surplus left after the monthly netting is paid in the month it arises. **This agrees with ADR 0005** (surplus
+sold at the Export Price in its month), so nothing is raised against it.
+
+**Not modelled, for the owner.**
+
+- The purchase guarantee is 10 years (Madde 26(4)); the Quote horizon is 25 years. After year 10 the surplus falls under
+  rules like Decision 11415 (90% of the YEKDEM price, capped at the PTF) and the distribution-fee tariff changes. The
+  Export Price is applied for the whole lifetime. It only prices the surplus share of the savings, and the lower end is
+  used, so the error is small but not zero.
+- Income tax or KDV on the sale of surplus by an individual (e-müstahsil practice) was not researched.
+
+### 9.3 Discount Rate (added to `assumptions.toml` by ticket #34)
+
+| Field | Value |
+|---|---|
+| Name | `discount_rate_real` |
+| **Value** | **0.056** (5.6% a year, real) |
+| Kind | derived (a rounded auction yield; the choice of instrument is a judgment) |
+| Source | Real compound yield **5.61%** at the Treasury auction of the 4-year CPI-linked bond TRT080530T27 (2.63% real coupon), reported 2026-06-08 by Bloomberg HT (https://www.bloomberght.com/hazine-4-yil-vadeli-tufe-endeksli-tahvilde-13-2-milyar-tl-borclandi-3779359). A 5-year CPI-linked auction earlier in 2026 was reported at 5.37% on average (4.89-5.56%). **Unverified against hmb.gov.tr** (secondary reporting); no CPI-linked auction in November 2026 was found. |
+| Date | 2026-06-08 |
+
+Why this rate: the cash flow is in today's lira (ADR 0003), so the rate must be real (ADR 0006). The riskless real
+alternative for a household is a CPI-indexed Treasury bond, the cleanest benchmark. Cross-check from the other side: the
+policy rate of 36% (TCMB, cut by 100 bp on 2026-10-22) against the 24.04% 12-month-ahead CPI expectation (TCMB Market
+Participants Survey, November 2026, secondary reports) is about 9.6% real, an upper bound for a short-term deposit. A
+higher rate lowers the NPV. 5.6% is the recommendation; the repo owner may prefer the deposit-based figure for a more
+conservative NPV.
+
+### 9.4 Data file changes
+
+| File and field | Before | After |
+|---|---|---|
+| `tariff.toml` `export_price_try_per_kwh` | 2.92, estimate, 2026-11-01 | **1.24**, derived, 2026-04-04, range and source in the source text |
+| `tariff.toml` `[tariff]` source, low and high tariff source text | BTV and KDV "not confirmed" | verified against Law 2464 and Decision 2007/13033 |
+| `assumptions.toml` `discount_rate_real` | absent | **0.056**, derived, 2026-06-08 (added by ticket #34) |
+| `assumptions.toml` `vat_rate` | 0.20, estimate | 0.20, **direct**, source text with the article and the caveat |
+| `assumptions.toml` `default_contracted_power_kw.residential` | source text only | cap citations added (value stays 10, estimate) |
+| `assumptions.toml` `dc_ac_ratio_max` | source text only | legal 2.0 ceiling cited (value stays 1.50, estimate) |
+
+Tests that asserted the old Export Price (`tests/adapters/test_data_files.py`, `tests/test_wiring.py`) were updated.
+
+### 9.5 Choices made without asking
+
+- Export Price: the lower end, 1.24 (the ticket's rule), instead of the 1.90 gross price.
+- Discount Rate: the real CPI-linked bond yield, not a deposit-based or risk-adjusted rate.
+- VAT kind set to `direct` for the rate, with its applicability to a PV sale verified by absence from the rate lists.
+- No comment raised on #30: surplus is not carried over, so ADR 0005 stands.
+
+### 9.6 Still open
+
+1. Confirm in the EPDK decision text (not the table) that the export-direction fee is deducted from the surplus payment
+   and which mesken tier is used. This is the single unverified assumption behind 1.24.
+2. Read Decision 11415 and Presidential Decision 7189 as text (scanned images here) if the 10-year horizon matters.
+3. Refresh the tariff and the Export Price together when EPDK publishes a table after 2026-04-04.
+4. Enerji Fonu, KDV on the sale of surplus, and KDV amendments after 2025-02-17.
+5. The mesken SKTT limit (4,000 kWh/year in 2026; one secondary site reports 3,000 kWh for 2027) is a separate rule from
+   the Tariff Tier.

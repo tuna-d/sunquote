@@ -70,3 +70,13 @@ def test_a_share_is_shown_as_a_percentage_with_one_decimal_half_up(
     share: str, expected: str
 ) -> None:
     assert rounding.round_percent(Decimal(share)) == Decimal(expected)
+
+
+@pytest.mark.parametrize(
+    ("share", "expected"),
+    [("0.8533333", "0.853"), ("0.4983333", "0.498"), ("0.8335", "0.834"), ("1", "1.000")],
+)
+def test_a_share_kept_as_a_ratio_rounds_to_three_decimals_half_up(
+    share: str, expected: str
+) -> None:
+    assert rounding.round_share(Decimal(share)) == Decimal(expected)

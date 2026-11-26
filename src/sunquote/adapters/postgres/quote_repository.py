@@ -1,13 +1,14 @@
 """The Postgres implementation of the domain's `QuoteRepository` port."""
 
-from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
 
 from pydantic import TypeAdapter
-from sqlalchemy import RowMapping, func, insert, select
+from sqlalchemy import RowMapping, delete, func, select
 from sqlalchemy.dialects.postgresql import insert as postgres_insert
+from sqlalchemy.engine import URL, make_url
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from sunquote.adapters.postgres.tables import quote_number_counters, quotes
 from sunquote.domain.ports import QuotePage, StoredQuote
@@ -29,9 +30,43 @@ def quote_from_json(document: dict[str, Any]) -> Quote:
     return _QUOTE_JSON.validate_python(document)
 
 
-def create_engine(database_url: str) -> AsyncEngine:
-    """An async engine. It connects lazily, so building it needs no running database."""
-    return create_async_engine(database_url, pool_pre_ping=True)
+def async_database_url(database_url: str) -> URL:
+    """The URL in the form the asyncpg driver reads.
+
+    A Postgres host (Neon, for one) shows its connection string as
+    `postgresql://...?sslmode=require&channel_binding=require`. asyncpg takes `ssl` instead of
+    `sslmode` and has no `channel_binding` option, so the string is rewritten here and can be
+    pasted into `SUNQUOTE_DATABASE_URL` as it is.
+    """
+    url = make_url(database_url).set(drivername="postgresql+asyncpg")
+    query = dict(url.query)
+    sslmode = query.pop("sslmode", None)
+    query.pop("channel_binding", None)
+    if sslmode is not None:
+        query.setdefault("ssl", sslmode if isinstance(sslmode, str) else sslmode[0])
+    return url.set(query=query)
+
+
+def create_engine(database_url: str, *, client_pool: bool = True) -> AsyncEngine:
+    """An async engine. It connects lazily, so building it needs no running database.
+
+    With `client_pool` off (serverless), every use opens its own connection and closes it
+    afterwards: an instance that is frozen between requests must not hold connections that
+    the server drops, and the host's own pooler (Neon's PgBouncer) does the pooling. That
+    pooler hands each transaction to any server connection, so prepared statements are off
+    too: one prepared on a connection would be missing on the next.
+    """
+    url = async_database_url(database_url)
+    if client_pool:
+        return create_async_engine(url, pool_pre_ping=True)
+    return create_async_engine(
+        url.update_query_dict({"prepared_statement_cache_size": "0"}),
+        poolclass=NullPool,
+        connect_args={
+            "statement_cache_size": 0,
+            "prepared_statement_name_func": lambda: f"__asyncpg_{uuid4()}__",
+        },
+    )
 
 
 class PostgresQuoteRepository:
@@ -59,26 +94,60 @@ class PostgresQuoteRepository:
         return format_quote_number(year, sequence)
 
     async def save(
-        self, quote: Quote, *, district: str | None = None, province: str | None = None
+        self,
+        quote: Quote,
+        *,
+        district: str | None = None,
+        province: str | None = None,
+        is_sample: bool = False,
     ) -> StoredQuote:
         quote_id = uuid4()
-        statement = (
-            insert(quotes)
-            .values(
-                id=quote_id,
-                quote_number=quote.quote_number,
-                customer_name=quote.customer.name,
-                district=district,
-                province=province,
-                quote=quote_to_json(quote),
+        statement = postgres_insert(quotes).values(
+            id=quote_id,
+            quote_number=quote.quote_number,
+            customer_name=quote.customer.name,
+            district=district,
+            province=province,
+            is_sample=is_sample,
+            quote=quote_to_json(quote),
+        )
+        if is_sample:
+            # The synthetic Customer name identifies each sample across seed runs.
+            statement = statement.on_conflict_do_nothing(
+                index_elements=[quotes.c.customer_name], index_where=quotes.c.is_sample
             )
-            .returning(quotes.c.created_at)
-        )
         async with self._engine.begin() as connection:
-            created_at: datetime = (await connection.execute(statement)).scalar_one()
+            result = await connection.execute(statement.returning(quotes.c.created_at))
+            created_at = result.scalar_one_or_none()
+            if created_at is None:
+                existing = await connection.execute(
+                    select(quotes).where(
+                        quotes.c.is_sample, quotes.c.customer_name == quote.customer.name
+                    )
+                )
+                return _stored_quote(existing.one()._mapping)
         return StoredQuote(
-            id=quote_id, created_at=created_at, quote=quote, district=district, province=province
+            id=quote_id,
+            created_at=created_at,
+            quote=quote,
+            district=district,
+            province=province,
+            is_sample=is_sample,
         )
+
+    async def sample_customer_names(self) -> set[str]:
+        """Identify existing samples before paying for a new Quote's upstream lookups."""
+        async with self._engine.connect() as connection:
+            names = await connection.scalars(
+                select(quotes.c.customer_name).where(quotes.c.is_sample)
+            )
+        return set(names)
+
+    async def delete_non_sample_quotes(self) -> int:
+        """Delete visitor Quotes in one transaction, leaving samples and numbering intact."""
+        async with self._engine.begin() as connection:
+            result = await connection.execute(delete(quotes).where(~quotes.c.is_sample))
+        return result.rowcount
 
     async def get(self, quote_id: UUID) -> StoredQuote | None:
         async with self._engine.connect() as connection:
@@ -109,4 +178,5 @@ def _stored_quote(row: RowMapping) -> StoredQuote:
         quote=quote_from_json(row["quote"]),
         district=row["district"],
         province=row["province"],
+        is_sample=row["is_sample"],
     )

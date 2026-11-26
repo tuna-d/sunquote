@@ -1,6 +1,9 @@
 """What the Gemini adapters share: the `generateContent` HTTP call and the first candidate.
 
 Each adapter passes its own error factory, so a failure is raised as that adapter's typed error.
+Every request draws one unit from the daily budget first (ADR 0007), so one count covers the
+Narrative's attempts, its retries and the Assistant's calls; a spent budget raises
+`GeminiBudgetExhaustedError` before anything is sent.
 The API key travels in a header, never in the URL, and no error message contains it or the
 server's response body.
 """
@@ -9,6 +12,8 @@ from collections.abc import Callable
 from typing import Any
 
 import httpx
+
+from sunquote.domain.gemini_budget import GeminiBudget
 
 DEFAULT_GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 
@@ -28,8 +33,14 @@ async def post_generate_content(
     body: dict[str, Any],
     timeout_seconds: float,
     fail: Failure,
+    budget: GeminiBudget | None = None,
 ) -> Any:
-    """POST `body` to `endpoint` and return the parsed JSON, or raise `fail(reason)`."""
+    """POST `body` to `endpoint` and return the parsed JSON, or raise `fail(reason)`.
+
+    With a `budget`, the request is counted first and refused when the day's budget is spent.
+    """
+    if budget is not None:
+        await budget.spend()
     try:
         response = await client.post(
             endpoint,

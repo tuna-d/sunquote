@@ -19,7 +19,6 @@ from sunquote.domain.money import Currency
 from tests.conftest import ClientFactory
 from tests.factories import (
     DEFAULT_INVERTERS,
-    MONTHLY_YIELD_KWH_PER_KWP,
     QUOTE_DATE,
     make_exchange_rate,
     make_panel,
@@ -70,8 +69,10 @@ def with_change(path: str, value: Any) -> dict[str, Any]:
 
 
 def test_creates_the_same_system_options_from_a_bill_as_from_kwh(client: TestClient) -> None:
-    # Test tariff: 3,000 kWh at 3 TRY plus 3,000 kWh at 5 TRY costs 2,000 TRY/month.
-    response = client.post("/quotes", json=with_change("consumption", {"monthly_bill_try": 2000}))
+    # Test tariff: 500 kWh a month is above every monthly threshold, so the bill is
+    # (12 x 2,500 - 2 x 2,920) / 12 = 2,013.33... TRY (the digits a decimal string can hold).
+    bill = "2013.333333333333333333333333333"
+    response = client.post("/quotes", json=with_change("consumption", {"monthly_bill_try": bill}))
     direct = client.post("/quotes", json=valid_body())
 
     assert response.status_code == 201
@@ -79,11 +80,13 @@ def test_creates_the_same_system_options_from_a_bill_as_from_kwh(client: TestCli
     assert quote["system_options"] == direct.json()["system_options"]
     assumptions = quote["assumptions"]
     assert assumptions["consumption_derived_from_bill"] is True
-    assert assumptions["derived_monthly_consumption_kwh"] == "500"
+    assert Decimal(assumptions["derived_monthly_consumption_kwh"]) == pytest.approx(
+        Decimal(500), abs=Decimal("1e-20")
+    )
     assert assumptions["annual_consumption_kwh"] == 6000
     assert assumptions["submitted_request"]["consumption"] == {
         "monthly_consumption_kwh": None,
-        "monthly_bill_try": "2000",
+        "monthly_bill_try": bill,
     }
 
 
@@ -201,7 +204,14 @@ def test_a_contracted_power_too_small_for_a_panel_is_a_no_viable_system_problem(
 def test_displayed_figures_are_rounded_by_the_policy(
     client: TestClient, specific_yield_provider: FakeSpecificYieldProvider
 ) -> None:
-    monthly = (Decimal("69.17"), *MONTHLY_YIELD_KWH_PER_KWP[1:])
+    # The 12 PVGIS months of the Ankara recording; they add up to the 1,472.13 annual figure.
+    monthly = tuple(
+        Decimal(value)
+        for value in (
+            *("69.17", "87.31", "115.43", "132.7", "144.0", "148.01"),
+            *("170.41", "166.67", "147.26", "121.34", "97.59", "72.24"),
+        )
+    )
     specific_yield_provider.specific_yield = make_specific_yield(annual="1472.13", monthly=monthly)
 
     option = client.post("/quotes", json=valid_body()).json()["system_options"][0]
@@ -318,16 +328,16 @@ def test_money_rates_ratios_and_tariff_prices_are_decimal_strings_without_a_floa
 
     assert assumptions["exchange_rate"]["rate"] == "41.234567890123456789"
     assert assumptions["tariff"] == {
-        "tier_threshold_kwh_per_year": "3000",
+        "tier_threshold_kwh_per_day": "8",
         "low_tariff_try_per_kwh": "3",
         "high_tariff_try_per_kwh": "5",
         "export_price_try_per_kwh": "2",
-        "self_consumption_ratio": "0.8",
         "valid_from": "2026-04-04",
         "source": "test tariff",
     }
     assert assumptions["financial"]["tariff_escalation_rate_real"] == "0.02"
     assert assumptions["financial"]["equipment_escalation_rate_real"] == "0"
+    assert assumptions["financial"]["discount_rate_real"] == "0.05"
     assert assumptions["coverage_ratio"] == "0.80"
     assert assumptions["default_panel"]["degradation_rate_per_year"] == "0.005"
     assert assumptions["default_panel"]["unit_price"] == {"amount": "100", "currency": "USD"}
@@ -360,6 +370,7 @@ def test_the_openapi_schema_declares_the_precision_sensitive_fields_as_strings(
     assert field_type("TariffResponse", "low_tariff_try_per_kwh") == "string"
     assert field_type("TariffResponse", "export_price_try_per_kwh") == "string"
     assert field_type("FinancialResponse", "tariff_escalation_rate_real") == "string"
+    assert field_type("FinancialResponse", "discount_rate_real") == "string"
     assert field_type("DcAcRatioRangeResponse", "maximum") == "string"
     assert field_type("SystemOptionResponse", "capacity_kwp") == "number"
     assert "decimal string" in schemas["MoneyResponse"]["description"]
@@ -741,17 +752,56 @@ def test_each_option_carries_first_year_savings_payback_and_lifetime_savings(
     matched, roof_max = client.post("/quotes", json=valid_body()).json()["system_options"]
 
     savings = matched["savings"]
-    assert savings["first_year_annual_savings_try"] == 22800
-    assert savings["payback_period_years"] == 6.7  # 6.6578, shown with one decimal
+    assert savings["first_year_annual_savings_try"] == 23256  # 21,496 bill drop + 1,760 export
+    assert savings["payback_period_years"] == 6.5  # 6.5240, shown with one decimal
     assert savings["payback_beyond_lifetime"] is False
-    assert savings["lifetime_savings_try"] == 665406  # 665,405.54, net of the replacement
-    # The Roof-Max option has its own savings: 12,000 kWh produced, the whole 6,000 kWh bill
-    # saved (24,000) plus 6,000 kWh exported at 2 (12,000), and a 52,800 TRY inverter replacement.
+    assert savings["lifetime_savings_try"] == 684385  # 684,384.57, net of the replacement
+    # The Roof-Max option has its own savings: 12,000 kWh produced, 5,980 kWh netted (bill drop
+    # 24,100) plus 6,020 kWh exported at 2 (12,040), and a 52,800 TRY inverter replacement.
     roof_max_savings = roof_max["savings"]
-    assert roof_max_savings["first_year_annual_savings_try"] == 36000
-    assert roof_max_savings["payback_period_years"] == 7.3  # 7.2745
-    assert roof_max_savings["lifetime_savings_try"] == 1052169  # 1,052,168.94
+    assert roof_max_savings["first_year_annual_savings_try"] == 36140
+    assert roof_max_savings["payback_period_years"] == 7.2  # 7.2492
+    assert roof_max_savings["lifetime_savings_try"] == 1055684  # 1,055,683.62
     assert roof_max_savings["cash_flow"][11]["inverter_replacement_try"] == 52800
+
+
+def test_each_option_reports_its_netted_share(client: TestClient) -> None:
+    matched, roof_max = client.post("/quotes", json=valid_body()).json()["system_options"]
+
+    # 5,120 of 6,000 kWh and 5,980 of 12,000 kWh come off the bill (see the savings test above).
+    assert matched["netted_share"] == 0.853
+    assert roof_max["netted_share"] == 0.498
+    assert (
+        "self_consumption_ratio"
+        not in client.post("/quotes", json=valid_body()).json()["assumptions"]["tariff"]
+    )
+
+
+def test_each_option_reports_its_npv_and_irr_next_to_the_payback_period(
+    client: TestClient,
+) -> None:
+    """Worked outside the code with exact fractions: the cash flow of each option (year 1 is
+    23,256 and 36,140; 2% real escalation, 0.5% degradation, the inverter replaced in year 12)
+    discounted at the test Discount Rate of 5% less the total price (159,000 and 276,000 TRY)
+    gives an NPV of 210,530.83 and 294,306.01; the rate that zeroes it is 15.17% and 13.40%."""
+    matched, roof_max = client.post("/quotes", json=valid_body()).json()["system_options"]
+
+    assert matched["savings"]["npv_try"] == 210531
+    assert matched["savings"]["irr"] == 0.152
+    assert roof_max["savings"]["npv_try"] == 294306
+    assert roof_max["savings"]["irr"] == 0.134
+    assert matched["savings"]["payback_period_years"] == 6.5  # the headline stays
+
+
+def test_a_payback_beyond_the_lifetime_has_a_negative_npv_and_no_irr(client: TestClient) -> None:
+    body = valid_body()
+    body["consumption"]["monthly_consumption_kwh"] = 10  # one panel; the fixed costs dominate
+
+    savings = client.post("/quotes", json=body).json()["system_options"][0]["savings"]
+
+    assert savings["payback_beyond_lifetime"] is True
+    assert savings["irr"] is None
+    assert savings["npv_try"] < 0
 
 
 def test_the_yearly_cash_flow_is_returned_in_whole_lira_and_kwh(client: TestClient) -> None:
@@ -762,20 +812,20 @@ def test_the_yearly_cash_flow_is_returned_in_whole_lira_and_kwh(client: TestClie
     assert cash_flow[0] == {
         "year": 1,
         "production_kwh": 6000,
-        "self_consumed_kwh": 4800,
-        "exported_kwh": 1200,
-        "self_consumption_savings_try": 20400,
-        "export_income_try": 2400,
-        "annual_savings_try": 22800,
+        "netted_kwh": 5120,
+        "exported_kwh": 880,
+        "netting_savings_try": 21496,
+        "export_income_try": 1760,
+        "annual_savings_try": 23256,
         "inverter_replacement_try": 0,
-        "net_savings_try": 22800,
-        "cumulative_net_savings_try": 22800,
+        "net_savings_try": 23256,
+        "cumulative_net_savings_try": 23256,
     }
-    # Year 12 carries the 31,200 TRY inverter replacement: 27,228.35 - 31,200 = -3,971.65.
+    # Year 12 carries the 31,200 TRY inverter replacement: 27,942.07 - 31,200 = -3,257.93.
     year_twelve = cash_flow[11]
     assert year_twelve["inverter_replacement_try"] == 31200
-    assert year_twelve["net_savings_try"] == -3972
-    assert year_twelve["cumulative_net_savings_try"] == 268242
+    assert year_twelve["net_savings_try"] == -3258
+    assert year_twelve["cumulative_net_savings_try"] == 275190  # 275,190.27
 
 
 def test_a_payback_beyond_the_lifetime_has_no_period_and_says_so(client: TestClient) -> None:
@@ -795,14 +845,13 @@ def test_assumptions_record_consumption_split_tariff_and_financial_inputs(
     assumptions = client.post("/quotes", json=valid_body()).json()["assumptions"]
 
     assert assumptions["annual_consumption_kwh"] == 6000
-    assert assumptions["low_tier_consumption_kwh"] == 3000
-    assert assumptions["high_tier_consumption_kwh"] == 3000
+    assert assumptions["low_tier_consumption_kwh"] == 2920
+    assert assumptions["high_tier_consumption_kwh"] == 3080
     assert assumptions["tariff"] == {
-        "tier_threshold_kwh_per_year": "3000",
+        "tier_threshold_kwh_per_day": "8",
         "low_tariff_try_per_kwh": "3",
         "high_tariff_try_per_kwh": "5",
         "export_price_try_per_kwh": "2",
-        "self_consumption_ratio": "0.8",
         "valid_from": "2026-04-04",
         "source": "test tariff",
     }
@@ -811,5 +860,6 @@ def test_assumptions_record_consumption_split_tariff_and_financial_inputs(
         "equipment_escalation_rate_real": "0",
         "lifetime_years": 25,
         "inverter_replacement_year": 12,
+        "discount_rate_real": "0.05",
     }
     assert assumptions["default_panel"]["degradation_rate_per_year"] == "0.005"

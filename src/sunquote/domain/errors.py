@@ -72,6 +72,30 @@ class AssistantNotConfiguredError(DomainError):
         super().__init__("the assistant needs a Gemini API key (SUNQUOTE_GEMINI_API_KEY)")
 
 
+class GeminiBudgetExhaustedError(DomainError):
+    """The day's global Gemini request budget is spent, or could not be checked (ADR 0007).
+
+    No request went out. The budget fails closed: when the counter store cannot be reached the
+    count is unknown, so the request is refused too (`counter_unavailable`). Quote creation
+    catches it and records a `fallback` Narrative with the reason. The quote assistant lets it
+    through when no Quote exists yet, and the API answers 503.
+    """
+
+    def __init__(self, daily_limit: int, *, counter_unavailable: bool = False) -> None:
+        self.daily_limit = daily_limit
+        self.counter_unavailable = counter_unavailable
+        if counter_unavailable:
+            super().__init__(
+                f"the daily Gemini budget of {daily_limit} requests could not be checked "
+                "(counter store unavailable), so the request was refused"
+            )
+        else:
+            super().__init__(
+                f"the daily Gemini budget of {daily_limit} requests is spent; "
+                "it resets at 00:00 Europe/Istanbul"
+            )
+
+
 class UpstreamUnavailableError(DomainError):
     """An external service (PVGIS, ...) could not be reached or gave no usable answer.
 
@@ -129,3 +153,17 @@ class LocationNotSupportedError(DomainError):
 
     The message is the source's own explanation, so the Sales Rep can act on it.
     """
+
+
+class RateLimitedError(DomainError):
+    """A client used up its calls for the current window of a rate limit."""
+
+    def __init__(self, policy_name: str, limit: int, window_seconds: int, retry_after_seconds: int):
+        self.policy_name = policy_name
+        self.limit = limit
+        self.window_seconds = window_seconds
+        self.retry_after_seconds = retry_after_seconds
+        super().__init__(
+            f"rate limit reached for {policy_name}: at most {limit} calls per "
+            f"{window_seconds} seconds per client; try again in {retry_after_seconds} seconds"
+        )

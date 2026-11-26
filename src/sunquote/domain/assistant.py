@@ -44,7 +44,7 @@ from sunquote.domain.conversation import (
     ToolExchange,
     validate_echoed_digits,
 )
-from sunquote.domain.errors import ConversationUnavailableError
+from sunquote.domain.errors import ConversationUnavailableError, GeminiBudgetExhaustedError
 from sunquote.domain.narrative import (
     Violation,
     ViolationKind,
@@ -172,7 +172,8 @@ class Assistant:
         self._last_problem: str | None = None
 
     async def run(self, messages: Sequence[ChatMessage]) -> AssistantOutcome:
-        """Raises `ConversationUnavailableError` when the model fails and no Quote exists. A
+        """Raises `ConversationUnavailableError` when the model fails and no Quote exists, and
+        `GeminiBudgetExhaustedError` when the day's budget is spent and no Quote exists. A
         turn that runs out of calls without a Quote is `RESTATE`, not an error."""
         exchanges: list[ToolExchange] = []
         rejection: ReplyRejection | None = None
@@ -186,10 +187,10 @@ class Assistant:
                     exchanges=tuple(exchanges),
                     rejected_reply=rejection,
                 )
-            except ConversationUnavailableError as error:
+            except (ConversationUnavailableError, GeminiBudgetExhaustedError) as error:
                 if self._created is None:
                     raise
-                logger.warning("Conversation model failed after a Quote: %s", error.reason)
+                logger.warning("Conversation model failed after a Quote: %s", error)
                 return self._confirmation(self._created)
 
             rejection = None
