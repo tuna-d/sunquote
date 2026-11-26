@@ -51,3 +51,6 @@ ignore = ["RUF001", "RUF002", "RUF003"]
 strict = true
 plugins = ["pydantic.mypy"]
 files = ["src"]
+
+[tool.vercel]
+entrypoint = "api.index:app"

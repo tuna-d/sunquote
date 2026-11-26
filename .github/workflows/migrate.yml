@@ -7,6 +7,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      seed_demo:
+        description: Add any missing sample Quotes to production
+        type: boolean
+        default: false
 
 # Two migrations never run side by side; a newer push waits for the running one.
 concurrency:
@@ -37,3 +42,6 @@ jobs:
       - name: Apply the migrations (alembic upgrade head)
         if: steps.secret.outputs.present == 'true'
         run: uv run --no-dev python -m sunquote.adapters.postgres.migrate
+      - name: Seed demo Quotes
+        if: steps.secret.outputs.present == 'true' && github.ref == 'refs/heads/main' && inputs.seed_demo
+        run: uv run --no-dev python -m sunquote.demo seed
