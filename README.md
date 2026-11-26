@@ -2,6 +2,10 @@
 
 # sunquote
 
+[Open the live web app](https://sunquote-web.vercel.app/) · [Try the live API in Swagger UI](https://sunquote-api.vercel.app/docs)
+
+![Quote detail page showing two rooftop solar System Options for the Demo Antalya A sample Quote](assets/quote-detail.png)
+
 sunquote prepares residential rooftop solar Quotes for Turkish Installers. A Sales Rep enters
 the Customer, the Site's Address or Coordinates, the Roof and the average Monthly Consumption
 or Monthly Bill. The service sizes up to two System Options (Consumption-Matched and Roof-Max),
@@ -24,7 +28,7 @@ From the repository root, with Docker running:
 docker compose up --build
 ```
 
-No `.env` or API keys are required. Compose starts the API, Postgres, Redis and the web app.
+No `.env` or API keys are required. Compose starts the API, Postgres, Redis and the web app on port 3000.
 The API applies the Alembic migrations at startup. Run `docker compose ps` in another terminal
 to check that all four services are healthy.
 
@@ -573,10 +577,18 @@ The rules are in [docs/agents/workflow.md](docs/agents/workflow.md), "Implementi
 
 ## Status
 
-All three specs are implemented: the [Quote engine](https://github.com/tuna-d/sunquote/issues/1),
-the [LLM-written Narrative](https://github.com/tuna-d/sunquote/issues/2) and the
-[quote assistant with its extraction eval](https://github.com/tuna-d/sunquote/issues/3). The
-domain vocabulary is in [GLOSSARY.md](GLOSSARY.md) and the design decisions are in
+Implemented specs:
+
+- [Quote engine](https://github.com/tuna-d/sunquote/issues/1)
+- [LLM-written Narrative](https://github.com/tuna-d/sunquote/issues/2)
+- [Quote Assistant with extraction eval](https://github.com/tuna-d/sunquote/issues/3)
+- [Web app and live demo](https://github.com/tuna-d/sunquote/issues/29)
+- [Domain finance: Monthly Netting, Export Price and discounted returns](https://github.com/tuna-d/sunquote/issues/30)
+
+Phase 2 covers streaming Assistant responses, LLM observability, an MCP server and
+prompt-injection evals.
+
+The domain vocabulary is in [GLOSSARY.md](GLOSSARY.md) and the design decisions are in
 [docs/adr](docs/adr). The Catalog, Tariff and pricing inputs remain
 [placeholder data](#placeholder-data-and-how-to-defend-it).
 
