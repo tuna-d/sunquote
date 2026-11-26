@@ -3,6 +3,7 @@
 import importlib.util
 import json
 import sys
+import tomllib
 from pathlib import Path
 from types import ModuleType
 
@@ -61,11 +62,14 @@ def test_the_environment_can_still_override_the_vercel_defaults(
     assert app.state.settings.database_client_pool is True
 
 
-def test_vercel_runs_the_entry_point_for_every_path_for_up_to_300_seconds() -> None:
+def test_vercel_routes_to_the_native_fastapi_entry_point() -> None:
     config = json.loads((ROOT / "vercel.json").read_text(encoding="utf-8"))
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
 
+    assert project["tool"]["vercel"]["entrypoint"] == "api.index:app"
     assert config["functions"]["api/index.py"]["maxDuration"] == 300
-    assert {"source": "/(.*)", "destination": "/api/index"} in config["rewrites"]
+    # Internal rewrites replace request paths before FastAPI can match them.
+    assert "rewrites" not in config
 
 
 def test_the_python_version_is_pinned_to_one_vercel_supports() -> None:

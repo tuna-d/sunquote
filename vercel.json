@@ -6,11 +6,5 @@
       "excludeFiles": "{tests/**,docs/**,assets/**,web/**,.github/**}"
     }
   },
-  "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/api/index"
-    }
-  ],
   "ignoreCommand": "[ \"$VERCEL_GIT_COMMIT_REF\" != \"main\" ]"
 }
