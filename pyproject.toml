@@ -52,7 +52,5 @@ strict = true
 plugins = ["pydantic.mypy"]
 files = ["src"]
 
-The focused UI element is 0 AXWebArea sunquote/pyproject.toml at development · tuna-d/sunquote, URL: github.com/tuna-d/sunquote/blob/development/pyproject.toml
-
 [tool.vercel]
 entrypoint = "api.index:app"
